@@ -18,6 +18,10 @@ Cada projeto tem título, ideia e objetivo próprios, e vive em pastas só dele:
 - A tela do projeto **não carrega nada do hub** (nem o CSS). Só usa o que é da base:
   `/navegador.js`, `/campos.js` e, no servidor, `lib/`.
 - Um projeto **nunca** lê tabela ou arquivo de outro.
+- Projeto que precisa de processamento pesado (ex.: vídeo) tem um **motor** próprio dentro
+  de `projetos/<slug>/motor/`, que roda no computador do dono. Ver o ClipStudio.
+- `public/campos.js` ganhou a máscara `url` (aceita localhost). Candidata a voltar para a
+  `base-cliente`.
 
 ## Criar um projeto
 

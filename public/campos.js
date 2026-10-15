@@ -8,6 +8,7 @@
 //   <input data-mask="cnpj">          formata enquanto digita e valida o dígito verificador
 //   <input data-mask="upper">         MAIÚSCULAS (default de texto comum)
 //   <input data-mask="email">         minúsculo, sem espaço
+//   <input data-mask="url">           endereço web: sem espaço, valida http(s)://
 //   <input data-mask="cep" data-autocep>   ao completar 8 dígitos, preenche o endereço
 //   <input data-end="logradouro">     destino do autofill (logradouro|bairro|cidade|uf)
 //
@@ -27,10 +28,12 @@ const Campos = (() => {
   const mUF = (v) => String(v == null ? '' : v).replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 2);
   const mUpper = (v) => String(v == null ? '' : v).toUpperCase();
   const mEmail = (v) => String(v == null ? '' : v).toLowerCase().replace(/\s+/g, '');
+  // url: NAO muda caixa (caminho de link diferencia maiuscula), so tira espaco. Lab Hub, Claude (Opus 5.5).
+  const mUrl = (v) => String(v == null ? '' : v).replace(/\s+/g, '');
   // moeda: digita em centavos, mostra 1.234,56
   const mMoeda = (v) => { const d = so(v, 15); if (!d) return ''; const n = (parseInt(d, 10) / 100).toFixed(2); return n.replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.'); };
 
-  const FMT = { cnpj: mCNPJ, cpf: mCPF, cep: mCEP, telefone: mTel, data: mData, uf: mUF, email: mEmail, upper: mUpper, moeda: mMoeda };
+  const FMT = { cnpj: mCNPJ, cpf: mCPF, cep: mCEP, telefone: mTel, data: mData, uf: mUF, email: mEmail, upper: mUpper, moeda: mMoeda, url: mUrl };
 
   // ---------- validação (dígito verificador de verdade onde existe) ----------
   const vCNPJ = (v) => { const c = so(v, 14); if (c.length !== 14 || /^(\d)\1{13}$/.test(c)) return false; const k = (b) => { let s = 0, p = b.length - 7; for (let i = 0; i < b.length; i++) { s += +b[i] * p--; if (p < 2) p = 9; } const r = s % 11; return r < 2 ? 0 : 11 - r; }; return k(c.slice(0, 12)) === +c[12] && k(c.slice(0, 13)) === +c[13]; };
@@ -41,12 +44,13 @@ const Campos = (() => {
   const vUF = (v) => UFS.includes(String(v || '').trim().toUpperCase());
   const vEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(v || '').trim());
   const vCEP = (v) => so(v, 8).length === 8;
+  const vUrl = (v) => { try { const u = new URL(String(v || '').trim()); return (u.protocol === 'https:' || u.protocol === 'http:') && (u.hostname.includes('.') || u.hostname === 'localhost'); } catch (_) { return false; } };
 
-  const VALIDA = { cnpj: vCNPJ, cpf: vCPF, cep: vCEP, telefone: vTel, data: vData, uf: vUF, email: vEmail };
+  const VALIDA = { cnpj: vCNPJ, cpf: vCPF, cep: vCEP, telefone: vTel, data: vData, uf: vUF, email: vEmail, url: vUrl };
   const COMPLETO = { cnpj: 14, cpf: 11, cep: 8, telefone: 10, data: 8 };
 
   // teclado do celular derivado da máscara: campo novo já nasce certo
-  const IMODE = { cnpj: 'numeric', cpf: 'numeric', cep: 'numeric', telefone: 'numeric', data: 'numeric', moeda: 'decimal' };
+  const IMODE = { cnpj: 'numeric', cpf: 'numeric', cep: 'numeric', telefone: 'numeric', data: 'numeric', moeda: 'decimal', url: 'url' };
 
   // ---------- CEP -> endereço (ViaCEP, grátis e com CORS) ----------
   async function buscarCEP(cep) {
@@ -89,7 +93,7 @@ const Campos = (() => {
 
       if (IMODE[m] && !el.getAttribute('inputmode')) el.setAttribute('inputmode', IMODE[m]);
 
-      const semTamanho = (m === 'upper' || m === 'email');   // não insere caractere -> preserva o cursor
+      const semTamanho = (m === 'upper' || m === 'email' || m === 'url');   // não insere caractere -> preserva o cursor
       const formatar = () => {
         if (semTamanho) { const p = el.selectionStart; el.value = fmt(el.value); try { el.setSelectionRange(p, p); } catch (_) {} }
         else { el.value = fmt(el.value); }
@@ -99,7 +103,7 @@ const Campos = (() => {
       if (VALIDA[m]) {
         const conferir = (soCompleto) => {
           const v = String(el.value || '').trim();
-          const compl = (m === 'email') ? /.+@.+\..+/.test(v) : (so(v, 20).length >= (COMPLETO[m] || 0));
+          const compl = (m === 'email') ? /.+@.+\..+/.test(v) : (m === 'url') ? /^https?:\/\/[^/]+\.[^/]+/.test(v) : (so(v, 20).length >= (COMPLETO[m] || 0));
           const ok = VALIDA[m](v);
           const ruim = soCompleto ? (compl && !ok) : (!!v && !ok);
           el.classList.toggle('invalido', ruim);

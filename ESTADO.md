@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 15/10/2026.**
+**Atualizado em 15/10/2026 (ClipStudio: tela e motor até a transcrição).**
 
 ## Pronto
 
@@ -17,15 +17,18 @@
 ## O que falta
 
 1. 🟢 Primeiro projeto criado: **ClipStudio** (`clipstudio`), página em branco no hub.
-4. 🔴 ClipStudio: de onde vem o vídeo - arquivo enviado (recomendado) ou link da
-   plataforma (perguntado em 15/10/2026). Motivo em `projetos/clipstudio/PROJETO.md`.
+4. 🟢 ClipStudio: link E arquivo (decidido pelo dono em 15/10). Tela e motor prontos até a
+   transcrição.
+5. 🟡 ClipStudio: ligar o motor no computador do dono com a chave da Groq e testar com uma
+   live de verdade.
+6. ClipStudio: etapa 4 (IA escolhe os cortes) e etapa 5 (recorte 9:16 + legenda).
 2. Infra pessoal (repo, Cloudflare, D1, Pages) e nome do Pages - do dono.
 3. Rotas de sessão/login - só quando um projeto precisar gravar no servidor.
 
 ## Próximo passo
 
-Com a resposta do item 4, construir a primeira tela do ClipStudio (carregar vídeo,
-marcar início e fim, gerar o corte).
+ClipStudio, etapa 4: mandar a transcrição para a IA e receber os trechos (início, fim,
+nota, título, gancho) - a galeria já sabe mostrar.
 
 ## Por quê
 

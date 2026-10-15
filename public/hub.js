@@ -9,6 +9,12 @@
     pronto: 'Pronto para migrar',
     migrado: 'Migrado',
   };
+  // Icones do cartao (campo "icone" no projetos.json). SVG inline: sem biblioteca externa.
+  var ICONES = {
+    tesoura: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12"/></svg>',
+    video: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>',
+    projeto: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6L4.5 18.5A2 2 0 0 0 6.2 21h11.6a2 2 0 0 0 1.7-2.5L14 9V3"/><path d="M7 15h10"/></svg>',
+  };
   var grade = document.getElementById('grade');
   var carregando = document.getElementById('carregando');
   var filtros = document.getElementById('filtros');
@@ -28,7 +34,10 @@
     var destino = fase === 'migrado' && p.endereco ? p.endereco : '/projetos/' + encodeURIComponent(p.slug) + '/';
     var rotulo = fase === 'migrado' ? 'Abrir no endereço próprio →' : 'Abrir projeto →';
     return '<a class="cartao" href="' + esc(destino) + '">' +
-      '<div class="cartao-topo"><h2>' + esc(p.titulo) + '</h2>' +
+      '<div class="cartao-topo">' +
+      '<span class="icone">' + (ICONES[p.icone] || ICONES.projeto) + '</span>' +
+      '<div class="cartao-nome"><h2>' + esc(p.titulo) + '</h2>' +
+      (p.resumo ? '<p class="resumo">' + esc(p.resumo) + '</p>' : '') + '</div>' +
       '<span class="fase fase-' + fase + '">' + FASES[fase] + '</span></div>' +
       '<dl>' +
       '<div><dt>Ideia</dt><dd>' + (esc(p.ideia) || '<em>a definir</em>') + '</dd></div>' +

@@ -2,6 +2,7 @@
 // scripts/novo-projeto.mjs - cria um projeto novo DENTRO do Lab Hub, ja isolado.
 //
 //   node scripts/novo-projeto.mjs <slug> --titulo "..." --ideia "..." --objetivo "..."
+//        [--resumo "frase curta do cartao"] [--icone tesoura|video|projeto]
 //
 // Cada projeto nasce em pastas so dele, a partir de scripts/modelo-projeto/:
 //   public/projetos/<slug>/   a tela (index.html, estilo.css, app.js)
@@ -67,6 +68,8 @@ lista.push({
   titulo: opc.titulo,
   ideia: opc.ideia || '',
   objetivo: opc.objetivo || '',
+  ...(opc.resumo ? { resumo: opc.resumo } : {}),
+  ...(opc.icone ? { icone: opc.icone } : {}),
   fase: 'beta',
   criado_em: hoje.toISOString().slice(0, 10),
 });

@@ -1,0 +1,6 @@
+# Motor do ClipStudio - roda no computador do dono, NAO no Cloudflare.
+fastapi==0.115.6
+uvicorn==0.34.0
+python-multipart==0.0.20
+requests==2.32.3
+yt-dlp>=2025.1.1

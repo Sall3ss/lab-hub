@@ -12,14 +12,98 @@
   <header class="barra">
     <a class="voltar" href="/">← Hub</a>
     <h1>ClipStudio</h1>
-    <span class="fase">Beta</span>
+    <button type="button" class="motor" id="motor" title="Endereço do motor">
+      <span class="ponto"></span><span id="motor-txt">Motor...</span>
+    </button>
   </header>
 
-  <main class="area" id="app">
-    <p class="vazio">Página em branco. É aqui que o projeto vai ser construído.</p>
+  <main class="area">
+    <!-- Entrada -->
+    <section class="painel">
+      <h2>Nova live</h2>
+      <div class="abas" role="tablist">
+        <button type="button" role="tab" class="ativa" data-aba="url">Link da live</button>
+        <button type="button" role="tab" data-aba="arquivo">Enviar arquivo</button>
+      </div>
+      <form id="form" novalidate>
+        <div data-painel="url">
+          <label for="url">Link do vídeo gravado (YouTube, Twitch, Kick...)</label>
+          <input id="url" name="url" data-mask="url" placeholder="https://www.twitch.tv/videos/..." autocomplete="off" />
+          <p class="dica">A live precisa ter terminado. Live ainda no ar não é aceita.</p>
+        </div>
+        <div data-painel="arquivo" hidden>
+          <label class="soltar" id="soltar" for="arquivo">
+            <input id="arquivo" type="file" accept="video/*,audio/*" />
+            <strong id="arquivo-nome">Escolha ou arraste o vídeo/áudio da live</strong>
+            <span>mp4, mkv, mov, webm, mp3, m4a, wav...</span>
+          </label>
+        </div>
+        <p class="msg" id="msg" hidden></p>
+        <button type="submit" class="primario" id="processar">Processar Live com IA</button>
+      </form>
+    </section>
+
+    <!-- Trabalho aberto -->
+    <section class="painel" id="trabalho" hidden>
+      <div class="trab-topo">
+        <div>
+          <h2 id="trab-titulo">Processando</h2>
+          <p class="dica" id="trab-sub"></p>
+        </div>
+        <button type="button" class="fechar" id="trab-fechar" aria-label="Fechar">✕</button>
+      </div>
+      <ol class="etapas" id="etapas"></ol>
+      <details class="transcricao" id="transcricao" hidden>
+        <summary>Ver transcrição</summary>
+        <div id="transcricao-txt"></div>
+      </details>
+    </section>
+
+    <!-- Galeria -->
+    <section>
+      <div class="sec-topo"><h2>Cortes encontrados</h2><span class="dica" id="cortes-qtd"></span></div>
+      <div class="galeria" id="galeria"></div>
+    </section>
+
+    <!-- Historico -->
+    <section>
+      <div class="sec-topo"><h2>Lives processadas</h2>
+        <button type="button" class="link" id="atualizar">Atualizar</button></div>
+      <ul class="historico" id="historico"></ul>
+    </section>
   </main>
 
+  <!-- Preview 9:16 -->
+  <div class="modal" id="modal" hidden>
+    <div class="modal-caixa" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
+      <div class="modal-topo">
+        <h3 id="modal-titulo"></h3>
+        <button type="button" class="fechar" id="modal-fechar" aria-label="Fechar">✕</button>
+      </div>
+      <div class="vertical"><video id="modal-video" controls playsinline></video></div>
+      <p class="dica" id="modal-gancho"></p>
+      <a class="primario" id="modal-baixar" download>Baixar corte</a>
+    </div>
+  </div>
+
+  <!-- Endereco do motor -->
+  <div class="modal" id="config" hidden>
+    <form class="modal-caixa" id="config-form" role="dialog" aria-modal="true" aria-labelledby="config-titulo">
+      <div class="modal-topo">
+        <h3 id="config-titulo">Endereço do motor</h3>
+        <button type="button" class="fechar" data-fecha aria-label="Fechar">✕</button>
+      </div>
+      <p class="dica">O motor roda no seu computador e faz o trabalho pesado (baixar, extrair áudio, transcrever).</p>
+      <input id="config-url" data-mask="url" placeholder="http://localhost:8000" />
+      <div class="botoes">
+        <button type="button" class="secundario" data-fecha>Cancelar</button>
+        <button type="submit" class="primario">Salvar</button>
+      </div>
+    </form>
+  </div>
+
   <script src="/navegador.js"></script>
+  <script src="/campos.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
