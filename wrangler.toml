@@ -13,7 +13,7 @@ pages_build_output_dir = "./public"
 [[d1_databases]]
 binding = "DB"
 database_name = "lab-hub-d1"               # ex: "padaria-do-ze-d1"
-database_id = "PREENCHER_APOS_d1_create"
+database_id = "4d14d93f-25e8-4dba-967a-1464bbdb1afd"  # lab-hub-d1, conta Cloudflare pessoal do dono (15/10/2026)
 
 # Deposito de arquivo do cliente (foto, documento, exame que o usuario envia).
 # Convencao da casa: painel-<cliente>-arquivos, com o binding ARQUIVOS - do mesmo jeito que

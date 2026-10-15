@@ -55,6 +55,18 @@ jobs:
           wranglerVersion: ${{ env.WRANGLER_VERSION }}
           command: d1 migrations apply ${{ env.D1_DATABASE }} --remote
 
+      # Lab Hub: o projeto Pages nasce aqui, na primeira publicacao, para o dono nao ter que
+      # criar pelo painel (o painel exige subir arquivos a mao). Se ja existe, o create
+      # falha e seguimos; se falhou por outro motivo, o passo seguinte acusa. Claude (Opus 5.5).
+      - name: Criar o projeto Pages (so na primeira vez)
+        uses: cloudflare/wrangler-action@v3
+        continue-on-error: true
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: ${{ env.WRANGLER_VERSION }}
+          command: pages project create ${{ env.PAGES_PROJECT }} --production-branch main
+
       - name: Publicar Pages
         uses: cloudflare/wrangler-action@v3
         with:

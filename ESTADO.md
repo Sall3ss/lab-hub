@@ -19,9 +19,10 @@
 ## O que falta
 
 1. 🟡 Hub no ar pela web (pedido do dono em 15/10: acessar como os outros projetos, sem
-   rodar nada local). Precisa da Cloudflare pessoal dele: conta, projeto Pages `lab-hub`,
-   banco D1 `lab-hub-d1` (o id vai no `wrangler.toml`) e os secrets `CLOUDFLARE_API_TOKEN` e
-   `CLOUDFLARE_ACCOUNT_ID` no repositório. Depois, religar o push no `deploy.yml`.
+   rodar nada local). 🟢 Conta Cloudflare pessoal criada; 🟢 D1 `lab-hub-d1` criado, id no
+   `wrangler.toml`; 🟢 o deploy cria o projeto Pages sozinho na primeira vez. Falta: os
+   secrets `CLOUDFLARE_API_TOKEN` (Pages:Edit + D1:Edit) e `CLOUDFLARE_ACCOUNT_ID` no repo,
+   e então religar o push no `deploy.yml` (o próprio commit de religar dispara a 1ª publicação).
 2. 🟢 Autoria dos 4 primeiros commits (`ventures-dev`, e-mail da empresa): **mantida**, decidido
    pelo dono em 15/10 ("pode manter tudo na empresa, estou usando de testes e treino").
 4. ⚠️ `lab-hub.pages.dev` JÁ É DE OUTRA PESSOA (conferido em 15/10: abre "Runstack Lab").
