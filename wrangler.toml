@@ -6,13 +6,13 @@
 # A conta vem do secret CLOUDFLARE_ACCOUNT_ID no GitHub Actions. (Descoberto no primeiro
 # deploy real, 01/08/2026; o template trazia o campo e quebrava todo cliente novo.)
 
-name = "CLIENTE-SLUG"                      # ex: "padaria-do-ze"
+name = "lab-hub"                           # ex: "padaria-do-ze"
 compatibility_date = "2025-09-23"
 pages_build_output_dir = "./public"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "CLIENTE-SLUG-d1"          # ex: "padaria-do-ze-d1"
+database_name = "lab-hub-d1"               # ex: "padaria-do-ze-d1"
 database_id = "PREENCHER_APOS_d1_create"
 
 # Deposito de arquivo do cliente (foto, documento, exame que o usuario envia).

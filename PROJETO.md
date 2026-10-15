@@ -51,6 +51,8 @@ o script é o que garante o isolamento.
 
 - Repositório privado no GitHub pessoal, conta Cloudflare pessoal, D1 e Pages.
 - Nome do projeto Pages (sugestão: `lab-hub`) antes de criar: a Cloudflare não renomeia.
-- Trocar `CLIENTE-SLUG` em `wrangler.toml` e `.github/workflows/deploy.yml`.
+- `CLIENTE-SLUG` já trocado por `lab-hub` em `wrangler.toml` e no deploy (15/10): o wrangler
+  recusa rodar até no PC com o nome provisório. Se o Pages for criado com outro nome, troque
+  nos dois.
 - Login: as rotas de sessão (`/api/sessao`) ainda não existem. Só serão necessárias quando
   o primeiro projeto precisar gravar dado no servidor; até lá tudo `/api/p/...` responde 401.

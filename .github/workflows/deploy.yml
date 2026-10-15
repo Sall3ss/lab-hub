@@ -23,13 +23,13 @@ name: deploy
 
 # Lab Hub (15/10/2026): o gatilho de push fica desligado até existir a Cloudflare pessoal
 # (Pages + D1) e os secrets no repositório. Sem isso, todo push vira um deploy que falha.
-# Para religar: voltar `push: branches: [main]` junto com a troca do CLIENTE-SLUG.
+# Nome já trocado para lab-hub (15/10). Para religar: voltar `push: branches: [main]`.
 on:
   workflow_dispatch:
 
 env:
-  PAGES_PROJECT: CLIENTE-SLUG
-  D1_DATABASE: CLIENTE-SLUG-d1
+  PAGES_PROJECT: lab-hub
+  D1_DATABASE: lab-hub-d1
   WRANGLER_VERSION: "4.118.0"
 
 jobs:
