@@ -1,0 +1,14 @@
+{
+  "name": "base-cliente",
+  "version": "0.1.0",
+  "description": "Template base para projetos de clientes (Cloudflare Pages + Functions + D1).",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler pages dev ./public",
+    "deploy": "wrangler pages deploy ./public",
+    "migrate:all": "node scripts/migrate-all.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^3.80.0"
+  }
+}

@@ -1,0 +1,23 @@
+# dependencias
+node_modules/
+
+# cloudflare / wrangler
+.wrangler/
+.dev.vars
+.dev.vars.*
+
+# segredos locais (nunca versionar)
+*.local
+.env
+.env.*
+
+# sistema
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# editor
+.vscode/
+
+# logs e temporarios
+*.log

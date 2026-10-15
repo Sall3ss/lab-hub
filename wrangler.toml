@@ -1,0 +1,35 @@
+# wrangler.toml — TEMPLATE. Ao provisionar um cliente, preencha name e database_id.
+# Um projeto Pages + um D1 POR CLIENTE (ver README).
+#
+# NÃO existe account_id aqui: wrangler.toml de projeto Pages NÃO aceita esse campo — o
+# deploy morre com "Configuration file for Pages projects does not support account_id".
+# A conta vem do secret CLOUDFLARE_ACCOUNT_ID no GitHub Actions. (Descoberto no primeiro
+# deploy real, 01/08/2026; o template trazia o campo e quebrava todo cliente novo.)
+
+name = "CLIENTE-SLUG"                      # ex: "padaria-do-ze"
+compatibility_date = "2025-09-23"
+pages_build_output_dir = "./public"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "CLIENTE-SLUG-d1"          # ex: "padaria-do-ze-d1"
+database_id = "PREENCHER_APOS_d1_create"
+
+# Deposito de arquivo do cliente (foto, documento, exame que o usuario envia).
+# Convencao da casa: painel-<cliente>-arquivos, com o binding ARQUIVOS - do mesmo jeito que
+# o banco e DB. Descomente quando o projeto for guardar arquivo; o gestor cria o deposito.
+#
+# ⚠️ Binding novo so passa a existir no deploy SEGUINTE ao da ligacao.
+#
+# [[r2_buckets]]
+# binding = "ARQUIVOS"
+# bucket_name = "CLIENTE-SLUG-arquivos"
+
+# Secrets (defina com `wrangler pages secret put NOME --project-name <slug>`), NUNCA no toml.
+# NAO existe mais ADMIN_TOKEN: o acesso e por usuario e senha individuais, e o sistema ja
+# nasce com o administrador criado (ver scripts/admin-inicial.mjs). Um token igual para
+# todo mundo nao identifica ninguem - decidido em 08/08/2026.
+#   RESEND_API_KEY     - se usar e-mail
+#   EMAIL_REMETENTE    - ex: "contato@dominiodocliente.com.br"
+#   WHATSAPP_TOKEN     - se usar WhatsApp (Cloud API oficial)
+#   WHATSAPP_PHONE_ID  - id do numero no WhatsApp Cloud API

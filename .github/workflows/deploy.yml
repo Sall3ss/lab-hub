@@ -1,0 +1,62 @@
+name: deploy
+
+# Publica no Cloudflare Pages a cada push na main. Quem tem as credenciais é o GitHub
+# Actions, nunca uma máquina de desenvolvimento - por isso o deploy mora aqui.
+#
+# OS NOMES FICAM AQUI, no próprio arquivo, e não em variáveis do GitHub. Motivo: variável
+# de repositório é mais um passo manual a cada cliente novo, e quando alguém esquece o
+# deploy falha com uma mensagem que não aponta para a causa. Aqui o nome está versionado
+# e à vista.
+#
+# ⚠️ `CLIENTE-SLUG` abaixo é PLACEHOLDER, e nada o substitui sozinho: o `novo-projeto`
+# copia este arquivo como está, de propósito, porque o nome definitivo é decisão do gestor
+# e vem depois da criação da pasta. Quem troca é o técnico, na etapa 9, junto com o
+# `wrangler.toml`. Antes do primeiro push: `grep -rn CLIENTE-SLUG .` tem que vir vazio.
+#
+# O `if` impede que este workflow rode no repositório TEMPLATE, que não tem Pages nem
+# banco: sem ele, todo push no template dispara um deploy que falha e enche o e-mail do
+# gestor. No clone de um cliente o nome do repo é outro, então o job roda normalmente.
+# Compara pelo NOME do repositório, não pelo dono: em 11/09/2026 o template mudou de conta
+# (informaticaf1 -> informaticaf1-clientes) e a trava que citava o dono deixou de valer.
+#
+# Autoria: Claude (Opus 5).
+
+on:
+  push:
+    branches: [main]
+
+env:
+  PAGES_PROJECT: CLIENTE-SLUG
+  D1_DATABASE: CLIENTE-SLUG-d1
+  WRANGLER_VERSION: "4.118.0"
+
+jobs:
+  deploy:
+    if: github.event.repository.name != 'base-cliente'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm install
+
+      # Migrations antes do deploy: o código novo pode depender de tabela nova.
+      # `d1 migrations apply` é idempotente - só roda o que ainda não rodou.
+      - name: Aplicar migrations no D1
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: ${{ env.WRANGLER_VERSION }}
+          command: d1 migrations apply ${{ env.D1_DATABASE }} --remote
+
+      - name: Publicar Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: ${{ env.WRANGLER_VERSION }}
+          command: pages deploy ./public --project-name ${{ env.PAGES_PROJECT }}
