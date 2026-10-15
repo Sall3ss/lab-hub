@@ -16,13 +16,16 @@
 
 ## O que falta
 
-1. 🔴 Primeiro projeto: título, ideia e objetivo (perguntado em 15/10/2026).
+1. 🟢 Primeiro projeto criado: **ClipStudio** (`clipstudio`), página em branco no hub.
+4. 🔴 ClipStudio: de onde vem o vídeo - arquivo enviado (recomendado) ou link da
+   plataforma (perguntado em 15/10/2026). Motivo em `projetos/clipstudio/PROJETO.md`.
 2. Infra pessoal (repo, Cloudflare, D1, Pages) e nome do Pages - do dono.
 3. Rotas de sessão/login - só quando um projeto precisar gravar no servidor.
 
 ## Próximo passo
 
-Receber título, ideia e objetivo do primeiro projeto e criá-lo com o script.
+Com a resposta do item 4, construir a primeira tela do ClipStudio (carregar vídeo,
+marcar início e fim, gerar o corte).
 
 ## Por quê
 

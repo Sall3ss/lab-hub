@@ -1,1 +1,10 @@
-[]
+[
+  {
+    "slug": "clipstudio",
+    "titulo": "ClipStudio",
+    "ideia": "Painel para fazer cortes e clipes das lives feitas em plataformas como Kick, Twitch e YouTube.",
+    "objetivo": "Que os usuários consigam fazer os cortes de forma fácil e prática, e ainda editar os clipes para uma experiência melhor.",
+    "fase": "beta",
+    "criado_em": "2026-10-15"
+  }
+]
