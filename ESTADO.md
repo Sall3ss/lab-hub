@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 15/10/2026 (ClipStudio arquivado; hub limpo, sem projeto).**
+**Atualizado em 15/10/2026 (hub no ar em https://lab-hub-9uh.pages.dev, sem projeto).**
 
 ## Pronto
 
@@ -18,17 +18,14 @@
 
 ## O que falta
 
-1. 🟡 Hub no ar pela web (pedido do dono em 15/10: acessar como os outros projetos, sem
-   rodar nada local). 🟢 Conta Cloudflare pessoal criada; 🟢 D1 `lab-hub-d1` criado, id no
-   `wrangler.toml`; 🟢 o deploy cria o projeto Pages sozinho na primeira vez. 🟢 Secrets
-   `CLOUDFLARE_API_TOKEN` (Pages:Edit + D1:Edit) e `CLOUDFLARE_ACCOUNT_ID` gravados pelo dono;
-   🟢 push religado no `deploy.yml` (15/10). Falta: conferir a 1ª publicação na aba Actions
-   e anotar aqui o endereço `*.pages.dev` real.
+1. 🟢 **Hub no ar: https://lab-hub-9uh.pages.dev** (15/10). Cloudflare pessoal do dono, D1
+   `lab-hub-d1`, projeto Pages `lab-hub` criado pelo próprio deploy. Push na main publica.
+   Conferido: página e `projetos.json` (vazio) respondem 200, `/api/p/...` responde 401
+   (esperado, sem login). Endereço desconhecido cai no hub (comportamento padrão do Pages).
 2. 🟢 Autoria dos 4 primeiros commits (`ventures-dev`, e-mail da empresa): **mantida**, decidido
    pelo dono em 15/10 ("pode manter tudo na empresa, estou usando de testes e treino").
-4. ⚠️ `lab-hub.pages.dev` JÁ É DE OUTRA PESSOA (conferido em 15/10: abre "Runstack Lab").
-   O Pages do dono, mesmo com o nome `lab-hub`, vai ganhar outro endereço
-   (ex.: `lab-hub-xxx.pages.dev`). Anotar aqui o endereço real quando existir.
+4. ⚠️ `lab-hub.pages.dev` (sem o `-9uh`) é de OUTRA pessoa ("Runstack Lab"). O nosso é
+   `lab-hub-9uh.pages.dev`.
 3. Rotas de sessão/login - só quando um projeto precisar gravar no servidor.
 
 ## ClipStudio: arquivado em 15/10/2026
