@@ -1,1 +1,10 @@
-[]
+[
+  {
+    "slug": "cyberidle",
+    "titulo": "Cyberidle",
+    "ideia": "Idle game no formato do BaiakIdle, com tema cyberpunk: hackers, augments, corporações, neon e megacidades.",
+    "objetivo": "",
+    "fase": "beta",
+    "criado_em": "2026-10-15"
+  }
+]

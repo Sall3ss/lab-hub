@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 15/10/2026 (hub no ar em https://lab-hub-9uh.pages.dev, sem projeto).**
+**Atualizado em 15/10/2026 (hub no ar em https://lab-hub-9uh.pages.dev; projeto Cyberidle criado).**
 
 ## Pronto
 
@@ -26,6 +26,9 @@
    pelo dono em 15/10 ("pode manter tudo na empresa, estou usando de testes e treino").
 4. ⚠️ `lab-hub.pages.dev` (sem o `-9uh`) é de OUTRA pessoa ("Runstack Lab"). O nosso é
    `lab-hub-9uh.pages.dev`.
+5. 🟡 **Cyberidle** (`cyberidle`) criado em 15/10: cartão no hub e página própria em branco
+   (`/projetos/cyberidle/`). Idle game no formato do BaiakIdle com tema cyberpunk. ❓ 🔴
+   Falta do dono: o objetivo e o que do BaiakIdle é a base (o loop do jogo).
 3. Rotas de sessão/login - só quando um projeto precisar gravar no servidor.
 
 ## ClipStudio: arquivado em 15/10/2026
