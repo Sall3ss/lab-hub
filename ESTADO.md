@@ -22,8 +22,11 @@
    rodar nada local). Precisa da Cloudflare pessoal dele: conta, projeto Pages `lab-hub`,
    banco D1 `lab-hub-d1` (o id vai no `wrangler.toml`) e os secrets `CLOUDFLARE_API_TOKEN` e
    `CLOUDFLARE_ACCOUNT_ID` no repositório. Depois, religar o push no `deploy.yml`.
-2. ❓ 🔴 Os 4 primeiros commits estão com autor `ventures-dev <contato@informaticaf1.com.br>`
-   (feitos antes do repo existir). Passar para o nome do dono ou manter? Aguardando.
+2. 🟢 Autoria dos 4 primeiros commits (`ventures-dev`, e-mail da empresa): **mantida**, decidido
+   pelo dono em 15/10 ("pode manter tudo na empresa, estou usando de testes e treino").
+4. ⚠️ `lab-hub.pages.dev` JÁ É DE OUTRA PESSOA (conferido em 15/10: abre "Runstack Lab").
+   O Pages do dono, mesmo com o nome `lab-hub`, vai ganhar outro endereço
+   (ex.: `lab-hub-xxx.pages.dev`). Anotar aqui o endereço real quando existir.
 3. Rotas de sessão/login - só quando um projeto precisar gravar no servidor.
 
 ## ClipStudio: arquivado em 15/10/2026
