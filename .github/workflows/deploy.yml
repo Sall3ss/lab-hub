@@ -21,10 +21,11 @@ name: deploy
 #
 # Autoria: Claude (Opus 5).
 
-# Lab Hub (15/10/2026): o gatilho de push fica desligado até existir a Cloudflare pessoal
-# (Pages + D1) e os secrets no repositório. Sem isso, todo push vira um deploy que falha.
-# Nome já trocado para lab-hub (15/10). Para religar: voltar `push: branches: [main]`.
+# Lab Hub (15/10/2026): Cloudflare pessoal do dono, D1 e secrets gravados -> push religado.
+# `workflow_dispatch` permite publicar de novo à mão, pela aba Actions, sem commit.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 env:
