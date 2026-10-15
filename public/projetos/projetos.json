@@ -3,7 +3,7 @@
     "slug": "cyberidle",
     "titulo": "Cyberidle",
     "ideia": "Idle game no formato do BaiakIdle, com tema cyberpunk: hackers, augments, corporações, neon e megacidades.",
-    "objetivo": "",
+    "objetivo": "Construir o jogo em pequenas fases, testando cada mecânica antes de avançar, com toda a lógica no navegador para não pesar o servidor.",
     "fase": "beta",
     "criado_em": "2026-10-15"
   }

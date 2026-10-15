@@ -26,9 +26,9 @@
    pelo dono em 15/10 ("pode manter tudo na empresa, estou usando de testes e treino").
 4. ⚠️ `lab-hub.pages.dev` (sem o `-9uh`) é de OUTRA pessoa ("Runstack Lab"). O nosso é
    `lab-hub-9uh.pages.dev`.
-5. 🟡 **Cyberidle** (`cyberidle`) criado em 15/10: cartão no hub e página própria em branco
-   (`/projetos/cyberidle/`). Idle game no formato do BaiakIdle com tema cyberpunk. ❓ 🔴
-   Falta do dono: o objetivo e o que do BaiakIdle é a base (o loop do jogo).
+5. 🟢 **Cyberidle** Fase 1 no ar (15/10): https://lab-hub-9uh.pages.dev/cyberidle - combate
+   automático, Creds, XP, level up, upgrade. Ficha com conceito, fases e decisões em
+   `projetos/cyberidle/PROJETO.md`. Próximo: Fase 2 (loot/inventário e distritos).
 3. Rotas de sessão/login - só quando um projeto precisar gravar no servidor.
 
 ## ClipStudio: arquivado em 15/10/2026
