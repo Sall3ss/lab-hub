@@ -17,6 +17,7 @@ import { diag } from '../../lib/diag.js';
 import { usuarioAtual, precisaDefinirAcesso, administra } from '../../lib/auth.js';
 import { auditar } from '../../lib/audit.js';
 import { db } from '../../lib/db.js';
+import { PROJETOS } from '../../projetos/registro.js';
 
 export async function onRequest(context) {
   const { request, env, params, data } = context;
@@ -36,6 +37,15 @@ export async function onRequest(context) {
     if (!u) return json({ erro: 'sessão expirada', reautenticar: true }, 401);
     if (precisaDefinirAcesso(u)) {
       return json({ erro: 'defina o seu acesso antes de usar o sistema', definir_acesso: true }, 403);
+    }
+
+    // Lab Hub: cada projeto responde em /api/p/<slug>/... com o modulo dele
+    // (projetos/<slug>/api.js). Passa por aqui, depois das travas, para nenhum projeto
+    // ficar sem protecao por esquecimento. Autoria: Claude (Opus 5.5).
+    if (rota === 'p') {
+      const projeto = PROJETOS[partes[1]];
+      if (!projeto) return json({ erro: 'projeto nao encontrado', projeto: partes[1] || '' }, 404);
+      return await projeto.rotas({ request, env, data, u, partes: partes.slice(2), metodo, json });
     }
 
     // Exemplo de rota da casca: listar/criar "itens" (troque pelo domínio do cliente).

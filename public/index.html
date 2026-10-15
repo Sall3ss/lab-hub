@@ -3,22 +3,33 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Base Cliente</title>
-  <style>
-    :root { color-scheme: light dark; }
-    * { box-sizing: border-box; }
-    body { font-family: system-ui, sans-serif; margin: 0; display: grid; place-items: center; min-height: 100dvh; padding: 1rem; }
-    main { max-width: 32rem; text-align: center; }
-    code { background: #8883; padding: .1em .4em; border-radius: .3em; }
-    h1 { margin-bottom: .25rem; }
-  </style>
+  <title>Lab Hub</title>
+  <link rel="stylesheet" href="/hub.css" />
 </head>
 <body>
-  <main>
-    <h1>Base Cliente</h1>
-    <p>Esqueleto pronto. Troque esta casca pelo frontend do cliente.</p>
-    <p>API viva em <code>/api/diag?fn=ping</code> (com header <code>x-token</code>).</p>
+  <header class="topo">
+    <div class="topo-dentro">
+      <div>
+        <h1>Lab Hub</h1>
+        <p class="sub">Projetos em fase beta. Cada um com título, ideia e objetivo próprios.</p>
+      </div>
+      <span class="contador" id="contador" hidden></span>
+    </div>
+  </header>
+
+  <main class="conteudo">
+    <div class="filtros" id="filtros" hidden>
+      <button type="button" data-fase="" class="ativo">Todos</button>
+      <button type="button" data-fase="beta">Beta</button>
+      <button type="button" data-fase="pronto">Pronto para migrar</button>
+      <button type="button" data-fase="migrado">Migrado</button>
+    </div>
+
+    <p class="aviso" id="carregando">Carregando projetos...</p>
+    <section class="grade" id="grade" aria-live="polite"></section>
   </main>
+
   <script src="/navegador.js"></script>
+  <script src="/hub.js"></script>
 </body>
 </html>

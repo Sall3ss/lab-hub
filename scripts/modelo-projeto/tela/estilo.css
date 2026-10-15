@@ -1,0 +1,11 @@
+/* Estilo do projeto "{{SLUG}}". Nao herda nada do hub: projeto nao se mistura. */
+:root { color-scheme: light dark; --fundo: #f6f7f9; --cartao: #fff; --texto: #1c2430; --suave: #5d6878; --borda: #e2e6ec; --destaque: #2f6fed; }
+@media (prefers-color-scheme: dark) { :root { --fundo: #12161c; --cartao: #1b2129; --texto: #e6eaf0; --suave: #9aa5b4; --borda: #2a323d; --destaque: #6f9dff; } }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, sans-serif; background: var(--fundo); color: var(--texto); min-height: 100dvh; }
+.barra { display: flex; align-items: center; gap: .75rem; padding: .75rem 1rem; background: var(--cartao); border-bottom: 1px solid var(--borda); }
+.barra h1 { margin: 0; font-size: 1.15rem; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.voltar { color: var(--destaque); text-decoration: none; font-weight: 600; white-space: nowrap; }
+.fase { font-size: .75rem; font-weight: 600; padding: .2rem .55rem; border-radius: 999px; color: #b26a00; background: #fff3df; }
+.area { max-width: 70rem; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+.vazio { text-align: center; color: var(--suave); padding: 4rem 1rem; border: 2px dashed var(--borda); border-radius: .75rem; }
