@@ -22,7 +22,9 @@
 5. 🟡 ClipStudio: ligar o motor no computador do dono com a chave da Groq e testar com uma
    live de verdade.
 6. ClipStudio: etapa 4 (IA escolhe os cortes) e etapa 5 (recorte 9:16 + legenda).
-2. Infra pessoal (repo, Cloudflare, D1, Pages) e nome do Pages - do dono.
+2. Infra pessoal: 🟢 repo criado (`github.com/Sall3ss/lab-hub`, privado). Falta Cloudflare,
+   D1, Pages e nome do Pages - do dono. O deploy automático está desligado até lá
+   (`.github/workflows/deploy.yml` só roda à mão).
 3. Rotas de sessão/login - só quando um projeto precisar gravar no servidor.
 
 ## Próximo passo

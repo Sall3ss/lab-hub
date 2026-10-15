@@ -21,9 +21,11 @@ name: deploy
 #
 # Autoria: Claude (Opus 5).
 
+# Lab Hub (15/10/2026): o gatilho de push fica desligado até existir a Cloudflare pessoal
+# (Pages + D1) e os secrets no repositório. Sem isso, todo push vira um deploy que falha.
+# Para religar: voltar `push: branches: [main]` junto com a troca do CLIENTE-SLUG.
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 env:
   PAGES_PROJECT: CLIENTE-SLUG
