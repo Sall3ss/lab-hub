@@ -19,8 +19,15 @@
 1. 🟢 Primeiro projeto criado: **ClipStudio** (`clipstudio`), página em branco no hub.
 4. 🟢 ClipStudio: link E arquivo (decidido pelo dono em 15/10). Tela e motor prontos até a
    transcrição.
-5. 🟡 ClipStudio: ligar o motor no computador do dono com a chave da Groq e testar com uma
-   live de verdade.
+5. 🟡 ClipStudio: motor e tela LIGADOS no PC do dono (Windows, `C:\Users\F1\lab-hub`, 15/10),
+   chave da Groq no `.env` dele. Falta testar com uma live de verdade.
+7. ❓ 🔴 Onde o motor mora para não depender do PC do dono (o dono quer que ele e outros
+   técnicos usem sem a máquina dele ligada). Opções dadas em 15/10: A) VPS pessoal dele
+   (recomendada; risco: YouTube bloqueia download de IP de datacenter), B) VPS da empresa
+   (quebra a regra de projeto pessoal, precisa do gestor, segredo em máquina compartilhada),
+   C) seguir no PC por ora. Aguardando resposta.
+8. ❓ 🔴 Os 4 primeiros commits estão com autor `ventures-dev <contato@informaticaf1.com.br>`
+   (feitos antes do repo existir). Passar para o nome do dono ou manter? Aguardando.
 6. ClipStudio: etapa 4 (IA escolhe os cortes) e etapa 5 (recorte 9:16 + legenda).
 2. Infra pessoal: 🟢 repo criado (`github.com/Sall3ss/lab-hub`, privado). Falta Cloudflare,
    D1, Pages e nome do Pages - do dono. O deploy automático está desligado até lá
