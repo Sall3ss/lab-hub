@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 15/10/2026 (ClipStudio: tela e motor até a transcrição).**
+**Atualizado em 15/10/2026 (ClipStudio arquivado; hub limpo, sem projeto).**
 
 ## Pronto
 
@@ -12,32 +12,33 @@
   repetido e slug inválido recusados, rota `/ping` respondendo.
 - Porta única da API encaminha `/api/p/<slug>/...` para o módulo do projeto, depois das
   travas de sessão.
+- Repositório: `github.com/Sall3ss/lab-hub` (privado, conta pessoal). Push desta máquina
+  com chave própria do repo (`~/.ssh/id_ed25519_labhub`, host `github-labhub`).
 - Como funciona e como migrar: `PROJETO.md`.
 
 ## O que falta
 
-1. 🟢 Primeiro projeto criado: **ClipStudio** (`clipstudio`), página em branco no hub.
-4. 🟢 ClipStudio: link E arquivo (decidido pelo dono em 15/10). Tela e motor prontos até a
-   transcrição.
-5. 🟡 ClipStudio: motor e tela LIGADOS no PC do dono (Windows, `C:\Users\F1\lab-hub`, 15/10),
-   chave da Groq no `.env` dele. Falta testar com uma live de verdade.
-7. ❓ 🔴 Onde o motor mora para não depender do PC do dono (o dono quer que ele e outros
-   técnicos usem sem a máquina dele ligada). Opções dadas em 15/10: A) VPS pessoal dele
-   (recomendada; risco: YouTube bloqueia download de IP de datacenter), B) VPS da empresa
-   (quebra a regra de projeto pessoal, precisa do gestor, segredo em máquina compartilhada),
-   C) seguir no PC por ora. Aguardando resposta.
-8. ❓ 🔴 Os 4 primeiros commits estão com autor `ventures-dev <contato@informaticaf1.com.br>`
+1. 🟡 Hub no ar pela web (pedido do dono em 15/10: acessar como os outros projetos, sem
+   rodar nada local). Precisa da Cloudflare pessoal dele: conta, projeto Pages `lab-hub`,
+   banco D1 `lab-hub-d1` (o id vai no `wrangler.toml`) e os secrets `CLOUDFLARE_API_TOKEN` e
+   `CLOUDFLARE_ACCOUNT_ID` no repositório. Depois, religar o push no `deploy.yml`.
+2. ❓ 🔴 Os 4 primeiros commits estão com autor `ventures-dev <contato@informaticaf1.com.br>`
    (feitos antes do repo existir). Passar para o nome do dono ou manter? Aguardando.
-6. ClipStudio: etapa 4 (IA escolhe os cortes) e etapa 5 (recorte 9:16 + legenda).
-2. Infra pessoal: 🟢 repo criado (`github.com/Sall3ss/lab-hub`, privado). Falta Cloudflare,
-   D1, Pages e nome do Pages - do dono. O deploy automático está desligado até lá
-   (`.github/workflows/deploy.yml` só roda à mão).
 3. Rotas de sessão/login - só quando um projeto precisar gravar no servidor.
 
-## Próximo passo
+## ClipStudio: arquivado em 15/10/2026
 
-ClipStudio, etapa 4: mandar a transcrição para a IA e receber os trechos (início, fim,
-nota, título, gancho) - a galeria já sabe mostrar.
+O dono pausou o projeto e pediu o hub limpo. Tudo saiu do código (tela, motor, ficha,
+cartão, atalho `/clipstudio`, máscara `url` do `campos.js`, ícone/resumo do cartão).
+Nada dele rodava na VPS (conferido: sem processo, sem pacote, sem arquivo fora do repo).
+
+Fica guardado na tag **`arquivo/clipstudio`** (tela + motor Python até a transcrição, e a
+ficha com as decisões). Para recuperar:
+`git checkout arquivo/clipstudio -- projetos/clipstudio public/projetos/clipstudio`.
+
+Lição: o motor exigia uma máquina ligada (o PC do dono), e o dono quer tudo acessível pela
+web sem depender de máquina de ninguém. Se voltar, decidir antes onde o motor mora
+(VPS pessoal do dono era a recomendação).
 
 ## Por quê
 
