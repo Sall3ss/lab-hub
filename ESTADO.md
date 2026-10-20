@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 20/10/2026 (Cyberidle com visual de sprites).**
+**Atualizado em 20/10/2026 (Cyberidle: avaliando o jogo do zip TB Idle como base).**
 
 ## Pronto
 
@@ -30,6 +30,19 @@
    automático, Creds, XP, level up, upgrade. 20/10: visual com sprites (6 inimigos, arena
    neon), só do OpenTibia Sprite Pack (CC BY 4.0). Ficha com conceito, fases e decisões em
    `projetos/cyberidle/PROJETO.md`. Próximo: Fase 2 (loot/inventário e distritos).
+6. 🟡 **Cyberidle vai ser substituído pelo jogo do `TB Idle.zip`** (pedido do dono em 20/10:
+   usar como base, ter o jogo todo funcional com UI e animações, e só depois virar cyberpunk).
+   O zip (`../_arquivos/Cyberidle/TB Idle.zip`, 819 MB, fora do Git) é o projeto "Tibia Idle
+   Global": monorepo pnpm, ~30 mil linhas - `apps/web` (React + PixiJS), `apps/server`
+   (Fastify + SQLite + WebSocket), `packages/sim` (combate determinístico), `packages/data`
+   (1800 monstros, 131 hunts), sprites oficiais do cliente Tibia extraídos (11 mil webp,
+   ~51 MB). Rodado nesta máquina em 20/10 (cópia de teste no scratchpad): **funciona** -
+   convidado, criação de personagem, hunt animada no mapa, painéis estilo Tibia.
+   Problemas para pôr no hub: (a) o servidor Node+SQLite+WebSocket não roda no Cloudflare
+   Pages; (b) os sprites e a UI são arte oficial da CipSoft e o nome "Tibia" é marca dela -
+   numa página pública arrisca pedido de remoção que derruba o Pages inteiro (o hub junto).
+   ❓ 🔴 Aguardando o dono: (1) modo local no navegador (recomendado) x servidor próprio;
+   (2) proteger `/cyberidle` com Cloudflare Access (só o e-mail dele) antes de publicar.
 3. Rotas de sessão/login - só quando um projeto precisar gravar no servidor.
 
 ## ClipStudio: arquivado em 15/10/2026
