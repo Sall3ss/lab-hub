@@ -1,0 +1,14 @@
+{
+  "frameWidth": 128,
+  "frameHeight": 128,
+  "frameCount": 5,
+  "animationSpeed": 0.32,
+  "sprites": {
+    "sword": "sword-strip.webp",
+    "axe": "axe-strip.webp",
+    "club": "club-strip.webp",
+    "fist": "fist-strip.webp",
+    "monk-daggers": "monk-daggers-strip.webp",
+    "monk-staff": "monk-staff-strip.webp"
+  }
+}

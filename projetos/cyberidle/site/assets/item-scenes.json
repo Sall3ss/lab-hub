@@ -1,0 +1,62 @@
+{
+  "15710": {
+    "file": "item-scenes/15710.webp",
+    "width": 32,
+    "height": 32,
+    "name": "item 15710"
+  },
+  "15711": {
+    "file": "item-scenes/15711.webp",
+    "width": 32,
+    "height": 32,
+    "name": "item 15711"
+  },
+  "28558": {
+    "file": "item-scenes/28558.webp",
+    "width": 64,
+    "height": 64,
+    "name": "item 28558"
+  },
+  "28559": {
+    "file": "item-scenes/28559.webp",
+    "width": 64,
+    "height": 64,
+    "name": "ferumbras exercise dummy"
+  },
+  "28561": {
+    "file": "item-scenes/28561.webp",
+    "width": 64,
+    "height": 64,
+    "name": "demon exercise dummy"
+  },
+  "28563": {
+    "file": "item-scenes/28563.webp",
+    "width": 64,
+    "height": 64,
+    "name": "monk exercise dummy"
+  },
+  "50435": {
+    "file": "item-scenes/50435.webp",
+    "width": 64,
+    "height": 64,
+    "name": "wooden dummy"
+  },
+  "12047": {
+    "file": "item-scenes/12047.webp",
+    "width": 64,
+    "height": 64,
+    "name": "item 12047"
+  },
+  "12048": {
+    "file": "item-scenes/12048.webp",
+    "width": 64,
+    "height": 64,
+    "name": "item 12048"
+  },
+  "50143": {
+    "file": "item-scenes/50143.webp",
+    "width": 64,
+    "height": 64,
+    "name": "item 50143"
+  }
+}

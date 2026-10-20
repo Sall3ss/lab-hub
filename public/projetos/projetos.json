@@ -2,9 +2,10 @@
   {
     "slug": "cyberidle",
     "titulo": "Cyberidle",
-    "ideia": "Idle game no formato do BaiakIdle, com tema cyberpunk: hackers, augments, corporações, neon e megacidades.",
-    "objetivo": "Construir o jogo em pequenas fases, testando cada mecânica antes de avançar, com toda a lógica no navegador para não pesar o servidor.",
+    "ideia": "Idle de navegador no estilo Tibia (base: projeto Tibia Idle Global), que depois ganha o tema cyberpunk: hackers, augments, corporações e megacidades.",
+    "objetivo": "Ter primeiro o jogo inteiro funcionando, com UI e animações, rodando só no navegador; depois trocar arte e tema para cyberpunk.",
     "fase": "beta",
-    "criado_em": "2026-10-15"
+    "criado_em": "2026-10-15",
+    "endereco": "https://cyberidle-game.pages.dev"
   }
 ]
