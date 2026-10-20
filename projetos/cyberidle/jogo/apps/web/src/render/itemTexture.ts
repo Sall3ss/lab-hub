@@ -19,14 +19,14 @@ const cache = new Map<number, Texture>();
 const loading = new Map<number, Promise<Texture>>();
 
 function loadSceneManifest(): Promise<Record<string, SceneRow>> {
-  sceneManifestPromise ??= fetch(`/assets/item-scenes.json?v=${ASSET_BUST}`)
+  sceneManifestPromise ??= fetch(`${import.meta.env.BASE_URL}assets/item-scenes.json?v=${ASSET_BUST}`)
     .then((r) => (r.ok ? r.json() : {}))
     .catch(() => ({})) as Promise<Record<string, SceneRow>>;
   return sceneManifestPromise;
 }
 
 function loadIconManifest(): Promise<Record<string, IconRow>> {
-  iconManifestPromise ??= fetch(`/assets/item-icons.json?v=${ASSET_BUST}`)
+  iconManifestPromise ??= fetch(`${import.meta.env.BASE_URL}assets/item-icons.json?v=${ASSET_BUST}`)
     .then((r) => (r.ok ? r.json() : {}))
     .catch(() => ({})) as Promise<Record<string, IconRow>>;
   return iconManifestPromise;
@@ -83,7 +83,7 @@ export async function itemSceneTexture(itemId: number): Promise<Texture> {
     const sceneManifest = await loadSceneManifest();
     const sceneRow = sceneManifest[String(itemId)];
     if (sceneRow?.file) {
-      const tex = await loadFromUrl(`/assets/${sceneRow.file}`);
+      const tex = await loadFromUrl(`${import.meta.env.BASE_URL}assets/${sceneRow.file}`);
       if (tex && tex.width > 0) {
         cache.set(itemId, tex);
         return tex;
@@ -93,7 +93,7 @@ export async function itemSceneTexture(itemId: number): Promise<Texture> {
     const iconManifest = await loadIconManifest();
     const iconRow = iconManifest[String(itemId)];
     if (iconRow?.file) {
-      const tex = await loadFromUrl(`/assets/${iconRow.file}`);
+      const tex = await loadFromUrl(`${import.meta.env.BASE_URL}assets/${iconRow.file}`);
       if (tex && tex.width > 0) {
         cache.set(itemId, tex);
         return tex;

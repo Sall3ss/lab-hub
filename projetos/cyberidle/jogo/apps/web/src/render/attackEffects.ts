@@ -9,7 +9,7 @@ interface AttackMeta {
   sprites: Record<string, string>;
 }
 
-const BASE = '/assets/attack';
+const BASE = `${import.meta.env.BASE_URL}assets/attack`;
 const BUST = 'melee-fx-2';
 
 let metaPromise: Promise<AttackMeta> | null = null;

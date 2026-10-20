@@ -50,7 +50,7 @@ export const DIRECTION_EAST = 1;
 export const DIRECTION_SOUTH = 2;
 export const DIRECTION_WEST = 3;
 
-const BASE = '/assets';
+const BASE = `${import.meta.env.BASE_URL}assets`;
 
 function applyPixelArtSampling(texture: Texture | null): void {
   if (!texture?.source || texture.source.destroyed) return;

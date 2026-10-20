@@ -1,60 +1,26 @@
 <!doctype html>
 <html lang="pt-BR">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#0d0f12" />
-  <title>Cyberidle</title>
-  <!-- Projeto "cyberidle" do Lab Hub. Tudo que e deste projeto fica nesta pasta: para
-       migrar, ela sai inteira, sem depender de nada do hub. -->
-  <link rel="stylesheet" href="./estilo.css" />
-</head>
-<body>
-  <header class="barra">
-    <a class="voltar" href="/">← Hub</a>
-    <h1>CYBERIDLE</h1>
-    <span class="fase">Beta</span>
-  </header>
-
-  <main class="jogo">
-    <!-- Operador (jogador) -->
-    <section class="painel">
-      <h2 class="com-icone"><img src="./img/rifle.png" alt="" class="icone" width="32" height="28" />[ OPERADOR ]</h2>
-      <div class="linha"><span>Status</span><span class="verde">ONLINE</span></div>
-      <div class="linha"><span>Nível de Sistema</span><span id="nivel">1</span></div>
-      <div class="linha"><span>Cripto Creds</span><span id="creds" class="verde">$0</span></div>
-      <div class="linha"><span>Poder de ataque</span><span><span id="atk">10</span> DPS</span></div>
-      <div class="linha"><span>Alvos neutralizados</span><span id="abates">0</span></div>
-
-      <div class="linha topo-barra"><span>Progresso do nível</span><span id="xp-txt">0/100 XP</span></div>
-      <div class="barra-fundo"><div id="xp-barra" class="barra-cheia xp"></div></div>
-
-      <button type="button" id="btn-overclock" class="botao">UPGRADE: OVERCLOCK (+5 DPS) · $15</button>
-      <button type="button" id="btn-reiniciar" class="botao discreto">Reiniciar progresso</button>
-    </section>
-
-    <!-- Alvo atual (combate) -->
-    <section class="painel">
-      <h2>[ ALVO ATUAL ]</h2>
-      <div class="arena" id="arena">
-        <img id="alvo-sprite" class="sprite" src="./img/bot-sucata.png" alt="Bot de Sucata v1" width="128" height="128" />
-      </div>
-      <div class="linha"><span>Alvo</span><strong id="alvo-nome" class="rosa">Bot de Sucata v1</strong></div>
-      <div class="linha topo-barra"><span>Integridade</span><span id="alvo-hp-txt">50/50</span></div>
-      <div class="barra-fundo"><div id="hp-barra" class="barra-cheia hp"></div></div>
-
-      <h2 class="sub">[ TERMINAL LOG ]</h2>
-      <div id="log" class="log" aria-live="polite"></div>
-    </section>
-  </main>
-
-  <footer class="creditos">
-    Sprites: <a href="https://github.com/peonso/opentibia_sprite_pack" target="_blank" rel="noopener">OpenTibia Sprite Pack</a>
-    (<a href="https://creativecommons.org/licenses/by/4.0/deed.pt-br" target="_blank" rel="noopener">CC BY 4.0</a>),
-    pela comunidade OpenTibia - <a href="./img/CREDITOS.txt" target="_blank" rel="noopener">autores</a>.
-  </footer>
-
-  <script src="/navegador.js"></script>
-  <script src="./app.js"></script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#12100e" />
+    <title>Tibia Idle</title>
+    <meta
+      name="description"
+      content="Um MMO idle construido sobre as formulas, monstros e itens do Tibia 15.25."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap"
+      rel="stylesheet"
+    />
+    <script type="module" crossorigin src="/projetos/cyberidle/app/index-I-45ZD8y.js"></script>
+    <link rel="modulepreload" crossorigin href="/projetos/cyberidle/app/pixi-BMspSJi_.js">
+    <link rel="modulepreload" crossorigin href="/projetos/cyberidle/app/data-DDWoN6Rj.js">
+    <link rel="stylesheet" crossorigin href="/projetos/cyberidle/app/index-K12vZi48.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
 </html>

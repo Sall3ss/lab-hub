@@ -49,7 +49,7 @@ let manifestPromise: Promise<SpellIconManifest> | null = null;
 let sheetPromise: Promise<HTMLImageElement> | null = null;
 
 function loadManifest(): Promise<SpellIconManifest> {
-  manifestPromise ??= fetch(`/assets/spell-icons.json?v=${ASSET_BUST}`)
+  manifestPromise ??= fetch(`${import.meta.env.BASE_URL}assets/spell-icons.json?v=${ASSET_BUST}`)
     .then((r) => (r.ok ? r.json() : null))
     .catch(() => null)
     .then((data) => data ?? { version: 0, sheet: '', iconSize: 32, iconsPerRow: 20, icons: {} }) as Promise<SpellIconManifest>;
@@ -61,7 +61,7 @@ function loadSpellSheet(file: string): Promise<HTMLImageElement> {
     const image = new Image();
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error(`spell sheet ${file}`));
-    image.src = `/assets/${file}?v=${ASSET_BUST}`;
+    image.src = `${import.meta.env.BASE_URL}assets/${file}?v=${ASSET_BUST}`;
   });
   return sheetPromise;
 }
@@ -69,7 +69,7 @@ function loadSpellSheet(file: string): Promise<HTMLImageElement> {
 function loadMeta(category: 'effects' | 'missiles'): Promise<AtlasMeta> {
   const existing = metaCache.get(category);
   if (existing) return existing;
-  const promise = fetch(`/assets/${category}.json?v=${ASSET_BUST}`).then((r) => r.json()) as Promise<AtlasMeta>;
+  const promise = fetch(`${import.meta.env.BASE_URL}assets/${category}.json?v=${ASSET_BUST}`).then((r) => r.json()) as Promise<AtlasMeta>;
   metaCache.set(category, promise);
   return promise;
 }
@@ -81,7 +81,7 @@ function loadPage(file: string): Promise<HTMLImageElement> {
     const image = new Image();
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error(`atlas page ${file}`));
-    image.src = `/assets/${file}?v=${ASSET_BUST}`;
+    image.src = `${import.meta.env.BASE_URL}assets/${file}?v=${ASSET_BUST}`;
   });
   pageCache.set(file, promise);
   return promise;

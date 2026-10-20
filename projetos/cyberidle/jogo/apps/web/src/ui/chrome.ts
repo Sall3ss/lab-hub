@@ -1,13 +1,13 @@
 /** Official client UI copied to /assets/ui by tools/extractor/copy_ui.py. */
 export function uiUrl(rel: string): string {
   const clean = rel.replace(/^\//, '').replace(/\.(png|webp)$/i, '');
-  return `/assets/ui/${clean}.webp`;
+  return `${import.meta.env.BASE_URL}assets/ui/${clean}.webp`;
 }
 
 /** Item / misc sprites under /assets (not the ui/ subtree). */
 export function assetUrl(rel: string): string {
   const clean = rel.replace(/^\//, '').replace(/\.(png|webp)$/i, '');
-  return `/assets/${clean}.webp`;
+  return `${import.meta.env.BASE_URL}assets/${clean}.webp`;
 }
 
 export const NAV_ICON: Record<string, string> = {

@@ -25,7 +25,7 @@ const atlasPages = new Map<number, Promise<HTMLImageElement>>();
 const cache = new Map<string, string>();
 
 function loadMeta(): Promise<OutfitsMeta> {
-  metaPromise ??= fetch(`/assets/outfits.json?v=${ASSET_BUST}`).then((r) => r.json()) as Promise<OutfitsMeta>;
+  metaPromise ??= fetch(`${import.meta.env.BASE_URL}assets/outfits.json?v=${ASSET_BUST}`).then((r) => r.json()) as Promise<OutfitsMeta>;
   return metaPromise;
 }
 
@@ -36,7 +36,7 @@ function loadAtlasPage(index: number, file: string): Promise<HTMLImageElement> {
     const image = new Image();
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error(`outfit page ${file}`));
-    image.src = `/assets/${file}?v=${ASSET_BUST}`;
+    image.src = `${import.meta.env.BASE_URL}assets/${file}?v=${ASSET_BUST}`;
   });
   atlasPages.set(index, promise);
   return promise;

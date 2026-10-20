@@ -175,15 +175,26 @@ CREATE TABLE IF NOT EXISTS invites (
 );
 `;
 
-// Node lists the SQLite driver in `builtinModules` only under its prefixed
-// name, which is enough to make bundlers treat `node:sqlite` as a package on
-// disk and fail to resolve it. Requiring it at runtime sidesteps that.
-const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite');
+/**
+ * O que o Database usa do driver. No Node e o `node:sqlite`; no navegador (modo local do
+ * Cyberidle) e um adaptador sobre o sql.js com a mesma forma. Lab Hub, Claude (Opus 5.5).
+ */
+export type SqlDriver = Pick<DatabaseSyncType, 'exec' | 'prepare' | 'close'>;
 
 export class Database {
-  private readonly db: DatabaseSyncType;
+  private readonly db: SqlDriver;
 
-  constructor(file: string) {
+  constructor(file: string | SqlDriver) {
+    if (typeof file !== 'string') {
+      this.db = file;
+      this.db.exec('PRAGMA foreign_keys = ON');
+      this.db.exec(SCHEMA);
+      return;
+    }
+    // Node lists the SQLite driver in `builtinModules` only under its prefixed
+    // name, which is enough to make bundlers treat `node:sqlite` as a package on
+    // disk and fail to resolve it. Requiring it at runtime sidesteps that.
+    const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite');
     if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
     this.db = new DatabaseSync(file);
     this.db.exec('PRAGMA journal_mode = WAL');

@@ -23,12 +23,12 @@ const standaloneIcons = new Map<string, Promise<HTMLImageElement>>();
 const cache = new Map<number, string>();
 
 function loadMeta(): Promise<ItemsMeta> {
-  metaPromise ??= fetch(`/assets/items.json?v=${ASSET_BUST}`).then((r) => r.json()) as Promise<ItemsMeta>;
+  metaPromise ??= fetch(`${import.meta.env.BASE_URL}assets/items.json?v=${ASSET_BUST}`).then((r) => r.json()) as Promise<ItemsMeta>;
   return metaPromise;
 }
 
 function loadManifest(): Promise<IconManifest> {
-  manifestPromise ??= fetch(`/assets/item-icons.json?v=${ASSET_BUST}`)
+  manifestPromise ??= fetch(`${import.meta.env.BASE_URL}assets/item-icons.json?v=${ASSET_BUST}`)
     .then((r) => (r.ok ? r.json() : {}))
     .catch(() => ({})) as Promise<IconManifest>;
   return manifestPromise;
@@ -41,7 +41,7 @@ function loadAtlasPage(index: number, file: string): Promise<HTMLImageElement> {
     const image = new Image();
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error(`item page ${file}`));
-    image.src = `/assets/${file}?v=${ASSET_BUST}`;
+    image.src = `${import.meta.env.BASE_URL}assets/${file}?v=${ASSET_BUST}`;
   });
   atlasPages.set(index, promise);
   return promise;
@@ -54,7 +54,7 @@ function loadStandaloneIcon(file: string): Promise<HTMLImageElement> {
     const image = new Image();
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error(`icon ${file}`));
-    image.src = `/assets/${file}?v=${ASSET_BUST}`;
+    image.src = `${import.meta.env.BASE_URL}assets/${file}?v=${ASSET_BUST}`;
   });
   standaloneIcons.set(file, promise);
   return promise;

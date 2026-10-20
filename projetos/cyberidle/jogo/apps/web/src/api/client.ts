@@ -1,4 +1,5 @@
 import type { AccountView, BossView, CharacterView, HuntView, Settlement, WorldView } from './types.js';
+import { assinar, chamar } from '../local/servidor.js';
 
 /**
  * Thin wrapper over the REST API.
@@ -26,34 +27,13 @@ export function storeToken(token: string | null): void {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
+// Cyberidle (Lab Hub): sem servidor. Cada chamada vai para o "servidor local" que roda
+// neste navegador (../local/servidor.ts), com as mesmas rotas e respostas. Claude (Opus 5.5).
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
-  const token = storedToken();
-  const response = await fetch(url, {
-    method,
-    headers: {
-      ...(body === undefined ? {} : { 'content-type': 'application/json' }),
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-
-  const text = await response.text();
-  let payload: Record<string, unknown> = {};
-  if (text) {
-    try {
-      payload = JSON.parse(text) as Record<string, unknown>;
-    } catch {
-      payload = {};
-    }
-  }
-  if (!response.ok) {
+  const { status, corpo: payload } = await chamar(method, url, body, storedToken());
+  if (status >= 400) {
     const raw = String(payload['error'] ?? '');
-    const fallback = response.status === 502 || response.status === 500
-      ? 'Servidor offline. Aguarde alguns segundos ou reinicie com pnpm dev.'
-      : response.status === 404 && url.startsWith('/api/')
-        ? 'API indisponível na porta 3000. Pare o servidor antigo e rode: pnpm --filter @tibia-idle/server dev'
-        : response.statusText;
-    throw new ApiError(raw || fallback, response.status);
+    throw new ApiError(raw || 'Algo deu errado.', status);
   }
   return payload as T;
 }
@@ -149,60 +129,22 @@ export const api = {
  * rather than showing a frozen screen.
  */
 export class LiveSocket {
-  private socket: WebSocket | null = null;
-  private retry = 0;
-  private closed = false;
-  private timer: number | null = null;
+  private parar: (() => void) | null;
 
   constructor(
-    private readonly characterId: number,
-    private readonly onState: (character: CharacterView, settlement: Settlement) => void,
-    private readonly onStatus: (status: 'connecting' | 'open' | 'closed') => void,
+    characterId: number,
+    onState: (character: CharacterView, settlement: Settlement) => void,
+    onStatus: (status: 'connecting' | 'open' | 'closed') => void,
   ) {
-    this.connect();
-  }
-
-  private connect(): void {
-    if (this.closed) return;
-    this.onStatus('connecting');
-
-    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const socket = new WebSocket(`${protocol}//${location.host}/ws`);
-    this.socket = socket;
-
-    socket.addEventListener('open', () => {
-      this.retry = 0;
-      this.onStatus('open');
-      socket.send(JSON.stringify({
-        type: 'subscribe',
-        token: storedToken(),
-        characterId: this.characterId,
-      }));
-    });
-
-    socket.addEventListener('message', (event) => {
-      const message = JSON.parse(String(event.data)) as {
-        type: string;
-        character?: CharacterView;
-        settlement?: Settlement;
-      };
-      if (message.type === 'state' && message.character) {
-        this.onState(message.character, message.settlement ?? { elapsedSeconds: 0, stoppedBecause: null });
-      }
-    });
-
-    socket.addEventListener('close', () => {
-      this.onStatus('closed');
-      if (this.closed) return;
-      const delay = Math.min(30_000, 500 * 2 ** this.retry);
-      this.retry += 1;
-      this.timer = window.setTimeout(() => this.connect(), delay);
+    // Modo local: o "estado ao vivo" vem do servidor local, sem rede. Lab Hub, Claude (Opus 5.5).
+    onStatus('open');
+    this.parar = assinar(storedToken(), characterId, (character, settlement) => {
+      onState(character as CharacterView, (settlement as Settlement | undefined) ?? { elapsedSeconds: 0, stoppedBecause: null });
     });
   }
 
   close(): void {
-    this.closed = true;
-    if (this.timer !== null) window.clearTimeout(this.timer);
-    this.socket?.close();
+    this.parar?.();
+    this.parar = null;
   }
 }

@@ -16,10 +16,17 @@ function hash(password: string, salt: string): string {
 }
 
 export function verifyPassword(password: string, salt: string, expected: string): boolean {
-  const actual = Buffer.from(hash(password, salt), 'hex');
-  const target = Buffer.from(expected, 'hex');
+  const actual = fromHex(hash(password, salt));
+  const target = fromHex(expected);
   if (actual.length !== target.length) return false;
   return timingSafeEqual(actual, target);
+}
+
+// Sem `Buffer`, para o mesmo arquivo rodar no navegador (modo local). Lab Hub, Claude (Opus 5.5).
+function fromHex(hex: string): Uint8Array {
+  const out = new Uint8Array(hex.length >> 1);
+  for (let i = 0; i < out.length; i += 1) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return out;
 }
 
 export interface AuthResult {
@@ -122,7 +129,7 @@ export function claimAccount(db: Database, accountId: number, username: string, 
 
 /** Reads `Authorization: Bearer <token>` and resolves it to an account. */
 export function isAdminUsername(username: string): boolean {
-  const listed = (process.env['ADMIN_USERS'] ?? 'admin')
+  const listed = ((globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.['ADMIN_USERS'] ?? 'admin')
     .split(/[,;\s]+/)
     .map((entry) => entry.trim().toLowerCase())
     .filter(Boolean);

@@ -8,7 +8,12 @@ import react from '@vitejs/plugin-react';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '../..');
 const apiTarget = process.env['API_URL'] ?? 'http://127.0.0.1:3000';
-const assetsDir = path.join(repoRoot, 'tools', 'extractor', 'out', 'assets');
+// Lab Hub: o jogo e publicado em /projetos/cyberidle/ e os sprites moram na pasta publica
+// do projeto (public/projetos/cyberidle/assets/), fora do codigo. Claude (Opus 5.5).
+const BASE = '/projetos/cyberidle/';
+const hubPublic = path.resolve(repoRoot, '../../../public/projetos/cyberidle');
+const assetsDir = path.join(hubPublic, 'assets');
+const shims = path.resolve(here, 'src/local/shims');
 
 const MIME: Record<string, string> = {
   '.webp': 'image/webp',
@@ -23,8 +28,9 @@ function serveExtractedAssets(): Plugin {
     name: 'serve-extracted-assets',
     configureServer(server) {
       server.middlewares.use((req: IncomingMessage, res: ServerResponse, next: () => void) => {
-        if (!req.url?.startsWith('/assets/')) return next();
-        const rel = decodeURIComponent(req.url.slice('/assets/'.length).split('?')[0] ?? '');
+        const prefixo = `${BASE}assets/`;
+        if (!req.url?.startsWith(prefixo)) return next();
+        const rel = decodeURIComponent(req.url.slice(prefixo.length).split('?')[0] ?? '');
         const file = path.normalize(path.join(assetsDir, rel));
         if (!file.startsWith(assetsDir) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
           return next();
@@ -42,6 +48,7 @@ function serveExtractedAssets(): Plugin {
 }
 
 export default defineConfig({
+  base: BASE,
   plugins: [react(), serveExtractedAssets()],
   server: {
     proxy: {
@@ -52,11 +59,22 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(here, 'src'),
+      // Modo local: o codigo do servidor roda no navegador; estes modulos do Node viram
+      // substitutos pequenos (ver src/local/shims/).
+      'node:crypto': path.join(shims, 'crypto.ts'),
+      'node:fs': path.join(shims, 'vazio.ts'),
+      'node:path': path.join(shims, 'vazio.ts'),
+      'node:module': path.join(shims, 'vazio.ts'),
     },
   },
   build: {
-    outDir: 'dist',
-    sourcemap: true,
+    // Sai direto na pasta publica do hub. Nao apaga a pasta (os sprites moram la);
+    // o script `publicar` limpa so o que e do build (index.html e app/).
+    outDir: hubPublic,
+    emptyOutDir: false,
+    assetsDir: 'app',
+    sourcemap: false,
+    chunkSizeWarningLimit: 12000,
     rollupOptions: {
       output: {
         manualChunks: {
