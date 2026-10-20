@@ -30,8 +30,23 @@
     try { localStorage.setItem(CHAVE, JSON.stringify(s)); } catch (_) {}
   }
 
-  // Alvo sobe de versão a cada 10 abates (só nome, por enquanto).
-  function nomeAlvo() { return 'Drone de Vigilância v' + (1 + Math.floor(s.abates / 10)); }
+  // Inimigos em ordem de progressão. Troca a cada 10 abates; depois do último, a lista
+  // recomeça com a versão seguinte (v2, v3...). Sprites em ./img/ (OpenTibia Sprite Pack,
+  // CC BY 4.0 - créditos no rodapé da página).
+  var INIMIGOS = [
+    { img: 'bot-sucata', nome: 'Bot de Sucata', cor: '#39ff14' },
+    { img: 'drone', nome: 'Drone de Vigilância', cor: '#00f0ff' },
+    { img: 'seguranca', nome: 'Segurança Corporativo', cor: '#ffb800' },
+    { img: 'ice', nome: 'ICE de Firewall', cor: '#7df9ff' },
+    { img: 'hacker', nome: 'Hacker Rival', cor: '#b14dff' },
+    { img: 'daemon', nome: 'Daemon de Rede', cor: '#ff007f' },
+  ];
+  function alvo() {
+    var t = Math.floor(s.abates / 10);
+    var i = INIMIGOS[t % INIMIGOS.length];
+    return { img: i.img, cor: i.cor, nome: i.nome + ' v' + (1 + Math.floor(t / INIMIGOS.length)) };
+  }
+  function nomeAlvo() { return alvo().nome; }
   // Recompensa acompanha a vida do alvo: sem isso o alvo cresce 5% por abate e o
   // ganho fica parado, e o jogo trava depois de poucos minutos.
   function premioCreds() { return Math.ceil(s.alvoMax / 10); }
@@ -51,7 +66,10 @@
   function abater(silencioso) {
     var c = premioCreds(), x = premioXp(), nome = nomeAlvo();
     s.creds += c; s.xp += x; s.abates++;
-    if (!silencioso) log('Alvo ' + nome + ' neutralizado! +$' + fmt(c) + ', +' + fmt(x) + ' XP', 'ok');
+    if (!silencioso) {
+      log('Alvo ' + nome + ' neutralizado! +$' + fmt(c) + ', +' + fmt(x) + ' XP', 'ok');
+      efeitoAbate(c);
+    }
     while (s.xp >= s.xpProx) {
       s.xp -= s.xpProx;
       s.nivel++;
@@ -81,7 +99,28 @@
     desenhar();
   }
 
+  // Efeito visual do abate: o sprite pisca e um "+$" sobe da arena. Só CSS, sem custo.
+  function efeitoAbate(creds) {
+    var spr = $('alvo-sprite');
+    spr.classList.remove('abatido');
+    void spr.offsetWidth; // reinicia a animação
+    spr.classList.add('abatido');
+    var f = document.createElement('span');
+    f.className = 'flutua';
+    f.textContent = '+$' + fmt(creds);
+    $('arena').appendChild(f);
+    setTimeout(function () { f.remove(); }, 900);
+  }
+
+  var imgAtual = '';
   function desenhar() {
+    var a = alvo();
+    if (a.img !== imgAtual) {
+      imgAtual = a.img;
+      $('alvo-sprite').src = './img/' + a.img + '.png';
+      $('alvo-sprite').alt = a.nome;
+      $('arena').closest('.painel').style.setProperty('--cor-alvo', a.cor);
+    }
     $('nivel').textContent = s.nivel;
     $('creds').textContent = '$' + fmt(s.creds);
     $('atk').textContent = fmt(s.atk);

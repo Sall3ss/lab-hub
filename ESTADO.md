@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 15/10/2026 (hub no ar em https://lab-hub-9uh.pages.dev; projeto Cyberidle criado).**
+**Atualizado em 20/10/2026 (Cyberidle com visual de sprites).**
 
 ## Pronto
 
@@ -27,7 +27,8 @@
 4. ⚠️ `lab-hub.pages.dev` (sem o `-9uh`) é de OUTRA pessoa ("Runstack Lab"). O nosso é
    `lab-hub-9uh.pages.dev`.
 5. 🟢 **Cyberidle** Fase 1 no ar (15/10): https://lab-hub-9uh.pages.dev/cyberidle - combate
-   automático, Creds, XP, level up, upgrade. Ficha com conceito, fases e decisões em
+   automático, Creds, XP, level up, upgrade. 20/10: visual com sprites (6 inimigos, arena
+   neon), só do OpenTibia Sprite Pack (CC BY 4.0). Ficha com conceito, fases e decisões em
    `projetos/cyberidle/PROJETO.md`. Próximo: Fase 2 (loot/inventário e distritos).
 3. Rotas de sessão/login - só quando um projeto precisar gravar no servidor.
 

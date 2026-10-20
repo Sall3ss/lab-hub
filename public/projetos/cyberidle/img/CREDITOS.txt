@@ -1,0 +1,69 @@
+Cyberidle - créditos das imagens desta pasta
+
+Todos os sprites desta pasta vêm do OpenTibia Sprite Pack
+https://github.com/peonso/opentibia_sprite_pack
+Licença: Creative Commons Atribuição 4.0 Internacional (CC BY 4.0)
+https://creativecommons.org/licenses/by/4.0/
+
+Alteração feita: recorte das folhas e remoção do fundo rosa (sem mudança no desenho).
+O brilho neon e as cores do jogo são aplicados por CSS na página.
+
+Arquivo          Folha de origem          Posição (x, y, tamanho)
+bot-sucata.png   otsp_creatures_02.png    32, 0, 32
+drone.png        otsp_creatures_02.png    128, 32, 32
+seguranca.png    otsp_creatures_01.png    0, 64, 32
+ice.png          otsp_creatures_03.png    0, 1568, 32
+hacker.png       otsp_creatures_02.png    0, 64, 64
+daemon.png       otsp_creatures_03.png    0, 1440, 32
+rifle.png        otsp_equipment_01.png    128, 576, 32
+
+Autores do pacote (lista do AUTHORS.md original):
+- 2Rec
+- 3visan (aka Vittu)
+- Anevis (aka Caynez)
+- Andreéw
+- Arkan'.
+- BeachboyX
+- BrenoNeto
+- Cat
+- Celix
+- Corvo (aka handland)
+- dami1310
+- Daniel
+- DawTorr
+- Despute
+- ElderDark
+- Erick Etchebeur
+- Frevius
+- Galiant (aka Andre)
+- GhostX
+- HalfAway
+- Hunter Killer (aka Made of Clay)
+- Jacobs
+- Landera
+- Leshrot
+- lionkobin
+- Madarada
+- markindoot
+- maxmillerxd
+- Nechros
+- Nogard
+- Nordberg
+- Noxz
+- Nu77
+- Peonso
+- Ranzor
+- Sam Drost
+- Saphron
+- Sherice
+- Shiva Shadowsong
+- Slaake
+- Somni
+- Thorn
+- Tokume
+- Venesis
+- wesleyt10
+- Way20
+- Weto
+- Worr
+- Sajgon

@@ -19,7 +19,7 @@
   <main class="jogo">
     <!-- Operador (jogador) -->
     <section class="painel">
-      <h2>[ OPERADOR ]</h2>
+      <h2 class="com-icone"><img src="./img/rifle.png" alt="" class="icone" width="32" height="28" />[ OPERADOR ]</h2>
       <div class="linha"><span>Status</span><span class="verde">ONLINE</span></div>
       <div class="linha"><span>Nível de Sistema</span><span id="nivel">1</span></div>
       <div class="linha"><span>Cripto Creds</span><span id="creds" class="verde">$0</span></div>
@@ -36,7 +36,10 @@
     <!-- Alvo atual (combate) -->
     <section class="painel">
       <h2>[ ALVO ATUAL ]</h2>
-      <div class="linha"><span>Alvo</span><strong id="alvo-nome" class="rosa">Drone de Vigilância v1</strong></div>
+      <div class="arena" id="arena">
+        <img id="alvo-sprite" class="sprite" src="./img/bot-sucata.png" alt="Bot de Sucata v1" width="128" height="128" />
+      </div>
+      <div class="linha"><span>Alvo</span><strong id="alvo-nome" class="rosa">Bot de Sucata v1</strong></div>
       <div class="linha topo-barra"><span>Integridade</span><span id="alvo-hp-txt">50/50</span></div>
       <div class="barra-fundo"><div id="hp-barra" class="barra-cheia hp"></div></div>
 
@@ -44,6 +47,12 @@
       <div id="log" class="log" aria-live="polite"></div>
     </section>
   </main>
+
+  <footer class="creditos">
+    Sprites: <a href="https://github.com/peonso/opentibia_sprite_pack" target="_blank" rel="noopener">OpenTibia Sprite Pack</a>
+    (<a href="https://creativecommons.org/licenses/by/4.0/deed.pt-br" target="_blank" rel="noopener">CC BY 4.0</a>),
+    pela comunidade OpenTibia - <a href="./img/CREDITOS.txt" target="_blank" rel="noopener">autores</a>.
+  </footer>
 
   <script src="/navegador.js"></script>
   <script src="./app.js"></script>

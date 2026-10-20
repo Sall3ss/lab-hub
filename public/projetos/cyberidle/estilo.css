@@ -5,6 +5,7 @@
   --fundo: #0d0f12; --painel: #161b22; --borda: #30363d; --trilho: #21262d;
   --texto: #c9d1d9; --suave: #8b949e;
   --azul: #00f0ff; --rosa: #ff007f; --verde: #39ff14;
+  --cor-alvo: #39ff14; /* trocada pelo app.js conforme o inimigo */
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--fundo); color: var(--texto); font-family: 'Courier New', Courier, monospace; min-height: 100dvh; }
@@ -42,3 +43,57 @@ h2.sub { margin-top: 1.25rem; }
 .botao:disabled { opacity: .4; cursor: not-allowed; }
 .botao.discreto { margin-top: .5rem; border-color: var(--borda); color: var(--suave); font-weight: 400; font-size: .85rem; }
 .botao.discreto:hover { background: var(--trilho); color: var(--texto); }
+
+/* ---------- Visual com sprites (OpenTibia Sprite Pack, CC BY 4.0) ---------- */
+/* Arena: chão de grade neon em perspectiva + linhas de varredura. A cor do brilho vem
+   do inimigo atual (--cor-alvo, definida pelo app.js). */
+.arena {
+
+  position: relative; height: 11rem; margin: .25rem 0 .75rem; overflow: hidden;
+  border: 1px solid var(--borda); border-radius: 4px;
+  background: radial-gradient(ellipse at 50% 85%, color-mix(in srgb, var(--cor-alvo) 22%, transparent), transparent 65%), #07080b;
+  display: grid; place-items: center;
+}
+.arena::before {
+  content: ''; position: absolute; left: -50%; right: -50%; bottom: -10%; height: 55%;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--cor-alvo) 45%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--cor-alvo) 45%, transparent) 1px, transparent 1px);
+  background-size: 28px 28px;
+  transform: perspective(220px) rotateX(60deg);
+  transform-origin: bottom; opacity: .55;
+}
+.arena::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(transparent 0 2px, rgba(0, 0, 0, .28) 2px 3px);
+}
+.sprite {
+  position: relative; z-index: 1; width: 128px; height: 128px; object-fit: contain;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 6px var(--cor-alvo)) drop-shadow(0 0 1px var(--cor-alvo));
+  animation: flutuar 2.4s ease-in-out infinite;
+}
+@keyframes flutuar { 50% { transform: translateY(-6px); } }
+.sprite.abatido { animation: abate .35s steps(2) 1, flutuar 2.4s ease-in-out .35s infinite; }
+@keyframes abate {
+  0% { filter: brightness(3) drop-shadow(0 0 10px #fff); transform: translateX(-3px); }
+  50% { filter: hue-rotate(90deg) drop-shadow(0 0 10px var(--cor-alvo)); transform: translateX(3px); }
+  100% { opacity: .2; }
+}
+.flutua {
+  position: absolute; z-index: 2; left: 50%; top: 40%; transform: translateX(-50%);
+  color: var(--verde); font-weight: 700; text-shadow: 0 0 6px var(--verde);
+  animation: subir .9s ease-out forwards; pointer-events: none;
+}
+@keyframes subir { to { transform: translate(-50%, -3rem); opacity: 0; } }
+#alvo-nome { color: var(--cor-alvo); }
+
+h2.com-icone { display: flex; align-items: center; gap: .5rem; }
+.icone { image-rendering: pixelated; filter: drop-shadow(0 0 4px var(--azul)); }
+
+.creditos { max-width: 52rem; margin: 0 auto; padding: 0 1rem 2rem; font-size: .75rem; color: var(--suave); text-align: center; }
+.creditos a { color: var(--azul); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sprite, .sprite.abatido, .flutua { animation: none; }
+}

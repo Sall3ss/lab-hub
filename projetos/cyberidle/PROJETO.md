@@ -46,8 +46,22 @@ Beta.
 - Fase 1 no ar em `/projetos/cyberidle/` (atalho `/cyberidle`). Conferida em print no PC
   (1280) e no celular (390): sem erro, sem rolagem lateral, progresso sobrevive ao recarregar.
 - Progresso salvo só no navegador (localStorage, chave `cyberidle.progresso.v1`).
+- 20/10: visual com sprites. Arena neon (grade em perspectiva, varredura, brilho na cor do
+  inimigo), sprite que flutua e pisca no abate, "+$" subindo. 6 inimigos que trocam a cada
+  10 abates e depois voltam em versão nova (v2, v3...): Bot de Sucata, Drone de Vigilância,
+  Segurança Corporativo, ICE de Firewall, Hacker Rival, Daemon de Rede. Ícone de rifle no
+  Operador. Conferido em print no PC e no celular.
 
 ## Decisões
+
+- 20/10/2026 - **Sprites só do OpenTibia Sprite Pack (CC BY 4.0)**, com crédito no rodapé e
+  em `public/projetos/cyberidle/img/CREDITOS.txt`. O dono deixou 3 pastas em
+  `../_arquivos/Cyberidle/` (1,3 GB, fora do Git). As outras (`Sprites/` - Hinas, Split,
+  Some Edited Weapons, Snowman - e `Custom Maps/`) **não têm licença** declarada (só um nome
+  em Credits.txt) e várias são edições de arte da CipSoft: não entram numa página pública.
+  Mapas `.otbm` precisam do cliente do Tibia para virar imagem; não servem direto aqui.
+  Para recortar mais sprites: folhas em `opentibia_sprite_pack-master/sprite_sheets/`,
+  grade de 32 px (outfits grandes em 64 px), fundo rosa #FF00FF vira transparente.
 
 - 15/10/2026 - **Servidor da Fase 3 é a Cloudflare (Functions + D1), não a VPS.** O plano
   original falava em Node.js na VPS; mas a VPS é só a máquina de desenvolvimento, e o hub
