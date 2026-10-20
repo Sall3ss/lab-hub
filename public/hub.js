@@ -25,8 +25,9 @@
   function cartao(p) {
     var fase = FASES[p.fase] ? p.fase : 'beta';
     // Projeto migrado leva para o endereco proprio dele; os demais, para a pasta no hub.
-    var destino = fase === 'migrado' && p.endereco ? p.endereco : '/projetos/' + encodeURIComponent(p.slug) + '/';
-    var rotulo = fase === 'migrado' ? 'Abrir no endereço próprio →' : 'Abrir projeto →';
+    // Projeto com `endereco` abre lá, mesmo em beta (ex.: Cyberidle, publicado à parte).
+    var destino = p.endereco ? p.endereco : '/projetos/' + encodeURIComponent(p.slug) + '/';
+    var rotulo = p.endereco ? 'Abrir no endereço próprio →' : 'Abrir projeto →';
     return '<a class="cartao" href="' + esc(destino) + '">' +
       '<div class="cartao-topo"><h2>' + esc(p.titulo) + '</h2>' +
       '<span class="fase fase-' + fase + '">' + FASES[fase] + '</span></div>' +

@@ -31,6 +31,7 @@ on:
 env:
   PAGES_PROJECT: lab-hub
   D1_DATABASE: lab-hub-d1
+  CYBERIDLE_PROJECT: cyberidle-game
   WRANGLER_VERSION: "4.118.0"
 
 jobs:
@@ -75,3 +76,20 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: ${{ env.WRANGLER_VERSION }}
           command: pages deploy ./public --project-name ${{ env.PAGES_PROJECT }}
+
+      # Cyberidle: o jogo tem endereco proprio (https://cyberidle-game.pages.dev), separado
+      # do hub, para que um pedido de remocao da arte (sprites do Tibia, da CipSoft) derrube
+      # so o jogo e nao o hub. Mesmo token e conta. Lab Hub, Claude (Opus 5.5), 20/10/2026.
+      # `npx` direto (e nao o wrangler-action, que instala o wrangler na pasta e o package.json
+      # iria para o site), e de uma COPIA fora do repo: o wrangler procura wrangler.toml subindo
+      # as pastas e usaria o do hub (nome, D1).
+      - name: Publicar o Cyberidle
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          cp -r projetos/cyberidle/site "$RUNNER_TEMP/cyberidle"
+          cd "$RUNNER_TEMP/cyberidle"
+          npx --yes wrangler@${WRANGLER_VERSION} pages project create "${CYBERIDLE_PROJECT}" --production-branch main \
+            || echo "projeto ja existe (ou falhou a criacao; o deploy abaixo acusa)"
+          npx --yes wrangler@${WRANGLER_VERSION} pages deploy . --project-name "${CYBERIDLE_PROJECT}" --branch main

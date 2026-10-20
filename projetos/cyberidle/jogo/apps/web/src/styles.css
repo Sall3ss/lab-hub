@@ -521,7 +521,7 @@ input, select {
   display: flex;
   align-items: center;
   gap: 8px;
-  background-image: url('/projetos/cyberidle/assets/ui/game/topbar/backgroundTop.webp') /* base do Lab Hub */;
+  background-image: url('/assets/ui/game/topbar/backgroundTop.webp');
   background-size: cover;
   padding: 0 10px;
   background: linear-gradient(#1a1f28, #10141b);

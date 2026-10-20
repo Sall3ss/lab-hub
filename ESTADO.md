@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 20/10/2026 (Cyberidle = TB Idle em modo local, aguardando Cloudflare Access).**
+**Atualizado em 20/10/2026 (Cyberidle no ar em endereço próprio).**
 
 ## Pronto
 
@@ -30,13 +30,12 @@
    automático, Creds, XP, level up, upgrade. 20/10: visual com sprites (6 inimigos, arena
    neon), só do OpenTibia Sprite Pack (CC BY 4.0). Ficha com conceito, fases e decisões em
    `projetos/cyberidle/PROJETO.md`. Próximo: Fase 2 (loot/inventário e distritos).
-6. 🟡 **Cyberidle = jogo do `TB Idle.zip` em modo local** (20/10, ramo `cyberidle-jogo`,
-   AINDA NÃO PUBLICADO). Roda inteiro no navegador (servidor do jogo dentro da página, banco
-   sql.js no IndexedDB); conferido no PC e no celular. Detalhes em
-   `projetos/cyberidle/PROJETO.md`. 20/10: nome trocado para Cyberidle na tela. O dono pediu
-   para pular o Cloudflare Access achando que o risco era só o nome; avisado que o maior é a
-   arte (sprites/UI extraídos do cliente oficial). ❓ 🔴 Aguardando o "pode publicar aberto
-   assim mesmo" (ou o Access) para fazer o merge na main.
+6. 🟢 **Cyberidle = jogo do `TB Idle.zip` em modo local, no ar em endereço próprio:
+   https://cyberidle-game.pages.dev** (20/10). Roda inteiro no navegador (servidor do jogo
+   dentro da página, banco sql.js no IndexedDB), nome trocado para Cyberidle. Projeto Pages
+   separado (`cyberidle-game`), publicado pelo mesmo deploy, para um pedido de remoção da arte
+   (sprites/UI do Tibia, da CipSoft) não derrubar o hub. Cartão do hub e `/cyberidle` apontam
+   para lá. Detalhes em `projetos/cyberidle/PROJETO.md`.
 3. Rotas de sessão/login - só quando um projeto precisar gravar no servidor.
 
 ## ClipStudio: arquivado em 15/10/2026

@@ -22,7 +22,8 @@ Beta.
 | O quê | Onde |
 | --- | --- |
 | Código do jogo (monorepo pnpm) | `projetos/cyberidle/jogo/` |
-| Jogo compilado + sprites (o que vai ao ar) | `public/projetos/cyberidle/` (`index.html`, `app/`, `assets/`) |
+| Jogo compilado + sprites (o que vai ao ar) | `projetos/cyberidle/site/` (`index.html`, `app/`, `assets/`) |
+| Endereço no ar (projeto Pages `cyberidle-game`, separado do hub) | https://cyberidle-game.pages.dev |
 | Esta ficha | `projetos/cyberidle/PROJETO.md` |
 | Rotas de servidor do hub | `projetos/cyberidle/api.js` (só `/ping`; o jogo não usa) |
 
@@ -51,10 +52,11 @@ WebSocket (`apps/server`). O Cloudflare Pages não roda esse servidor, então:
 ```
 cd projetos/cyberidle/jogo
 corepack pnpm install
-cd apps/web && corepack pnpm publicar     # limpa app/ e index.html e compila em public/
+cd apps/web && corepack pnpm publicar     # limpa app/ e index.html e compila em site/
 ```
 
-Depois, commit e push na main (o deploy publica). O `tsc` do original tem erros de tipo
+Depois, commit e push na main: o deploy publica o hub (`public/`) e, no mesmo job, o jogo
+(`projetos/cyberidle/site/`) no projeto Pages `cyberidle-game` (criado pelo próprio deploy). O `tsc` do original tem erros de tipo
 antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
 
 ## Estado
@@ -68,6 +70,13 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
   ("weapon attack fx club") aparece às vezes e não trava nada.
 
 ## Decisões
+
+- 20/10/2026 - **Jogo em endereço próprio, aberto: https://cyberidle-game.pages.dev**
+  (opção A do dono, no lugar do Cloudflare Access). Projeto Pages separado na mesma conta:
+  um pedido de remoção da arte derruba só o jogo, não o hub; e o testador recebe só o
+  endereço do jogo, que não tem link para o hub. O cartão do hub aponta para lá (campo
+  `endereco` no `projetos.json`; o `hub.js` agora abre `endereco` mesmo em beta) e
+  `/cyberidle` no hub redireciona para lá. `cyberidle.pages.dev` já era de outra pessoa.
 
 - 20/10/2026 - **Nome trocado para Cyberidle** em tudo que aparece na tela: logo, título da
   aba, tela de entrada, rodapé, moeda ("Cyber Coins"). Ficaram os nomes de conteúdo herdados

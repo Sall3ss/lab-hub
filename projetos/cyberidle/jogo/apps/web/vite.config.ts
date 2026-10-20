@@ -8,11 +8,12 @@ import react from '@vitejs/plugin-react';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '../..');
 const apiTarget = process.env['API_URL'] ?? 'http://127.0.0.1:3000';
-// Lab Hub: o jogo e publicado em /projetos/cyberidle/ e os sprites moram na pasta publica
-// do projeto (public/projetos/cyberidle/assets/), fora do codigo. Claude (Opus 5.5).
-const BASE = '/projetos/cyberidle/';
-const hubPublic = path.resolve(repoRoot, '../../../public/projetos/cyberidle');
-const assetsDir = path.join(hubPublic, 'assets');
+// Lab Hub: o jogo tem endereco proprio (projeto Pages `cyberidle-game`, separado do hub),
+// publicado a partir de projetos/cyberidle/site/. Os sprites moram em site/assets/, fora do
+// codigo. Claude (Opus 5.5).
+const BASE = '/';
+const site = path.resolve(repoRoot, '../site');
+const assetsDir = path.join(site, 'assets');
 const shims = path.resolve(here, 'src/local/shims');
 
 const MIME: Record<string, string> = {
@@ -70,7 +71,7 @@ export default defineConfig({
   build: {
     // Sai direto na pasta publica do hub. Nao apaga a pasta (os sprites moram la);
     // o script `publicar` limpa so o que e do build (index.html e app/).
-    outDir: hubPublic,
+    outDir: site,
     emptyOutDir: false,
     assetsDir: 'app',
     sourcemap: false,

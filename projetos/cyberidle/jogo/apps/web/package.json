@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "publicar": "rm -rf ../../../../../public/projetos/cyberidle/app ../../../../../public/projetos/cyberidle/index.html && vite build"
+    "publicar": "rm -rf ../../../site/app ../../../site/index.html && vite build"
   },
   "dependencies": {
     "@tibia-idle/data": "workspace:*",

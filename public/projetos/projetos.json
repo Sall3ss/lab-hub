@@ -5,6 +5,7 @@
     "ideia": "Idle de navegador no estilo Tibia (base: projeto Tibia Idle Global), que depois ganha o tema cyberpunk: hackers, augments, corporações e megacidades.",
     "objetivo": "Ter primeiro o jogo inteiro funcionando, com UI e animações, rodando só no navegador; depois trocar arte e tema para cyberpunk.",
     "fase": "beta",
-    "criado_em": "2026-10-15"
+    "criado_em": "2026-10-15",
+    "endereco": "https://cyberidle-game.pages.dev"
   }
 ]
