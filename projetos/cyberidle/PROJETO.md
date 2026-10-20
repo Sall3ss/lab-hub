@@ -69,6 +69,12 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
 
 ## Decisões
 
+- 20/10/2026 - **Nome trocado para Cyberidle** em tudo que aparece na tela: logo, título da
+  aba, tela de entrada, rodapé, moeda ("Cyber Coins"). Ficaram os nomes de conteúdo herdados
+  (itens como "flag of Tibia", NPC "King Tibianus") e nomes internos de código
+  (`@tibia-idle/*`, `tibiaColor`), que não aparecem como marca. O dono pediu para pular o
+  Cloudflare Access; avisado que o risco maior é a ARTE (sprites/UI da CipSoft), não o nome.
+
 - 20/10/2026 - **Substitui a Fase 1 própria (combate neon com sprites OTSP).** O dono pediu
   para usar o TB Idle como base. A versão anterior fica no histórico do Git (commit
   `f37b8af`).

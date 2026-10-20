@@ -51,7 +51,7 @@ export function AuthScreen({ onReady }: { onReady: () => void }) {
   }
 
   return (
-    <AuthShell footer={<span>Tibia Idle 15.30 · hunts oficiais · sim determinístico</span>}>
+    <AuthShell footer={<span>Cyberidle · beta · progresso salvo neste navegador</span>}>
       <div className="auth-card auth-card-enter">
         <AuthLogo subtitle={t('authLede')} />
 

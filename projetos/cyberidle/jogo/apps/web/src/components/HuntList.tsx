@@ -50,7 +50,7 @@ export function HuntList({
             <b>{formatRate(hunt.expectedXpPerHour)} XP/h</b>
           </div>
           <div className="meta">
-            <span>{hunt.location || 'Tibia'}</span>
+            <span>{hunt.location || 'Mundo'}</span>
             <span>{hunt.unlocked ? `${Math.round(hunt.fit * 100)}% fit` : 'bloqueada'}</span>
           </div>
         </button>

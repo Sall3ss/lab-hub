@@ -33,9 +33,10 @@
 6. 🟡 **Cyberidle = jogo do `TB Idle.zip` em modo local** (20/10, ramo `cyberidle-jogo`,
    AINDA NÃO PUBLICADO). Roda inteiro no navegador (servidor do jogo dentro da página, banco
    sql.js no IndexedDB); conferido no PC e no celular. Detalhes em
-   `projetos/cyberidle/PROJETO.md`. ❓ 🔴 Falta o dono configurar o **Cloudflare Access**
-   (app 1: site inteiro só o e-mail dele; app 2: `/projetos/cyberidle` para ele + testadores).
-   Depois de conferido o bloqueio, fazer merge do ramo na main (publica).
+   `projetos/cyberidle/PROJETO.md`. 20/10: nome trocado para Cyberidle na tela. O dono pediu
+   para pular o Cloudflare Access achando que o risco era só o nome; avisado que o maior é a
+   arte (sprites/UI extraídos do cliente oficial). ❓ 🔴 Aguardando o "pode publicar aberto
+   assim mesmo" (ou o Access) para fazer o merge na main.
 3. Rotas de sessão/login - só quando um projeto precisar gravar no servidor.
 
 ## ClipStudio: arquivado em 15/10/2026

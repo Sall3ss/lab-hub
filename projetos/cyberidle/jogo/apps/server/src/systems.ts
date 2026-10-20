@@ -1085,7 +1085,7 @@ export function act(
       const currency = body.currency === 'coins' ? 'coins' : 'gold';
       const cost = currency === 'coins' ? lootSlotCoinCost(slots) : lootSlotUpgradeCost(slots);
       if (currency === 'coins') {
-        if (character.coins < cost) throw new GameError(`Need ${cost} Tibia Coins.`, 402);
+        if (character.coins < cost) throw new GameError(`Need ${cost} Cyber Coins.`, 402);
         character.coins -= cost;
       } else {
         if (character.gold < cost) throw new GameError(`Need ${cost} gold.`, 402);
@@ -1102,7 +1102,7 @@ export function act(
       const currency = body.currency === 'coins' ? 'coins' : 'gold';
       const cost = currency === 'coins' ? supplySlotCoinCost(slots) : supplySlotUpgradeCost(slots);
       if (currency === 'coins') {
-        if (character.coins < cost) throw new GameError(`Need ${cost} Tibia Coins.`, 402);
+        if (character.coins < cost) throw new GameError(`Need ${cost} Cyber Coins.`, 402);
         character.coins -= cost;
       } else {
         if (character.gold < cost) throw new GameError(`Need ${cost} gold.`, 402);

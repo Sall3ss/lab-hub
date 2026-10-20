@@ -17,9 +17,9 @@ export const WHEEL_NODES = [
 export type WheelNodeId = (typeof WHEEL_NODES)[number]['id'];
 
 export const COIN_PACKS = [
-  { id: 'pack50', name: '50 Tibia Coins', coins: 50, brl: 5 },
-  { id: 'pack250', name: '250 Tibia Coins', coins: 250, brl: 20 },
-  { id: 'pack1000', name: '1.000 Tibia Coins', coins: 1000, brl: 70 },
+  { id: 'pack50', name: '50 Cyber Coins', coins: 50, brl: 5 },
+  { id: 'pack250', name: '250 Cyber Coins', coins: 250, brl: 20 },
+  { id: 'pack1000', name: '1.000 Cyber Coins', coins: 1000, brl: 70 },
 ] as const;
 
 export interface WorldEvent {

@@ -44,7 +44,7 @@ export type RouletteSpinFail = { ok: false; reason: string };
 /** Spend 75 TC, pick a random vocation item, store it in the depot. */
 export function spinRoulette(character: CharacterState, rng: Rng): RouletteSpinOk | RouletteSpinFail {
   if ((character.coins ?? 0) < ROULETTE_SPIN_COST) {
-    return { ok: false, reason: `Precisa de ${ROULETTE_SPIN_COST} Tibia Coins.` };
+    return { ok: false, reason: `Precisa de ${ROULETTE_SPIN_COST} Cyber Coins.` };
   }
   const pool = roulettePool(character.vocationId);
   if (!pool.length) {

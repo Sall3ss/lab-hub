@@ -105,7 +105,7 @@ export function TopNav({
   const sta = Math.max(0, Math.min(100, (stamina / 2520) * 100));
   return (
     <header className="topnav">
-      <div className="logo">TIBIA <span>IDLE</span></div>
+      <div className="logo">CYBER<span>IDLE</span></div>
       <div className="who">
         <strong>{name}</strong>
         <small>lvl {level}</small>

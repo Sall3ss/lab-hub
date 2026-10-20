@@ -25,7 +25,7 @@ export function AuthLogo({ subtitle }: { subtitle?: string }) {
   return (
     <header className="auth-logo">
       <h1>
-        TIBIA <span>IDLE</span>
+        CYBER<span>IDLE</span>
       </h1>
       {subtitle ? <p>{subtitle}</p> : null}
     </header>

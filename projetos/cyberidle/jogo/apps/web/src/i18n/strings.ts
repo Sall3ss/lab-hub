@@ -3,8 +3,8 @@ export type Locale = 'pt' | 'en';
 export const STRINGS = {
   pt: {
     boot: 'Carregando…',
-    brand: 'TIBIA IDLE',
-    authLede: 'MMO idle com as fórmulas, monstros e hunts do Tibia Idle 15.30.',
+    brand: 'CYBERIDLE',
+    authLede: 'Idle de navegador: seu personagem caça sozinho, sobe de nível e junta loot.',
     account: 'Conta',
     password: 'Senha',
     invite: 'Convite (beta)',
@@ -174,8 +174,8 @@ export const STRINGS = {
   },
   en: {
     boot: 'Loading…',
-    brand: 'TIBIA IDLE',
-    authLede: 'Idle MMO using Tibia Idle 15.30 formulas, monsters and hunts.',
+    brand: 'CYBERIDLE',
+    authLede: 'Browser idle game: your character hunts on its own, levels up and gathers loot.',
     account: 'Account',
     password: 'Password',
     invite: 'Invite (beta)',

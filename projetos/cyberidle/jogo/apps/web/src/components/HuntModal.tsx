@@ -207,7 +207,7 @@ export function HuntModal({
             <div className="hunt-callout-copy">
               <strong>Salas de treino premium</strong>
               <p>
-                Dummies extraídos do cliente Tibia. Enquanto você não caça, o dummy offline treina automaticamente
+                Bonecos de treino. Enquanto você não caça, o dummy offline treina automaticamente
                 (1 try / 8s · teto 8h).
               </p>
             </div>
@@ -530,7 +530,7 @@ function HuntRow({
             {hunt.premium ? <span className="hunt-badge premium">Premium</span> : null}
           </div>
           <div className="meta hunt-row-meta">
-            {hunt.location || 'Tibia'} · lvl {hunt.recommendedLevel ?? hunt.statedLevel}
+            {hunt.location || 'Mundo'} · lvl {hunt.recommendedLevel ?? hunt.statedLevel}
             {partyTag(hunt.partySizes, t)}
             {hunt.unlocked ? '' : ` · ${t('blocked')}`}
             {hunt.partyLocked ? ` · ${t('partyNeed')}` : ''}

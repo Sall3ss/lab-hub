@@ -64,7 +64,7 @@ export function App() {
         <div className="auth-page-bg" aria-hidden />
         <div className="auth-page-vignette" aria-hidden />
         <div className="splash auth-card-enter">
-          <h1>TIBIA <span>IDLE</span></h1>
+          <h1>CYBER<span>IDLE</span></h1>
           <p>{t('boot')}</p>
         </div>
       </div>
