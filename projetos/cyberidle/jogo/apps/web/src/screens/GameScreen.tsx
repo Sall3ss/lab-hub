@@ -377,6 +377,8 @@ export function GameScreen({
                 active={character.session.active}
                 events={events}
                 decorations={character.decorations}
+                wave={character.session.wave}
+                bossWave={Boolean(character.session.bossWave)}
                 allies={[
                   ...(character.caveParty ?? []).filter((mate) => !mate.self).map((mate) => ({
                     name: mate.name,

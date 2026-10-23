@@ -16,8 +16,9 @@ import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const OTBM_PATH = path.join(ROOT, 'servidor/data-global/world/world.otbm');
-const HUNTS_PATH = path.join(ROOT, 'cliente pc/assets_unpacked/data/json/hunting_places.json');
+// Caminhos podem vir do ambiente (Lab Hub: servidor/ e cliente pc/ ficam fora do Git, no zip).
+const OTBM_PATH = process.env.OTBM_PATH ?? path.join(ROOT, 'servidor/data-global/world/world.otbm');
+const HUNTS_PATH = process.env.HUNTS_PATH ?? path.join(ROOT, 'cliente pc/assets_unpacked/data/json/hunting_places.json');
 const OUT_MAPS = path.join(ROOT, 'packages/data/generated/hunt-maps.json');
 const OUT_IDS = path.join(ROOT, 'packages/data/generated/hunt-map-ids.json');
 
@@ -25,6 +26,19 @@ const SCENE_COLS = 13;
 const SCENE_ROWS = 11;
 const HALF_X = Math.floor(SCENE_COLS / 2); // 6
 const HALF_Y = Math.floor(SCENE_ROWS / 2); // 5
+
+/**
+ * Trechos vizinhos (Cyberidle, Lab Hub - Claude Opus 5.5): além da tela do centro, recorta
+ * as 8 telas em volta, no mesmo andar. Cada wave mostra um trecho diferente da hunt e a
+ * cena "anda" de um para o outro. Só entram os trechos com chão suficiente.
+ */
+const OFFSETS = [
+  [0, 0],
+  [SCENE_COLS, 0], [-SCENE_COLS, 0], [0, SCENE_ROWS], [0, -SCENE_ROWS],
+  [SCENE_COLS, SCENE_ROWS], [-SCENE_COLS, SCENE_ROWS], [SCENE_COLS, -SCENE_ROWS], [-SCENE_COLS, -SCENE_ROWS],
+];
+const MAX_TRECHOS = 3;
+const MIN_CHAO_TRECHO = 105; // de 143 SQMs
 
 const NODE_START = 0xfe;
 const NODE_END = 0xff;
@@ -339,17 +353,19 @@ function loadTargets() {
     const cy = pos.y | 0;
     const cz = pos.z | 0;
     hunts.push({ id, name: entry.Name, x: cx, y: cy, z: cz });
-    for (let dy = -HALF_Y; dy <= HALF_Y; dy += 1) {
-      for (let dx = -HALF_X; dx <= HALF_X; dx += 1) {
-        const key = tileKey(cx + dx, cy + dy, cz);
-        let bucket = needed.get(key);
-        if (!bucket) {
-          bucket = [];
-          needed.set(key, bucket);
+    OFFSETS.forEach(([ox, oy], trecho) => {
+      for (let dy = -HALF_Y; dy <= HALF_Y; dy += 1) {
+        for (let dx = -HALF_X; dx <= HALF_X; dx += 1) {
+          const key = tileKey(cx + ox + dx, cy + oy + dy, cz);
+          let bucket = needed.get(key);
+          if (!bucket) {
+            bucket = [];
+            needed.set(key, bucket);
+          }
+          bucket.push({ huntId: `${id}@${trecho}`, lx: dx + HALF_X, ly: dy + HALF_Y });
         }
-        bucket.push({ huntId: id, lx: dx + HALF_X, ly: dy + HALF_Y });
       }
-    }
+    });
   }
   return { hunts, needed };
 }
@@ -379,13 +395,17 @@ function cut() {
 
   const rooms = new Map();
   for (const h of hunts) {
-    rooms.set(h.id, {
-      id: h.id,
-      name: h.name,
-      center: { x: h.x, y: h.y, z: h.z },
-      ground: Array.from({ length: SCENE_ROWS }, () => Array(SCENE_COLS).fill(0)),
-      stack: Array.from({ length: SCENE_ROWS }, () => Array.from({ length: SCENE_COLS }, () => [])),
-      filled: 0,
+    OFFSETS.forEach(([ox, oy], trecho) => {
+      rooms.set(`${h.id}@${trecho}`, {
+        id: h.id,
+        name: h.name,
+        dx: ox,
+        dy: oy,
+        center: { x: h.x + ox, y: h.y + oy, z: h.z },
+        ground: Array.from({ length: SCENE_ROWS }, () => Array(SCENE_COLS).fill(0)),
+        stack: Array.from({ length: SCENE_ROWS }, () => Array.from({ length: SCENE_COLS }, () => [])),
+        filled: 0,
+      });
     });
   }
 
@@ -482,19 +502,35 @@ function cut() {
   const out = {};
   const idSet = new Set();
   let ok = 0;
+  const chao = (room) => room.ground.reduce((n, row) => n + row.filter(Boolean).length, 0);
+  const guardarIds = (room) => {
+    for (const row of room.ground) for (const id of row) if (id) idSet.add(id);
+    for (const row of room.stack) for (const cell of row) for (const id of cell) if (id) idSet.add(id);
+  };
+  let totalTrechos = 0;
   for (const h of hunts) {
-    const room = rooms.get(h.id);
+    const room = rooms.get(`${h.id}@0`);
     if (!room || room.filled < 20) continue;
     ok += 1;
+    const trechos = OFFSETS.slice(1)
+      .map((_, i) => rooms.get(`${h.id}@${i + 1}`))
+      .filter((r) => r && chao(r) >= MIN_CHAO_TRECHO)
+      .sort((a, b) => chao(b) - chao(a))
+      .slice(0, MAX_TRECHOS);
+    totalTrechos += trechos.length;
     out[h.id] = {
       center: room.center,
       ground: room.ground,
       stack: room.stack,
       filled: room.filled,
+      ...(trechos.length ? {
+        trechos: trechos.map((r) => ({ dx: r.dx, dy: r.dy, ground: r.ground, stack: r.stack, filled: r.filled })),
+      } : {}),
     };
-    for (const row of room.ground) for (const id of row) if (id) idSet.add(id);
-    for (const row of room.stack) for (const cell of row) for (const id of cell) if (id) idSet.add(id);
+    guardarIds(room);
+    for (const r of trechos) guardarIds(r);
   }
+  console.log(`trechos vizinhos: ${totalTrechos} (até ${MAX_TRECHOS} por hunt)`);
 
   fs.writeFileSync(OUT_MAPS, JSON.stringify(out));
   fs.writeFileSync(OUT_IDS, JSON.stringify([...idSet].sort((a, b) => a - b)));

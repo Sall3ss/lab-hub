@@ -412,13 +412,31 @@ function paintProceduralRoom(parent: Container, tiles: Atlas, huntId: string): v
  * WayPath.Position (with themed underlay so missing sprites never go black);
  * falls back to a clean themed procedural room.
  */
-export function paintHuntScene(parent: Container, tiles: Atlas, huntId: string): void {
+export function paintHuntScene(parent: Container, tiles: Atlas, huntId: string, trecho = 0): void {
   const room = huntMaps[huntId];
+  const vizinho = trecho > 0 ? room?.trechos?.[trecho - 1] : undefined;
+  if (room && vizinho) {
+    paintOtbmRoom(parent, tiles, { ...room, ...vizinho }, huntId);
+    return;
+  }
   if (room && room.filled >= 40) {
     paintOtbmRoom(parent, tiles, room, huntId);
     return;
   }
   paintProceduralRoom(parent, tiles, huntId);
+}
+
+/** Quantas telas a hunt tem (centro + trechos vizinhos). Cyberidle, Claude (Opus 5.5). */
+export function trechosDaHunt(huntId: string): number {
+  const room = huntMaps[huntId];
+  if (!room || room.filled < 40) return 1;
+  return 1 + (room.trechos?.length ?? 0);
+}
+
+/** Posição da tela no mapa, em SQMs a partir do centro (0,0 para o centro). */
+export function posicaoDoTrecho(huntId: string, trecho: number): { dx: number; dy: number } {
+  const vizinho = trecho > 0 ? huntMaps[huntId]?.trechos?.[trecho - 1] : undefined;
+  return vizinho ? { dx: vizinho.dx, dy: vizinho.dy } : { dx: 0, dy: 0 };
 }
 
 const HOUSE_DECO: Record<string, Array<{ id: number; x: number; y: number; ground?: boolean }>> = {

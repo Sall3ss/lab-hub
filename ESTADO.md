@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 20/10/2026 (Cyberidle no ar em endereço próprio).**
+**Atualizado em 23/10/2026 (Cyberidle: cada wave anda para outro trecho do mapa).**
 
 ## Pronto
 
@@ -26,16 +26,14 @@
    pelo dono em 15/10 ("pode manter tudo na empresa, estou usando de testes e treino").
 4. ⚠️ `lab-hub.pages.dev` (sem o `-9uh`) é de OUTRA pessoa ("Runstack Lab"). O nosso é
    `lab-hub-9uh.pages.dev`.
-5. 🟢 **Cyberidle** Fase 1 no ar (15/10): https://lab-hub-9uh.pages.dev/cyberidle - combate
-   automático, Creds, XP, level up, upgrade. 20/10: visual com sprites (6 inimigos, arena
-   neon), só do OpenTibia Sprite Pack (CC BY 4.0). Ficha com conceito, fases e decisões em
-   `projetos/cyberidle/PROJETO.md`. Próximo: Fase 2 (loot/inventário e distritos).
 6. 🟢 **Cyberidle = jogo do `TB Idle.zip` em modo local, no ar em endereço próprio:
    https://cyberidle-game.pages.dev** (20/10). Roda inteiro no navegador (servidor do jogo
    dentro da página, banco sql.js no IndexedDB), nome trocado para Cyberidle. Projeto Pages
    separado (`cyberidle-game`), publicado pelo mesmo deploy, para um pedido de remoção da arte
    (sprites/UI do Tibia, da CipSoft) não derrubar o hub. Cartão do hub e `/cyberidle` apontam
    para lá. Detalhes em `projetos/cyberidle/PROJETO.md`.
+   23/10: a cada wave a cena desliza para outro trecho real do mapa da hunt, com letreiro
+   "WAVE N" e os monstros novos chegando das bordas (pedido do dono).
 3. Rotas de sessão/login - só quando um projeto precisar gravar no servidor.
 
 ## ClipStudio: arquivado em 15/10/2026

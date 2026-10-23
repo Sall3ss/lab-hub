@@ -206,6 +206,11 @@ export interface HuntMapRoom {
   ground: number[][];
   stack: number[][][];
   filled: number;
+  /**
+   * Telas vizinhas no mesmo andar (dx/dy em SQMs a partir do centro). Cada wave mostra um
+   * trecho e a cena desliza de um para o outro. Cyberidle (Lab Hub), Claude (Opus 5.5).
+   */
+  trechos?: Array<{ dx: number; dy: number; ground: number[][]; stack: number[][][]; filled: number }>;
 }
 
 export interface Charm {

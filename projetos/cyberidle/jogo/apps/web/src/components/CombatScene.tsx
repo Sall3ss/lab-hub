@@ -13,6 +13,8 @@ export function CombatScene({
   events,
   huntId,
   decorations = [],
+  wave = 0,
+  bossWave = false,
 }: {
   characterId: number;
   active: ActiveMonsterView[];
@@ -21,14 +23,17 @@ export function CombatScene({
   events: SimEvent[];
   huntId: string;
   decorations?: string[];
+  /** Wave atual da sessão: cada troca desliza a cena para outro trecho do mapa. */
+  wave?: number;
+  bossWave?: boolean;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<ReturnType<typeof acquireCombatScene> | null>(null);
   const ready = useRef(false);
   const booted = useRef(false);
   const pending = useRef<SimEvent[]>([]);
-  const latest = useRef({ active, player, allies, huntId, decorations });
-  latest.current = { active, player, allies, huntId, decorations };
+  const latest = useRef({ active, player, allies, huntId, decorations, wave, bossWave });
+  latest.current = { active, player, allies, huntId, decorations, wave, bossWave };
 
   function present() {
     const renderer = scene.current;
@@ -68,6 +73,7 @@ export function CombatScene({
         renderer.resetViewport();
         renderer.setDecorations(latest.current.decorations ?? []);
         renderer.setHunt(latest.current.huntId);
+        renderer.setWave(latest.current.wave ?? 0, latest.current.bossWave);
       } catch (error) {
         console.error('combat floor', error);
       }
@@ -94,6 +100,16 @@ export function CombatScene({
       }
     }
   }, [huntId]);
+
+  useEffect(() => {
+    if (ready.current) {
+      try {
+        scene.current?.setWave(wave ?? 0, bossWave);
+      } catch (error) {
+        console.error('combat wave', error);
+      }
+    }
+  }, [wave, bossWave]);
 
   useEffect(() => {
     if (ready.current) {

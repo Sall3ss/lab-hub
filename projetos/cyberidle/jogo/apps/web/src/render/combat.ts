@@ -7,7 +7,7 @@ import { attackAnimationSpeed, loadAttackFrames, preloadAttackFrames } from './a
 import { burstsFor, damageTint, isCustomMeleeSwing, magicEffectId, outgoingDamageTint } from './effects.js';
 import { missileAim, shootEffectId } from './missiles.js';
 import { recoloredFrames, appearancePoseKey, creatureRecolorAppearance } from './outfit.js';
-import { paintDecorations, paintHuntScene } from './scenes.js';
+import { paintDecorations, paintHuntScene, posicaoDoTrecho, trechosDaHunt } from './scenes.js';
 import {
   chebyshev, faceOf, MONSTER_STEP_MS, PLAYER_STEP_MS, spawnTile, stepToward, surroundGoal,
 } from './walk.js';
@@ -148,6 +148,15 @@ export class CombatScene {
   private floatStacks = new Map<string, number>();
   private huntId = '';
   private decorations: string[] = [];
+  /**
+   * Troca de wave (Cyberidle, Lab Hub - Claude Opus 5.5): cada wave mostra um trecho do mapa
+   * da hunt; na troca a tela desliza para o trecho seguinte com o personagem andando, e um
+   * letreiro "WAVE N" aparece. Os monstros da wave nova só entram depois, vindo das bordas.
+   */
+  private trecho = 0;
+  private ondaAtual = 0;
+  private transicao: { de: Container; para: Container; sx: number; sy: number; t: number; dur: number } | null = null;
+  private letreiro: { text: Text; life: number; maxLife: number } | null = null;
   private dead = false;
   private host: HTMLElement | null = null;
   private mounting: Promise<void> | null = null;
@@ -250,8 +259,10 @@ export class CombatScene {
     app.ticker.add((ticker) => {
       if (this.dead || !this.alive()) return;
       try {
+        this.tickTransicao(ticker.deltaMS);
         this.tickWalk(ticker.deltaMS);
         this.tickFloaters(ticker.deltaMS);
+        this.tickLetreiro(ticker.deltaMS);
         this.tickShots(ticker.deltaMS);
       } catch (error) {
         console.error('combat tick', error);
@@ -262,6 +273,11 @@ export class CombatScene {
   setHunt(huntId: string): void {
     const changed = this.huntId !== huntId;
     this.huntId = huntId;
+    if (changed) {
+      this.trecho = 0;
+      this.ondaAtual = 0;
+      this.encerrarTransicao();
+    }
     if (!this.alive()) return;
     if (changed) this.clearMonsterSprites();
     if (!changed && this.floor) return;
@@ -275,6 +291,12 @@ export class CombatScene {
   /** Drop actors/events from a previous character without tearing down the GPU app. */
   resetViewport(): void {
     this.clearMonsterSprites();
+    this.ondaAtual = 0;
+    this.encerrarTransicao();
+    if (this.letreiro) {
+      try { this.letreiro.text.destroy(); } catch { /* already gone */ }
+      this.letreiro = null;
+    }
     for (const entry of this.allies.values()) {
       try { entry.root.destroy({ children: true }); } catch { /* already gone */ }
     }
@@ -305,6 +327,8 @@ export class CombatScene {
     } catch (error) {
       console.error('combat allies', error);
     }
+    // Enquanto a tela desliza para o próximo trecho, a wave nova espera para entrar.
+    if (this.transicao) return;
     const pack = active ?? [];
     const seen = new Set(pack.map((monster) => monster.uid));
     if (pack.length > 0) {
@@ -360,6 +384,8 @@ export class CombatScene {
 
   destroy(): void {
     this.dead = true;
+    this.transicao = null;
+    this.letreiro = null;
     this.clearMonsterSprites();
     for (const entry of this.allies.values()) {
       try { entry.root.destroy({ children: true }); } catch { /* already gone */ }
@@ -397,13 +423,127 @@ export class CombatScene {
     this.floor?.destroy({ children: true });
     const floor = new Container();
     if (this.tiles && huntId) {
-      paintHuntScene(floor, this.tiles, huntId);
+      paintHuntScene(floor, this.tiles, huntId, this.trecho);
       if (this.decorations.length) paintDecorations(floor, this.tiles, this.decorations);
     } else {
       floor.addChild(drawCave());
     }
+    this.encerrarTransicao();
     this.world.addChildAt(floor, 0);
     this.floor = floor;
+  }
+
+  /** Chamado a cada mudança de wave. A primeira só posiciona, sem animar. */
+  setWave(wave: number, boss = false): void {
+    if (!wave || wave === this.ondaAtual) return;
+    const primeira = this.ondaAtual === 0;
+    this.ondaAtual = wave;
+    const total = trechosDaHunt(this.huntId);
+    const proximo = total > 1 ? (wave - 1) % total : 0;
+    if (!this.alive() || !this.world || !this.tiles || !this.floor || primeira) {
+      if (proximo !== this.trecho) {
+        this.trecho = proximo;
+        if (this.alive() && this.world && this.huntId) this.paintFloor(this.huntId);
+      }
+      return;
+    }
+    this.mostrarLetreiro(boss ? 'BOSS' : `WAVE ${wave}`, boss);
+    this.iniciarTransicao(proximo);
+  }
+
+  private iniciarTransicao(proximo: number): void {
+    if (!this.world || !this.tiles || !this.floor) return;
+    this.encerrarTransicao();
+    const de = posicaoDoTrecho(this.huntId, this.trecho);
+    const para = posicaoDoTrecho(this.huntId, proximo);
+    let sx = Math.sign(para.dx - de.dx);
+    let sy = Math.sign(para.dy - de.dy);
+    // Hunt com uma tela só (ou o mesmo trecho): ainda assim anda, para o lado.
+    if (sx === 0 && sy === 0) sx = this.ondaAtual % 2 === 0 ? 1 : -1;
+    this.trecho = proximo;
+
+    const novo = new Container();
+    paintHuntScene(novo, this.tiles, this.huntId, proximo);
+    if (this.decorations.length) paintDecorations(novo, this.tiles, this.decorations);
+    const w = COLS * TILE;
+    const h = ROWS * TILE;
+    novo.x = sx * w;
+    novo.y = sy * h;
+    this.world.addChildAt(novo, 0);
+    // Os monstros da wave anterior saem com a tela; os novos entram depois.
+    this.clearMonsterSprites();
+    this.transicao = { de: this.floor, para: novo, sx, sy, t: 0, dur: 1300 };
+    this.floor = novo;
+    if (this.player) {
+      this.placeAt(this.player, PLAYER_TILE.x, PLAYER_TILE.y);
+      this.face(this.player, sx, sy, true, true);
+    }
+  }
+
+  private tickTransicao(delta: number): void {
+    const tr = this.transicao;
+    if (!tr) return;
+    tr.t = Math.min(tr.dur, tr.t + delta);
+    const k = tr.t / tr.dur;
+    const p = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2; // ease-in-out
+    const w = COLS * TILE;
+    const h = ROWS * TILE;
+    tr.de.x = -tr.sx * w * p;
+    tr.de.y = -tr.sy * h * p;
+    tr.para.x = tr.sx * w * (1 - p);
+    tr.para.y = tr.sy * h * (1 - p);
+    if (tr.t >= tr.dur) this.encerrarTransicao();
+  }
+
+  private encerrarTransicao(): void {
+    const tr = this.transicao;
+    if (!tr) return;
+    this.transicao = null;
+    try { tr.de.destroy({ children: true }); } catch { /* already gone */ }
+    if (!tr.para.destroyed) {
+      tr.para.x = 0;
+      tr.para.y = 0;
+    }
+    if (this.player && !this.player.root.destroyed) this.face(this.player, 0, 1, false, true);
+  }
+
+  private mostrarLetreiro(texto: string, boss: boolean): void {
+    if (!this.fx || this.fx.destroyed) return;
+    if (this.letreiro) {
+      try { this.letreiro.text.destroy(); } catch { /* already gone */ }
+      this.letreiro = null;
+    }
+    const text = new Text({
+      text: texto,
+      style: {
+        fill: boss ? 0xff4040 : 0xffe066,
+        fontFamily: 'Verdana, Geneva, Tahoma, sans-serif',
+        fontSize: 22,
+        fontWeight: 'bold',
+        stroke: { color: 0x000000, width: 5, join: 'round' },
+        letterSpacing: 2,
+        padding: 6,
+      },
+    });
+    text.anchor.set(0.5);
+    text.x = (COLS * TILE) / 2;
+    text.y = TILE * 2.2;
+    text.zIndex = 100000;
+    this.fx.addChild(text);
+    this.letreiro = { text, life: 1900, maxLife: 1900 };
+  }
+
+  private tickLetreiro(delta: number): void {
+    const l = this.letreiro;
+    if (!l) return;
+    l.life -= delta;
+    const k = 1 - l.life / l.maxLife;
+    l.text.alpha = k < 0.15 ? k / 0.15 : k > 0.7 ? Math.max(0, (1 - k) / 0.3) : 1;
+    l.text.scale.set(1 + 0.08 * Math.min(1, k * 4));
+    if (l.life <= 0) {
+      try { l.text.destroy(); } catch { /* already gone */ }
+      this.letreiro = null;
+    }
   }
 
   setDecorations(unlocked: string[]): void {
@@ -1148,6 +1288,10 @@ export class CombatScene {
     if (player) this.advanceWalk(player, delta);
     for (const entry of this.sprites.values()) this.advanceWalk(entry, delta);
 
+    if (this.transicao) {
+      this.sortActors();
+      return;
+    }
     if (player && player.walkLeft <= 0) {
       const target = this.closestMonster(player);
       if (target) this.chase(player, target.destX, target.destY);

@@ -55,6 +55,15 @@ corepack pnpm install
 cd apps/web && corepack pnpm publicar     # limpa app/ e index.html e compila em site/
 ```
 
+Para recortar de novo os trechos do mapa e regerar o atlas de tiles (precisa do
+`world.otbm`, do `hunting_places.json` e de `cliente pc/things/`, que estão só no zip):
+
+```
+OTBM_PATH=.../world.otbm HUNTS_PATH=.../hunting_places.json node tools/mapcut/cut-hunts.mjs
+python3 -I tools/extractor/extract.py --tiles --out <pasta>   # rodado numa cópia com cliente pc/
+# copiar tiles*.webp e tiles.json para ../site/assets/ (apagando os tiles antigos)
+```
+
 Depois, commit e push na main: o deploy publica o hub (`public/`) e, no mesmo job, o jogo
 (`projetos/cyberidle/site/`) no projeto Pages `cyberidle-game` (criado pelo próprio deploy). O `tsc` do original tem erros de tipo
 antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
@@ -65,6 +74,14 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
   com navegador de teste no PC (1366) e no celular (390): convidado, criação de personagem,
   hunt animada (Venore Rotworm Cave), XP, loot, skills, task, analyzer; personagem continua
   ao recarregar; reentrada funciona.
+- 23/10/2026: **cada wave muda de trecho do mapa.** Além da tela do centro, cada hunt ganhou
+  até 3 telas vizinhas reais do mapa (383 no total, recortadas do `world.otbm` por
+  `tools/mapcut/cut-hunts.mjs`, campo `trechos` em `hunt-maps.json`). Na troca de wave a
+  cena desliza ~1,3 s para o trecho seguinte com o personagem andando, aparece o letreiro
+  "WAVE N" (ou "BOSS"), e os monstros da wave nova só entram depois, vindo das bordas até
+  ele. Hunt sem vizinho bom desliza para o lado na mesma tela. Atlas `tiles` regerado
+  (3.289 → 5.018 desenhos, +3,3 MB) para cobrir 100% dos trechos. Conferido capturando os
+  quadros da animação no navegador de teste; sem erro na página.
 - Conhecido: a dica "Reivindicar conta para não perder o personagem" aparece, mas no modo
   local o convidado já fica salvo no navegador. Um erro de console de efeito de ataque
   ("weapon attack fx club") aparece às vezes e não trava nada.
