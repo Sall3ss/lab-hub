@@ -1425,6 +1425,13 @@ h2.window-head-title { font-size: 13px; }
 .party-bar.hp i { background: #3ccf5a; }
 .party-bar.mp i { background: #3d7bea; }
 .party-bar.xp i { background: #d8b03a; }
+/* Cyberidle: janela de equipamento do companheiro. */
+.equip-companheiro { width: min(520px, 100%); }
+.equip-companheiro-body { display: grid; grid-template-columns: auto 1fr; gap: 18px; padding: 16px; align-items: start; }
+.equip-companheiro-info { display: grid; gap: 8px; font-size: 12px; }
+.equip-companheiro-info > div { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); }
+.equip-companheiro-info strong { color: #e6e8ec; }
+@media (max-width: 520px) { .equip-companheiro-body { grid-template-columns: 1fr; justify-items: center; } }
 /* Cyberidle: escolha de quem vai em cada slot de party. */
 .party-pick { margin-top: 8px; display: grid; gap: 6px; }
 .party-pick-slot { display: grid; grid-template-columns: 44px 1fr; gap: 6px; align-items: center; font-size: 10px; color: var(--muted); }

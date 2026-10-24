@@ -166,7 +166,10 @@ function cavePartyView(loaded: LoadedCharacter, db?: Database): Array<PartyHunte
     self: true,
     ...fichaDe(loaded.character),
   };
-  const others = (loaded.session?.partyMembers ?? []).map((hunter) => {
+  // Fora de caça a party continua aparecendo (escolhidos no Party Config), para o jogador
+  // configurar todos a qualquer hora. Cyberidle, Claude (Opus 5.5).
+  const membros = loaded.session ? (loaded.session.partyMembers ?? []) : (db ? companheirosEscolhidos(db, loaded) : []);
+  const others = membros.map((hunter) => {
     const row = db?.findCharacter(hunter.id);
     const estado = row && row.accountId === loaded.row.accountId ? estadoAtual(row) : null;
     return { ...hunter, self: false, ...(estado ? fichaDe(estado) : {}) };

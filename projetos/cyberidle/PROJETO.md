@@ -96,6 +96,11 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
 - 24/10/2026: **Helper por membro da party.** Abas no topo do Helper (sigla da vocação +
   nome), como no BaiakIdle; cada aba edita e salva as magias, poções e táticas daquele
   personagem. Conferido: mudança no companheiro ficou nele e não mexeu no líder.
+- 24/10/2026: **companheiros com as mesmas opções do principal no painel da party.** A
+  party aparece sempre (não só caçando). Cada companheiro tem ⚙ Helper, 👕 Outfit (janela de
+  aparência dele, com presets) e 🛡 Equipamento (set dele e "Organizar equipamento", que usa
+  o ouro dele). O principal tem ⚙ e 👕 no cartão e o painel Set logo abaixo. Conferido no
+  navegador de teste com a party fora de caça.
 - **Limite atual da party:** na simulação de combate só o líder age (ataca, cura, gasta
   poção). Os companheiros aparecem na cena, ganham XP e têm Helper próprio salvo, mas ainda
   não lutam com as magias deles. Fazer a party lutar de verdade é mexer no núcleo do

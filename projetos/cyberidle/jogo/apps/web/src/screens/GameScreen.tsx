@@ -5,6 +5,7 @@ import type { BossView, CharacterView, HuntView, Settlement, WorldView } from '.
 import { ActionBar } from '../components/ActionBar.js';
 import { CombatScene } from '../components/CombatScene.js';
 import { HelperModal } from '../components/HelperModal.js';
+import { CompanheiroEquipModal } from '../components/CompanheiroEquipModal.js';
 import { HuntModal } from '../components/HuntModal.js';
 import { TrainingScene } from '../components/TrainingScene.js';
 import { trainingRoom } from '../trainingRooms.js';
@@ -64,6 +65,22 @@ export function GameScreen({
   // Helper de outro membro da party (Cyberidle): id do membro e a ficha dele carregada.
   const [helperDe, setHelperDe] = useState<number | null>(null);
   const [helperOutro, setHelperOutro] = useState<CharacterView | null>(null);
+  // Outfit / equipamento de um companheiro da party: id, janela e a ficha carregada.
+  const [janelaComp, setJanelaComp] = useState<{ id: number; tipo: 'outfit' | 'equip'; view: CharacterView | null } | null>(null);
+
+  function abrirCompanheiro(id: number, tipo: 'outfit' | 'equip') {
+    setJanelaComp({ id, tipo, view: null });
+    void api.character(id)
+      .then((r) => setJanelaComp((atual) => (atual && atual.id === id ? { ...atual, view: r.character } : atual)))
+      .catch((error) => {
+        setJanelaComp(null);
+        pushLog(error instanceof ApiError ? error.message : 'Não consegui abrir esse membro da party.');
+      });
+  }
+
+  function atualizarCompanheiro(view: CharacterView) {
+    setJanelaComp((atual) => (atual && atual.id === view.id ? { ...atual, view } : atual));
+  }
   const [helperSection, setHelperSection] = useState<'cura' | 'magias'>('cura');
   const [settings, setSettings] = useState(false);
   const [pickingHunt, setPickingHunt] = useState(false);
@@ -664,6 +681,8 @@ export function GameScreen({
           onParty={() => void act(() => api.act(character.id, { type: 'party-unlock' }).then((r) => onCharacter(r.character)))}
           onPartyMember={(slot, characterId) => void act(() => api.act(character.id, { type: 'party-member', slot, characterId }).then((r) => onCharacter(r.character)))}
           onHelperFor={abrirHelperDe}
+          onOutfitFor={(id) => abrirCompanheiro(id, 'outfit')}
+          onEquipFor={(id) => abrirCompanheiro(id, 'equip')}
           onOutfit={() => setOutfitOpen(true)}
           onLootSlot={(currency) => void act(() => api.act(character.id, { type: 'loot-slot', currency }).then((r) => onCharacter(r.character)))}
           onSupplySlot={(currency) => void act(() => api.act(character.id, { type: 'supply-slot', currency }).then((r) => onCharacter(r.character)))}
@@ -750,6 +769,55 @@ export function GameScreen({
             if (loop) setPickingHunt(true);
           }))}
           onEnterTraining={(roomId) => enterTraining(roomId)}
+        />
+      )}
+
+      {janelaComp?.tipo === 'equip' && janelaComp.view && (
+        <CompanheiroEquipModal
+          character={janelaComp.view}
+          busy={busy}
+          onClose={() => setJanelaComp(null)}
+          onOrganizar={() => {
+            const id = janelaComp.id;
+            void act(() => api.upgradeGear(id).then((r) => {
+              atualizarCompanheiro(r.character);
+              pushLog(`Equipamento de ${r.character.name} organizado.`);
+            }));
+          }}
+        />
+      )}
+
+      {janelaComp?.tipo === 'outfit' && janelaComp.view && (
+        <OutfitModal
+          character={janelaComp.view}
+          busy={busy}
+          onClose={() => setJanelaComp(null)}
+          onApply={async (draft) => {
+            const id = janelaComp.id;
+            setBusy(true);
+            try {
+              const result = await api.act(id, { type: 'appearance', ...draft });
+              atualizarCompanheiro(result.character);
+              setJanelaComp(null);
+              pushLog(`Aparência de ${result.character.name} atualizada.`);
+            } catch (error) {
+              const message = error instanceof ApiError ? error.message : 'Falha ao aplicar aparência.';
+              pushLog(message);
+              throw error instanceof Error ? error : new Error(message);
+            } finally {
+              setBusy(false);
+            }
+          }}
+          onPresetSave={(slot) => act(() => api.act(janelaComp.id, { type: 'preset-save', slot }).then((result) => {
+            atualizarCompanheiro(result.character);
+            pushLog(`Preset ${slot + 1} salvo.`);
+          }))}
+          onPresetLoad={async (slot) => {
+            const result = await api.act(janelaComp.id, { type: 'preset-load', slot });
+            atualizarCompanheiro(result.character);
+            const a = result.character.appearance;
+            return { outfit: a.outfit, head: a.head, body: a.body, legs: a.legs, feet: a.feet, addons: a.addons ?? 0, mount: a.mount ?? 0, aura: a.aura ?? 0 } as OutfitDraft;
+          }}
         />
       )}
 

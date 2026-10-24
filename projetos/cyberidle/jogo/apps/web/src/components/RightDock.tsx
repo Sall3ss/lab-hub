@@ -83,6 +83,8 @@ export function RightDock({
   onParty,
   onPartyMember,
   onHelperFor,
+  onOutfitFor,
+  onEquipFor,
   onOutfit,
   onLootSlot,
   onSupplySlot,
@@ -105,6 +107,9 @@ export function RightDock({
   onPartyMember: (slot: number, characterId: number | null) => void;
   /** Abre o Helper já no membro escolhido da party. */
   onHelperFor: (characterId: number) => void;
+  /** Outfit e equipamento de um companheiro da party. */
+  onOutfitFor: (characterId: number) => void;
+  onEquipFor: (characterId: number) => void;
   onOutfit: () => void;
   onLootSlot: (currency: SlotCurrency) => void;
   onSupplySlot: (currency: SlotCurrency) => void;
@@ -229,8 +234,9 @@ export function RightDock({
                       <div className="party-card-sub">{vocacao} · lvl {mate.level}</div>
                       <div className="party-card-btns">
                         <button type="button" className="party-icon-btn" title="Helper (magias, poções, táticas)" disabled={busy} onClick={() => onHelperFor(mate.id)}>⚙</button>
-                        {eu && (
-                          <button type="button" className="party-icon-btn" title="Outfit" disabled={busy} onClick={onOutfit}>👕</button>
+                        <button type="button" className="party-icon-btn" title="Outfit" disabled={busy} onClick={() => (eu ? onOutfit() : onOutfitFor(mate.id))}>👕</button>
+                        {!eu && (
+                          <button type="button" className="party-icon-btn" title="Equipamento" disabled={busy} onClick={() => onEquipFor(mate.id)}>🛡</button>
                         )}
                       </div>
                     </div>
