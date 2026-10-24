@@ -1079,6 +1079,28 @@ export function act(
       return { loaded };
     }
 
+    // Cyberidle (Lab Hub, Claude Opus 5.5): escolhe qual personagem da conta vai em cada
+    // slot de party (slot 0 = segundo lugar da party). characterId vazio libera o slot.
+    case 'party-member': {
+      const vaga = Number(body.slot);
+      const vagas = Math.max(0, (character.partySlots ?? 1) - 1);
+      if (!Number.isInteger(vaga) || vaga < 0 || vaga >= vagas) throw new GameError('Slot de party bloqueado.', 400);
+      const escolhido = body.characterId === null || body.characterId === undefined || body.characterId === ''
+        ? 0 : Number(body.characterId);
+      if (escolhido) {
+        if (escolhido === loaded.row.id) throw new GameError('Esse já é você.', 400);
+        const outro = db.findCharacter(escolhido);
+        if (!outro || outro.accountId !== loaded.row.accountId) throw new GameError('Personagem não encontrado.', 404);
+      }
+      const ids = (character.partyIds ?? []).slice(0, vagas);
+      while (ids.length < vagas) ids.push(0);
+      for (let i = 0; i < ids.length; i += 1) if (ids[i] === escolhido) ids[i] = 0;
+      ids[vaga] = escolhido;
+      character.partyIds = ids;
+      persist(db, loaded, now);
+      return { loaded };
+    }
+
     case 'loot-slot': {
       const slots = character.lootSlots ?? LOOT_SLOT_DEFAULT;
       if (slots >= LOOT_SLOT_CAP) throw new GameError('Loot pouch is already maxed.', 409);

@@ -55,7 +55,7 @@ corepack pnpm install
 cd apps/web && corepack pnpm publicar     # limpa app/ e index.html e compila em site/
 ```
 
-Para recortar de novo os trechos do mapa e regerar o atlas de tiles (precisa do
+Para recortar de novo as regiões do mapa e regerar o atlas de tiles (precisa do
 `world.otbm`, do `hunting_places.json` e de `cliente pc/things/`, que estão só no zip):
 
 ```
@@ -74,14 +74,19 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
   com navegador de teste no PC (1366) e no celular (390): convidado, criação de personagem,
   hunt animada (Venore Rotworm Cave), XP, loot, skills, task, analyzer; personagem continua
   ao recarregar; reentrada funciona.
-- 23/10/2026: **cada wave muda de trecho do mapa.** Além da tela do centro, cada hunt ganhou
-  até 3 telas vizinhas reais do mapa (383 no total, recortadas do `world.otbm` por
-  `tools/mapcut/cut-hunts.mjs`, campo `trechos` em `hunt-maps.json`). Na troca de wave a
-  cena desliza ~1,3 s para o trecho seguinte com o personagem andando, aparece o letreiro
-  "WAVE N" (ou "BOSS"), e os monstros da wave nova só entram depois, vindo das bordas até
-  ele. Hunt sem vizinho bom desliza para o lado na mesma tela. Atlas `tiles` regerado
-  (3.289 → 5.018 desenhos, +3,3 MB) para cobrir 100% dos trechos. Conferido capturando os
-  quadros da animação no navegador de teste; sem erro na página.
+- 24/10/2026: **troca de wave refeita como caminhada curta.** O dono viu, na versão de
+  23/10 (telas vizinhas inteiras), o personagem "flutuando por fora do mapa". Agora cada hunt
+  tem uma **região contínua** de 21×19 SQMs (a tela + 4 de margem, campo `regiao` em
+  `hunt-maps.json`) e até 4 **paradas** da câmera com chão no meio e na janela toda. Na troca
+  a câmera anda 2-4 SQMs no passo do personagem (~320 ms por SQM), sem pular de tela; os
+  monstros novos entram depois. Atlas `tiles` regerado (4.599 desenhos) cobrindo 100% das
+  regiões. Conferido capturando os quadros no navegador de teste.
+- 24/10/2026: **slots de party levam outros personagens da conta.** No original os slots só
+  dividiam XP com outros jogadores online na mesma cave, o que não existe no modo local; o
+  dono comprou os slots e nada apareceu. Agora, no "Party Config", cada slot liberado tem um
+  seletor com os outros personagens da conta (ação `party-member`; `partyIds` no personagem).
+  Eles aparecem na cena caçando junto e entram no bônus de XP da party (+30% com 3).
+  Conferido montando 2 companheiros num banco de teste e abrindo no navegador.
 - Conhecido: a dica "Reivindicar conta para não perder o personagem" aparece, mas no modo
   local o convidado já fica salvo no navegador. Um erro de console de efeito de ataque
   ("weapon attack fx club") aparece às vezes e não trava nada.

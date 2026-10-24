@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 23/10/2026 (Cyberidle: cada wave anda para outro trecho do mapa).**
+**Atualizado em 24/10/2026 (Cyberidle: troca de wave em caminhada curta; party com seus personagens).**
 
 ## Pronto
 
@@ -32,8 +32,9 @@
    separado (`cyberidle-game`), publicado pelo mesmo deploy, para um pedido de remoção da arte
    (sprites/UI do Tibia, da CipSoft) não derrubar o hub. Cartão do hub e `/cyberidle` apontam
    para lá. Detalhes em `projetos/cyberidle/PROJETO.md`.
-   23/10: a cada wave a cena desliza para outro trecho real do mapa da hunt, com letreiro
-   "WAVE N" e os monstros novos chegando das bordas (pedido do dono).
+   24/10: a cada wave o personagem anda 2-4 SQMs dentro de uma região contínua do mapa
+   (letreiro "WAVE N", monstros novos chegam depois) e os slots de party levam outros
+   personagens da conta, escolhidos no "Party Config" (pedidos do dono).
 3. Rotas de sessão/login - só quando um projeto precisar gravar no servidor.
 
 ## ClipStudio: arquivado em 15/10/2026

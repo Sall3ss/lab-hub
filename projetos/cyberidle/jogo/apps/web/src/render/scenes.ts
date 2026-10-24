@@ -412,13 +412,8 @@ function paintProceduralRoom(parent: Container, tiles: Atlas, huntId: string): v
  * WayPath.Position (with themed underlay so missing sprites never go black);
  * falls back to a clean themed procedural room.
  */
-export function paintHuntScene(parent: Container, tiles: Atlas, huntId: string, trecho = 0): void {
+export function paintHuntScene(parent: Container, tiles: Atlas, huntId: string): void {
   const room = huntMaps[huntId];
-  const vizinho = trecho > 0 ? room?.trechos?.[trecho - 1] : undefined;
-  if (room && vizinho) {
-    paintOtbmRoom(parent, tiles, { ...room, ...vizinho }, huntId);
-    return;
-  }
   if (room && room.filled >= 40) {
     paintOtbmRoom(parent, tiles, room, huntId);
     return;
@@ -426,17 +421,47 @@ export function paintHuntScene(parent: Container, tiles: Atlas, huntId: string, 
   paintProceduralRoom(parent, tiles, huntId);
 }
 
-/** Quantas telas a hunt tem (centro + trechos vizinhos). Cyberidle, Claude (Opus 5.5). */
-export function trechosDaHunt(huntId: string): number {
+/**
+ * Pinta a região contínua inteira (tela + margem), já deslocada para a tela (0,0) ficar
+ * onde estava. A câmera (combat.ts) move este container para andar entre as paradas.
+ * Devolve false se a hunt não tem região; aí se usa paintHuntScene. Claude (Opus 5.5).
+ */
+export function paintHuntRegion(parent: Container, tiles: Atlas, huntId: string): boolean {
   const room = huntMaps[huntId];
-  if (!room || room.filled < 40) return 1;
-  return 1 + (room.trechos?.length ?? 0);
+  const regiao = room?.regiao;
+  if (!room || room.filled < 40 || !regiao || regiao.paradas.length < 2) return false;
+  const rows = regiao.ground.length;
+  const cols = regiao.ground[0]?.length ?? 0;
+  const color = THEME_COLOR[themeForHunt(huntId)];
+  const base = new Graphics();
+  base.rect(0, 0, cols * SCENE_TILE, rows * SCENE_TILE);
+  base.fill({ color });
+  const area = new Container();
+  area.x = -regiao.raio * SCENE_TILE;
+  area.y = -regiao.raio * SCENE_TILE;
+  area.addChild(base);
+  const floor = new Container();
+  const props = new Container();
+  area.addChild(floor);
+  area.addChild(props);
+  const random = rng(hashId(huntId) ^ 0x9e3779b9);
+  for (let y = 0; y < rows; y += 1) {
+    for (let x = 0; x < cols; x += 1) {
+      const ground = regiao.ground[y]?.[x] ?? 0;
+      if (ground && canPaint(tiles, ground)) placeGround(floor, tiles, ground, x, y);
+      else placeGround(floor, tiles, themeFloorId(tiles, huntId, x, y, random), x, y);
+      for (const itemId of regiao.stack[y]?.[x] ?? []) placeProp(props, tiles, itemId, x, y);
+    }
+  }
+  parent.addChild(area);
+  return true;
 }
 
-/** Posição da tela no mapa, em SQMs a partir do centro (0,0 para o centro). */
-export function posicaoDoTrecho(huntId: string, trecho: number): { dx: number; dy: number } {
-  const vizinho = trecho > 0 ? huntMaps[huntId]?.trechos?.[trecho - 1] : undefined;
-  return vizinho ? { dx: vizinho.dx, dy: vizinho.dy } : { dx: 0, dy: 0 };
+/** Paradas da câmera (deslocamento em SQMs a partir do centro); [[0,0]] sem região. */
+export function paradasDaHunt(huntId: string): Array<[number, number]> {
+  const room = huntMaps[huntId];
+  const paradas = room && room.filled >= 40 ? room.regiao?.paradas : undefined;
+  return paradas && paradas.length >= 2 ? paradas : [[0, 0]];
 }
 
 const HOUSE_DECO: Record<string, Array<{ id: number; x: number; y: number; ground?: boolean }>> = {

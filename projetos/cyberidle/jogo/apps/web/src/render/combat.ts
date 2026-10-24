@@ -7,7 +7,7 @@ import { attackAnimationSpeed, loadAttackFrames, preloadAttackFrames } from './a
 import { burstsFor, damageTint, isCustomMeleeSwing, magicEffectId, outgoingDamageTint } from './effects.js';
 import { missileAim, shootEffectId } from './missiles.js';
 import { recoloredFrames, appearancePoseKey, creatureRecolorAppearance } from './outfit.js';
-import { paintDecorations, paintHuntScene, posicaoDoTrecho, trechosDaHunt } from './scenes.js';
+import { paintDecorations, paintHuntRegion, paintHuntScene, paradasDaHunt } from './scenes.js';
 import {
   chebyshev, faceOf, MONSTER_STEP_MS, PLAYER_STEP_MS, spawnTile, stepToward, surroundGoal,
 } from './walk.js';
@@ -149,13 +149,15 @@ export class CombatScene {
   private huntId = '';
   private decorations: string[] = [];
   /**
-   * Troca de wave (Cyberidle, Lab Hub - Claude Opus 5.5): cada wave mostra um trecho do mapa
-   * da hunt; na troca a tela desliza para o trecho seguinte com o personagem andando, e um
-   * letreiro "WAVE N" aparece. Os monstros da wave nova só entram depois, vindo das bordas.
+   * Troca de wave (Cyberidle, Lab Hub - Claude Opus 5.5): o chão é uma região contínua do
+   * mapa, maior que a tela. Na troca a câmera anda 2-4 SQMs até a próxima parada, no passo
+   * do personagem (que anda no lugar, como no Tibia), e aparece o letreiro "WAVE N". Os
+   * monstros da wave nova só entram quando ele chega, vindo das bordas.
    */
-  private trecho = 0;
+  private deco: Container | null = null;
+  private parada = 0;
   private ondaAtual = 0;
-  private transicao: { de: Container; para: Container; sx: number; sy: number; t: number; dur: number } | null = null;
+  private camera: { de: [number, number]; para: [number, number]; t: number; dur: number } | null = null;
   private letreiro: { text: Text; life: number; maxLife: number } | null = null;
   private dead = false;
   private host: HTMLElement | null = null;
@@ -259,7 +261,7 @@ export class CombatScene {
     app.ticker.add((ticker) => {
       if (this.dead || !this.alive()) return;
       try {
-        this.tickTransicao(ticker.deltaMS);
+        this.tickCamera(ticker.deltaMS);
         this.tickWalk(ticker.deltaMS);
         this.tickFloaters(ticker.deltaMS);
         this.tickLetreiro(ticker.deltaMS);
@@ -274,9 +276,9 @@ export class CombatScene {
     const changed = this.huntId !== huntId;
     this.huntId = huntId;
     if (changed) {
-      this.trecho = 0;
+      this.parada = 0;
       this.ondaAtual = 0;
-      this.encerrarTransicao();
+      this.camera = null;
     }
     if (!this.alive()) return;
     if (changed) this.clearMonsterSprites();
@@ -292,7 +294,7 @@ export class CombatScene {
   resetViewport(): void {
     this.clearMonsterSprites();
     this.ondaAtual = 0;
-    this.encerrarTransicao();
+    this.camera = null;
     if (this.letreiro) {
       try { this.letreiro.text.destroy(); } catch { /* already gone */ }
       this.letreiro = null;
@@ -327,8 +329,8 @@ export class CombatScene {
     } catch (error) {
       console.error('combat allies', error);
     }
-    // Enquanto a tela desliza para o próximo trecho, a wave nova espera para entrar.
-    if (this.transicao) return;
+    // Enquanto o personagem anda até a próxima parada, a wave nova espera para entrar.
+    if (this.camera) return;
     const pack = active ?? [];
     const seen = new Set(pack.map((monster) => monster.uid));
     if (pack.length > 0) {
@@ -384,7 +386,7 @@ export class CombatScene {
 
   destroy(): void {
     this.dead = true;
-    this.transicao = null;
+    this.camera = null;
     this.letreiro = null;
     this.clearMonsterSprites();
     for (const entry of this.allies.values()) {
@@ -395,6 +397,8 @@ export class CombatScene {
     this.player = null;
     try { this.floor?.destroy({ children: true }); } catch { /* already gone */ }
     this.floor = null;
+    try { this.deco?.destroy({ children: true }); } catch { /* already gone */ }
+    this.deco = null;
     try { this.fx?.destroy({ children: true }); } catch { /* already gone */ }
     this.fx = null;
     this.shots = [];
@@ -421,16 +425,30 @@ export class CombatScene {
   private paintFloor(huntId: string): void {
     if (!this.world || this.dead) return;
     this.floor?.destroy({ children: true });
+    this.deco?.destroy({ children: true });
     const floor = new Container();
+    const deco = new Container();
     if (this.tiles && huntId) {
-      paintHuntScene(floor, this.tiles, huntId, this.trecho);
-      if (this.decorations.length) paintDecorations(floor, this.tiles, this.decorations);
+      if (!paintHuntRegion(floor, this.tiles, huntId)) paintHuntScene(floor, this.tiles, huntId);
+      // Decoração da casa fica presa à tela, não ao chão que a câmera move.
+      if (this.decorations.length) paintDecorations(deco, this.tiles, this.decorations);
     } else {
       floor.addChild(drawCave());
     }
-    this.encerrarTransicao();
+    this.camera = null;
     this.world.addChildAt(floor, 0);
+    this.world.addChildAt(deco, 1);
     this.floor = floor;
+    this.deco = deco;
+    const [cx, cy] = paradasDaHunt(huntId)[this.parada] ?? [0, 0];
+    this.moverChao(cx, cy);
+  }
+
+  /** Posição da câmera em SQMs a partir do centro da região. */
+  private moverChao(cx: number, cy: number): void {
+    if (!this.floor || this.floor.destroyed) return;
+    this.floor.x = Math.round(-cx * TILE);
+    this.floor.y = Math.round(-cy * TILE);
   }
 
   /** Chamado a cada mudança de wave. A primeira só posiciona, sem animar. */
@@ -438,72 +456,38 @@ export class CombatScene {
     if (!wave || wave === this.ondaAtual) return;
     const primeira = this.ondaAtual === 0;
     this.ondaAtual = wave;
-    const total = trechosDaHunt(this.huntId);
-    const proximo = total > 1 ? (wave - 1) % total : 0;
-    if (!this.alive() || !this.world || !this.tiles || !this.floor || primeira) {
-      if (proximo !== this.trecho) {
-        this.trecho = proximo;
-        if (this.alive() && this.world && this.huntId) this.paintFloor(this.huntId);
-      }
+    const paradas = paradasDaHunt(this.huntId);
+    const proxima = (wave - 1) % paradas.length;
+    if (!this.alive() || !this.floor || primeira) {
+      this.parada = proxima;
+      const [cx, cy] = paradas[proxima] ?? [0, 0];
+      this.camera = null;
+      this.moverChao(cx, cy);
       return;
     }
     this.mostrarLetreiro(boss ? 'BOSS' : `WAVE ${wave}`, boss);
-    this.iniciarTransicao(proximo);
-  }
-
-  private iniciarTransicao(proximo: number): void {
-    if (!this.world || !this.tiles || !this.floor) return;
-    this.encerrarTransicao();
-    const de = posicaoDoTrecho(this.huntId, this.trecho);
-    const para = posicaoDoTrecho(this.huntId, proximo);
-    let sx = Math.sign(para.dx - de.dx);
-    let sy = Math.sign(para.dy - de.dy);
-    // Hunt com uma tela só (ou o mesmo trecho): ainda assim anda, para o lado.
-    if (sx === 0 && sy === 0) sx = this.ondaAtual % 2 === 0 ? 1 : -1;
-    this.trecho = proximo;
-
-    const novo = new Container();
-    paintHuntScene(novo, this.tiles, this.huntId, proximo);
-    if (this.decorations.length) paintDecorations(novo, this.tiles, this.decorations);
-    const w = COLS * TILE;
-    const h = ROWS * TILE;
-    novo.x = sx * w;
-    novo.y = sy * h;
-    this.world.addChildAt(novo, 0);
-    // Os monstros da wave anterior saem com a tela; os novos entram depois.
+    if (paradas.length < 2 || proxima === this.parada) return;
+    const de = paradas[this.parada] ?? [0, 0];
+    const para = paradas[proxima] ?? [0, 0];
+    this.parada = proxima;
+    const passos = Math.max(1, chebyshev(de[0], de[1], para[0], para[1]));
+    // Os monstros que sobraram da wave anterior ficam para trás.
     this.clearMonsterSprites();
-    this.transicao = { de: this.floor, para: novo, sx, sy, t: 0, dur: 1300 };
-    this.floor = novo;
+    this.camera = { de, para, t: 0, dur: passos * PLAYER_STEP_MS };
     if (this.player) {
       this.placeAt(this.player, PLAYER_TILE.x, PLAYER_TILE.y);
-      this.face(this.player, sx, sy, true, true);
+      this.face(this.player, para[0] - de[0], para[1] - de[1], true, true);
     }
   }
 
-  private tickTransicao(delta: number): void {
-    const tr = this.transicao;
-    if (!tr) return;
-    tr.t = Math.min(tr.dur, tr.t + delta);
-    const k = tr.t / tr.dur;
-    const p = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2; // ease-in-out
-    const w = COLS * TILE;
-    const h = ROWS * TILE;
-    tr.de.x = -tr.sx * w * p;
-    tr.de.y = -tr.sy * h * p;
-    tr.para.x = tr.sx * w * (1 - p);
-    tr.para.y = tr.sy * h * (1 - p);
-    if (tr.t >= tr.dur) this.encerrarTransicao();
-  }
-
-  private encerrarTransicao(): void {
-    const tr = this.transicao;
-    if (!tr) return;
-    this.transicao = null;
-    try { tr.de.destroy({ children: true }); } catch { /* already gone */ }
-    if (!tr.para.destroyed) {
-      tr.para.x = 0;
-      tr.para.y = 0;
-    }
+  private tickCamera(delta: number): void {
+    const cam = this.camera;
+    if (!cam) return;
+    cam.t = Math.min(cam.dur, cam.t + delta);
+    const k = cam.t / cam.dur; // passo constante, como andar
+    this.moverChao(cam.de[0] + (cam.para[0] - cam.de[0]) * k, cam.de[1] + (cam.para[1] - cam.de[1]) * k);
+    if (cam.t < cam.dur) return;
+    this.camera = null;
     if (this.player && !this.player.root.destroyed) this.face(this.player, 0, 1, false, true);
   }
 
@@ -1288,7 +1272,7 @@ export class CombatScene {
     if (player) this.advanceWalk(player, delta);
     for (const entry of this.sprites.values()) this.advanceWalk(entry, delta);
 
-    if (this.transicao) {
+    if (this.camera) {
       this.sortActors();
       return;
     }

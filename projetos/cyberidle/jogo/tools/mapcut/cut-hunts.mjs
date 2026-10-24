@@ -28,17 +28,15 @@ const HALF_X = Math.floor(SCENE_COLS / 2); // 6
 const HALF_Y = Math.floor(SCENE_ROWS / 2); // 5
 
 /**
- * Trechos vizinhos (Cyberidle, Lab Hub - Claude Opus 5.5): além da tela do centro, recorta
- * as 8 telas em volta, no mesmo andar. Cada wave mostra um trecho diferente da hunt e a
- * cena "anda" de um para o outro. Só entram os trechos com chão suficiente.
+ * Região contínua (Cyberidle, Lab Hub - Claude Opus 5.5): além da tela 13×11, recorta uma
+ * margem de RAIO SQMs em volta. A cada wave a "câmera" anda alguns SQMs dentro dessa
+ * região (paradas), então o chão é sempre o mapa de verdade, sem pular para longe.
  */
-const OFFSETS = [
-  [0, 0],
-  [SCENE_COLS, 0], [-SCENE_COLS, 0], [0, SCENE_ROWS], [0, -SCENE_ROWS],
-  [SCENE_COLS, SCENE_ROWS], [-SCENE_COLS, SCENE_ROWS], [SCENE_COLS, -SCENE_ROWS], [-SCENE_COLS, -SCENE_ROWS],
-];
-const MAX_TRECHOS = 3;
-const MIN_CHAO_TRECHO = 105; // de 143 SQMs
+const RAIO = 4;
+const REG_COLS = SCENE_COLS + 2 * RAIO; // 21
+const REG_ROWS = SCENE_ROWS + 2 * RAIO; // 19
+const MIN_CHAO_PARADA = 112; // de 143 SQMs visíveis
+const MAX_PARADAS = 5;
 
 const NODE_START = 0xfe;
 const NODE_END = 0xff;
@@ -353,19 +351,17 @@ function loadTargets() {
     const cy = pos.y | 0;
     const cz = pos.z | 0;
     hunts.push({ id, name: entry.Name, x: cx, y: cy, z: cz });
-    OFFSETS.forEach(([ox, oy], trecho) => {
-      for (let dy = -HALF_Y; dy <= HALF_Y; dy += 1) {
-        for (let dx = -HALF_X; dx <= HALF_X; dx += 1) {
-          const key = tileKey(cx + ox + dx, cy + oy + dy, cz);
-          let bucket = needed.get(key);
-          if (!bucket) {
-            bucket = [];
-            needed.set(key, bucket);
-          }
-          bucket.push({ huntId: `${id}@${trecho}`, lx: dx + HALF_X, ly: dy + HALF_Y });
+    for (let dy = -HALF_Y - RAIO; dy <= HALF_Y + RAIO; dy += 1) {
+      for (let dx = -HALF_X - RAIO; dx <= HALF_X + RAIO; dx += 1) {
+        const key = tileKey(cx + dx, cy + dy, cz);
+        let bucket = needed.get(key);
+        if (!bucket) {
+          bucket = [];
+          needed.set(key, bucket);
         }
+        bucket.push({ huntId: id, lx: dx + HALF_X + RAIO, ly: dy + HALF_Y + RAIO });
       }
-    });
+    }
   }
   return { hunts, needed };
 }
@@ -395,17 +391,13 @@ function cut() {
 
   const rooms = new Map();
   for (const h of hunts) {
-    OFFSETS.forEach(([ox, oy], trecho) => {
-      rooms.set(`${h.id}@${trecho}`, {
-        id: h.id,
-        name: h.name,
-        dx: ox,
-        dy: oy,
-        center: { x: h.x + ox, y: h.y + oy, z: h.z },
-        ground: Array.from({ length: SCENE_ROWS }, () => Array(SCENE_COLS).fill(0)),
-        stack: Array.from({ length: SCENE_ROWS }, () => Array.from({ length: SCENE_COLS }, () => [])),
-        filled: 0,
-      });
+    rooms.set(h.id, {
+      id: h.id,
+      name: h.name,
+      center: { x: h.x, y: h.y, z: h.z },
+      ground: Array.from({ length: REG_ROWS }, () => Array(REG_COLS).fill(0)),
+      stack: Array.from({ length: REG_ROWS }, () => Array.from({ length: REG_COLS }, () => [])),
+      filled: 0,
     });
   }
 
@@ -502,35 +494,65 @@ function cut() {
   const out = {};
   const idSet = new Set();
   let ok = 0;
-  const chao = (room) => room.ground.reduce((n, row) => n + row.filter(Boolean).length, 0);
-  const guardarIds = (room) => {
-    for (const row of room.ground) for (const id of row) if (id) idSet.add(id);
-    for (const row of room.stack) for (const cell of row) for (const id of cell) if (id) idSet.add(id);
+  // Janela 13×11 da região deslocada em (ox, oy) a partir do centro.
+  const janela = (room, ox, oy, campo) => Array.from({ length: SCENE_ROWS }, (_, y) =>
+    Array.from({ length: SCENE_COLS }, (_, x) => room[campo][y + RAIO + oy][x + RAIO + ox]));
+  const chaoNaJanela = (room, ox, oy) => {
+    let n = 0;
+    for (let y = 0; y < SCENE_ROWS; y += 1) for (let x = 0; x < SCENE_COLS; x += 1) {
+      if (room.ground[y + RAIO + oy][x + RAIO + ox]) n += 1;
+    }
+    // O personagem fica no meio da tela: ali tem que ter chão.
+    const meio = room.ground[HALF_Y + RAIO + oy][HALF_X + RAIO + ox];
+    return meio ? n : 0;
   };
-  let totalTrechos = 0;
+  // Paradas da câmera: começa no centro e anda 2-4 SQMs por vez para um ponto com chão.
+  const paradasDe = (room) => {
+    const validas = [];
+    for (let oy = -RAIO; oy <= RAIO; oy += 1) for (let ox = -RAIO; ox <= RAIO; ox += 1) {
+      if (chaoNaJanela(room, ox, oy) >= MIN_CHAO_PARADA) validas.push([ox, oy]);
+    }
+    const rota = [[0, 0]];
+    const usadas = new Set(['0,0']);
+    while (rota.length < MAX_PARADAS) {
+      const [ax, ay] = rota[rota.length - 1];
+      const prox = validas
+        .filter(([x, y]) => !usadas.has(`${x},${y}`))
+        .map(([x, y]) => ({ x, y, d: Math.max(Math.abs(x - ax), Math.abs(y - ay)), longe: Math.abs(x) + Math.abs(y) }))
+        .filter((c) => c.d >= 2 && c.d <= 4)
+        // prefere o que se afasta do caminho já feito, para a volta fechar um circuito
+        .sort((a, b) => (b.d - a.d) || (b.longe - a.longe));
+      if (!prox.length) break;
+      // espalha: escolhe entre os 3 melhores de forma determinística
+      const c = prox[(rota.length * 7) % Math.min(3, prox.length)];
+      rota.push([c.x, c.y]);
+      usadas.add(`${c.x},${c.y}`);
+    }
+    return rota;
+  };
+  let totalParadas = 0;
   for (const h of hunts) {
-    const room = rooms.get(`${h.id}@0`);
-    if (!room || room.filled < 20) continue;
+    const room = rooms.get(h.id);
+    if (!room) continue;
+    const ground = janela(room, 0, 0, 'ground');
+    const stack = janela(room, 0, 0, 'stack');
+    const filled = ground.reduce((n, row) => n + row.filter(Boolean).length, 0)
+      + stack.reduce((n, row) => n + row.filter((c, x) => c.length && !row[x]).length, 0);
+    if (filled < 20) continue;
     ok += 1;
-    const trechos = OFFSETS.slice(1)
-      .map((_, i) => rooms.get(`${h.id}@${i + 1}`))
-      .filter((r) => r && chao(r) >= MIN_CHAO_TRECHO)
-      .sort((a, b) => chao(b) - chao(a))
-      .slice(0, MAX_TRECHOS);
-    totalTrechos += trechos.length;
+    const paradas = paradasDe(room);
+    totalParadas += paradas.length - 1;
     out[h.id] = {
       center: room.center,
-      ground: room.ground,
-      stack: room.stack,
-      filled: room.filled,
-      ...(trechos.length ? {
-        trechos: trechos.map((r) => ({ dx: r.dx, dy: r.dy, ground: r.ground, stack: r.stack, filled: r.filled })),
-      } : {}),
+      ground,
+      stack,
+      filled,
+      regiao: { raio: RAIO, ground: room.ground, stack: room.stack, paradas },
     };
-    guardarIds(room);
-    for (const r of trechos) guardarIds(r);
+    for (const row of room.ground) for (const id of row) if (id) idSet.add(id);
+    for (const row of room.stack) for (const cell of row) for (const id of cell) if (id) idSet.add(id);
   }
-  console.log(`trechos vizinhos: ${totalTrechos} (até ${MAX_TRECHOS} por hunt)`);
+  console.log(`paradas de câmera: ${totalParadas} (até ${MAX_PARADAS - 1} por hunt, além do centro)`);
 
   fs.writeFileSync(OUT_MAPS, JSON.stringify(out));
   fs.writeFileSync(OUT_IDS, JSON.stringify([...idSet].sort((a, b) => a - b)));

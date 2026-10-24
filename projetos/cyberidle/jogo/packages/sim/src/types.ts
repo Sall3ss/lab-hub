@@ -235,6 +235,8 @@ export interface CharacterState {
   unlockedMounts: number[];
   appearance: Appearance;
   partySlots: number;
+  /** Outros personagens da conta levados nos slots de party (Cyberidle, modo local). */
+  partyIds?: number[];
   guildId: number | null;
   decorations: string[];
   /** Tries granted the last time the exercise dummy ran (idle only). */

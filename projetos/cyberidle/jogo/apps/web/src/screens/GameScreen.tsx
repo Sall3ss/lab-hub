@@ -632,6 +632,7 @@ export function GameScreen({
           }))}
           onUpgrade={() => void act(() => api.upgradeGear(character.id).then((r) => onCharacter(r.character)))}
           onParty={() => void act(() => api.act(character.id, { type: 'party-unlock' }).then((r) => onCharacter(r.character)))}
+          onPartyMember={(slot, characterId) => void act(() => api.act(character.id, { type: 'party-member', slot, characterId }).then((r) => onCharacter(r.character)))}
           onOutfit={() => setOutfitOpen(true)}
           onLootSlot={(currency) => void act(() => api.act(character.id, { type: 'loot-slot', currency }).then((r) => onCharacter(r.character)))}
           onSupplySlot={(currency) => void act(() => api.act(character.id, { type: 'supply-slot', currency }).then((r) => onCharacter(r.character)))}

@@ -72,9 +72,48 @@ function parse(row: CharacterRow): LoadedCharacter {
 function attachCaveParty(db: Database, loaded: LoadedCharacter): void {
   if (!loaded.session) return;
   const online = new Set(onlineCharacterIds());
-  loaded.session.partyMembers = db
+  const escolhidos = companheirosEscolhidos(db, loaded);
+  const naCave = db
     .listHuntHunters(loaded.session.huntId)
     .filter((hunter) => hunter.id !== loaded.row.id && online.has(hunter.id));
+  const vistos = new Set(escolhidos.map((h) => h.id));
+  loaded.session.partyMembers = [...escolhidos, ...naCave.filter((h) => !vistos.has(h.id))];
+}
+
+/**
+ * Cyberidle (modo local, sem outros jogadores): os slots de party levam OUTROS personagens
+ * da mesma conta, escolhidos pelo jogador. Entram na cena e no bônus de XP da party, como
+ * os caçadores da cave no original. Lab Hub, Claude (Opus 5.5).
+ */
+function companheirosEscolhidos(db: Database, loaded: LoadedCharacter): PartyHunter[] {
+  const vagas = Math.max(0, (loaded.character.partySlots ?? 1) - 1);
+  const ids = (loaded.character.partyIds ?? []).slice(0, vagas);
+  const lista: PartyHunter[] = [];
+  for (const id of ids) {
+    if (!id || id === loaded.row.id) continue;
+    const row = db.findCharacter(id);
+    if (!row || row.accountId !== loaded.row.accountId) continue;
+    try {
+      const vivo = (row.session ? (JSON.parse(row.session) as HuntSession).character : JSON.parse(row.state)) as CharacterState;
+      lista.push({ id: row.id, name: vivo.name ?? row.name, level: vivo.level, vocationId: vivo.vocationId ?? row.vocationId, appearance: vivo.appearance });
+    } catch {
+      /* personagem com estado ilegível: fica de fora */
+    }
+  }
+  return lista;
+}
+
+/** Outros personagens da conta que podem ir na party (para a tela escolher). */
+function opcoesDeParty(db: Database, loaded: LoadedCharacter): Array<{ id: number; name: string; level: number; vocationId: number }> {
+  return db.charactersForAccount(loaded.row.accountId)
+    .filter((row) => row.id !== loaded.row.id)
+    .map((row) => {
+      let level = 0;
+      try {
+        level = ((row.session ? (JSON.parse(row.session) as HuntSession).character : JSON.parse(row.state)) as CharacterState).level;
+      } catch { /* sem nível */ }
+      return { id: row.id, name: row.name, level, vocationId: row.vocationId };
+    });
 }
 
 function cavePartyView(loaded: LoadedCharacter): Array<PartyHunter & { self: boolean }> {
@@ -494,6 +533,8 @@ export function describeCharacter(loaded: LoadedCharacter, db?: Database) {
     partySlots: character.partySlots ?? 1,
     partyBonus: Math.round((partyShare - 1) * 100),
     caveParty: cavePartyView(loaded),
+    partyIds: loaded.character.partyIds ?? [],
+    partyOptions: db ? opcoesDeParty(db, loaded) : [],
     guildId: character.guildId,
     decorations: character.decorations ?? [],
     lastDummyTries: character.lastDummyTries ?? 0,

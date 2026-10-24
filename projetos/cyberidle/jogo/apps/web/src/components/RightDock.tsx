@@ -81,6 +81,7 @@ export function RightDock({
   onSell,
   onUpgrade,
   onParty,
+  onPartyMember,
   onOutfit,
   onLootSlot,
   onSupplySlot,
@@ -99,6 +100,8 @@ export function RightDock({
   onSell: () => void;
   onUpgrade: () => void;
   onParty: () => void;
+  /** Escolhe o personagem do slot extra de party (null libera). */
+  onPartyMember: (slot: number, characterId: number | null) => void;
   onOutfit: () => void;
   onLootSlot: (currency: SlotCurrency) => void;
   onSupplySlot: (currency: SlotCurrency) => void;
@@ -248,6 +251,33 @@ export function RightDock({
             <div className="locked-slot">
               SLOT BLOQUEADO
               <button className="btn" disabled={busy || character.partySlots < 2} onClick={onParty}>desbloquear 75 coins</button>
+            </div>
+          )}
+          {character.partySlots > 1 && (
+            <div className="party-pick">
+              {Array.from({ length: character.partySlots - 1 }, (_, vaga) => (
+                <label key={vaga} className="party-pick-slot">
+                  <span>Slot {vaga + 2}</span>
+                  <select
+                    value={character.partyIds?.[vaga] || ''}
+                    disabled={busy || !(character.partyOptions?.length)}
+                    onChange={(event) => onPartyMember(vaga, event.target.value ? Number(event.target.value) : null)}
+                  >
+                    <option value="">— vazio —</option>
+                    {(character.partyOptions ?? []).map((opcao) => (
+                      <option key={opcao.id} value={opcao.id}>{opcao.name} · lvl {opcao.level}</option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+              {!character.partyOptions?.length && (
+                <div className="party-sub">
+                  Para levar alguém na party, crie outro personagem (botão "sair" → novo personagem) e volte aqui.
+                </div>
+              )}
+              {!character.session && Boolean(character.partyOptions?.length) && (
+                <div className="party-sub">A party aparece na cena quando você estiver caçando.</div>
+              )}
             </div>
           )}
           {character.partySlots > 1 && (

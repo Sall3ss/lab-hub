@@ -207,10 +207,11 @@ export interface HuntMapRoom {
   stack: number[][][];
   filled: number;
   /**
-   * Telas vizinhas no mesmo andar (dx/dy em SQMs a partir do centro). Cada wave mostra um
-   * trecho e a cena desliza de um para o outro. Cyberidle (Lab Hub), Claude (Opus 5.5).
+   * Região contínua em volta da tela (raio SQMs para cada lado). A cada wave a câmera anda
+   * para a próxima parada (deslocamento em SQMs a partir do centro), sempre dentro dela.
+   * Cyberidle (Lab Hub), Claude (Opus 5.5).
    */
-  trechos?: Array<{ dx: number; dy: number; ground: number[][]; stack: number[][][]; filled: number }>;
+  regiao?: { raio: number; ground: number[][]; stack: number[][][]; paradas: Array<[number, number]> };
 }
 
 export interface Charm {
