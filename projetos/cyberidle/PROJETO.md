@@ -87,6 +87,19 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
   seletor com os outros personagens da conta (ação `party-member`; `partyIds` no personagem).
   Eles aparecem na cena caçando junto e entram no bônus de XP da party (+30% com 3).
   Conferido montando 2 companheiros num banco de teste e abrindo no navegador.
+- 24/10/2026: **painel da party no estilo BaiakIdle.** Um cartão por membro: papel (TANK
+  para Knight, SUP para Druid, DPS para os outros), nome, vocação e nível, barras de HP, MP
+  e XP, e atalho para o Helper do membro (Outfit só no próprio). Os companheiros **ganham a
+  mesma XP que o líder** enquanto ele caça, inclusive offline (`partyXpVisto` guarda o que já
+  foi repassado; quem estiver caçando sozinho em outro lugar não recebe). Conferido em teste
+  exato: líder +1.008 / +8.196 / +37.950 XP, companheiro igual.
+- 24/10/2026: **Helper por membro da party.** Abas no topo do Helper (sigla da vocação +
+  nome), como no BaiakIdle; cada aba edita e salva as magias, poções e táticas daquele
+  personagem. Conferido: mudança no companheiro ficou nele e não mexeu no líder.
+- **Limite atual da party:** na simulação de combate só o líder age (ataca, cura, gasta
+  poção). Os companheiros aparecem na cena, ganham XP e têm Helper próprio salvo, mas ainda
+  não lutam com as magias deles. Fazer a party lutar de verdade é mexer no núcleo do
+  `packages/sim` (hoje um personagem por sessão) - próximo passo grande, se o dono quiser.
 - Conhecido: a dica "Reivindicar conta para não perder o personagem" aparece, mas no modo
   local o convidado já fica salvo no navegador. Um erro de console de efeito de ataque
   ("weapon attack fx club") aparece às vezes e não trava nada.

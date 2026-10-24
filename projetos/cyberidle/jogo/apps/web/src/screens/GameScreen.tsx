@@ -61,6 +61,9 @@ export function GameScreen({
   const { t, locale, setLocale } = useLocale();
   const { character, events } = usePredictedCharacter(server);
   const [overlay, setOverlay] = useState<OverlayId>('none');
+  // Helper de outro membro da party (Cyberidle): id do membro e a ficha dele carregada.
+  const [helperDe, setHelperDe] = useState<number | null>(null);
+  const [helperOutro, setHelperOutro] = useState<CharacterView | null>(null);
   const [helperSection, setHelperSection] = useState<'cura' | 'magias'>('cura');
   const [settings, setSettings] = useState(false);
   const [pickingHunt, setPickingHunt] = useState(false);
@@ -294,8 +297,35 @@ export function GameScreen({
     void act(() => api.act(character.id, { type: 'policy', ...patch }).then((result) => onCharacter(result.character)));
   }
 
+  function abrirHelperDe(id: number) {
+    if (id === character.id) {
+      setHelperDe(null);
+      setHelperOutro(null);
+      setOverlay('helper');
+      return;
+    }
+    setHelperDe(id);
+    setHelperOutro(null);
+    setOverlay('helper');
+    void api.character(id)
+      .then((r) => setHelperOutro(r.character))
+      .catch((error) => pushLog(error instanceof ApiError ? error.message : 'Não consegui abrir o Helper desse membro.'));
+  }
+
+  function savePolicyOutro(patch: Record<string, unknown>) {
+    const alvo = helperOutro;
+    if (!alvo) return;
+    const otimista = applyPolicyPatch(alvo, patch);
+    if (otimista) setHelperOutro(otimista);
+    void act(() => api.act(alvo.id, { type: 'policy', ...patch }).then((result) => setHelperOutro(result.character)));
+  }
+
   function toggle(id: OverlayId) {
-    if (id === 'helper') setHelperSection('cura');
+    if (id === 'helper') {
+      setHelperSection('cura');
+      setHelperDe(null);
+      setHelperOutro(null);
+    }
     setOverlay((current) => (current === id ? 'none' : id));
   }
 
@@ -633,6 +663,7 @@ export function GameScreen({
           onUpgrade={() => void act(() => api.upgradeGear(character.id).then((r) => onCharacter(r.character)))}
           onParty={() => void act(() => api.act(character.id, { type: 'party-unlock' }).then((r) => onCharacter(r.character)))}
           onPartyMember={(slot, characterId) => void act(() => api.act(character.id, { type: 'party-member', slot, characterId }).then((r) => onCharacter(r.character)))}
+          onHelperFor={abrirHelperDe}
           onOutfit={() => setOutfitOpen(true)}
           onLootSlot={(currency) => void act(() => api.act(character.id, { type: 'loot-slot', currency }).then((r) => onCharacter(r.character)))}
           onSupplySlot={(currency) => void act(() => api.act(character.id, { type: 'supply-slot', currency }).then((r) => onCharacter(r.character)))}
@@ -670,14 +701,17 @@ export function GameScreen({
         />
       </div>
 
-      {overlay === 'helper' && (
+      {overlay === 'helper' && (helperDe === null || helperOutro?.id === helperDe) && (
         <HelperModal
-          key={helperSection}
-          character={character}
+          key={`${helperSection}-${helperDe ?? 'eu'}`}
+          character={helperDe !== null && helperOutro ? helperOutro : character}
           busy={busy}
           initialSection={helperSection}
           onClose={() => setOverlay('none')}
-          onPolicy={savePolicy}
+          onPolicy={helperDe !== null ? savePolicyOutro : savePolicy}
+          membros={(character.caveParty ?? []).map((m) => ({ id: m.id, name: m.self ? character.name : m.name, vocationId: m.vocationId }))}
+          atual={helperDe ?? character.id}
+          onTrocar={abrirHelperDe}
         />
       )}
 

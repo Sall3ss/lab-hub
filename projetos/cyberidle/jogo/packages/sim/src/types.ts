@@ -237,6 +237,8 @@ export interface CharacterState {
   partySlots: number;
   /** Outros personagens da conta levados nos slots de party (Cyberidle, modo local). */
   partyIds?: number[];
+  /** XP do líder já repassado à party (base para repassar só o que ganhou depois). */
+  partyXpVisto?: number;
   guildId: number | null;
   decorations: string[];
   /** Tries granted the last time the exercise dummy ran (idle only). */

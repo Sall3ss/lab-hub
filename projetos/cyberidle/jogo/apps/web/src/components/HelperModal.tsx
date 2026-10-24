@@ -22,18 +22,30 @@ const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: 'loot', label: 'Loot' },
 ];
 
+/** Sigla da vocação nas abas da party, como no BaiakIdle (EK, ED, MS, RP...). */
+const SIGLA_VOCACAO: Record<number, string> = {
+  1: 'S', 2: 'D', 3: 'P', 4: 'K', 5: 'MS', 6: 'ED', 7: 'RP', 8: 'EK', 9: 'MK', 10: 'EM',
+};
+
 export function HelperModal({
   character,
   busy,
   onClose,
   onPolicy,
   initialSection = 'cura',
+  membros = [],
+  atual,
+  onTrocar,
 }: {
   character: CharacterView;
   busy: boolean;
   onClose: () => void;
   onPolicy: (patch: Record<string, unknown>) => void;
   initialSection?: Section;
+  /** Membros da party (Cyberidle): abas no topo para configurar cada um. */
+  membros?: Array<{ id: number; name: string; vocationId: number }>;
+  atual?: number;
+  onTrocar?: (id: number) => void;
 }) {
   const { t } = useLocale();
   const [mode, setMode] = useState<HelperMode>('hunt');
@@ -69,11 +81,29 @@ export function HelperModal({
         <WindowHead
           title={t('helper')}
           extra={(
+            <>
+            {membros.length > 1 && (
+              <div className="helper-membros">
+                {membros.map((membro) => (
+                  <button
+                    key={membro.id}
+                    type="button"
+                    className={membro.id === atual ? 'on' : ''}
+                    title={membro.name}
+                    onClick={() => onTrocar?.(membro.id)}
+                  >
+                    <b>{SIGLA_VOCACAO[membro.vocationId] ?? '?'}</b>
+                    <span>{membro.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="helper-modes">
               {([['hunt', 'Hunt'], ['boss', 'Boss'], ['pvp', 'PVP']] as const).map(([id, label]) => (
                 <button key={id} className={mode === id ? 'on' : ''} onClick={() => setMode(id)}>{label}</button>
               ))}
             </div>
+            </>
           )}
           onClose={onClose}
           closeLabel={t('close')}

@@ -82,6 +82,7 @@ export function RightDock({
   onUpgrade,
   onParty,
   onPartyMember,
+  onHelperFor,
   onOutfit,
   onLootSlot,
   onSupplySlot,
@@ -102,6 +103,8 @@ export function RightDock({
   onParty: () => void;
   /** Escolhe o personagem do slot extra de party (null libera). */
   onPartyMember: (slot: number, characterId: number | null) => void;
+  /** Abre o Helper já no membro escolhido da party. */
+  onHelperFor: (characterId: number) => void;
   onOutfit: () => void;
   onLootSlot: (currency: SlotCurrency) => void;
   onSupplySlot: (currency: SlotCurrency) => void;
@@ -200,46 +203,46 @@ export function RightDock({
   return (
     <aside className="dock right">
       <DockBox id="party-config" title="Party Config">
-          <div className="party-members">
+          {/* Cyberidle: cartão por membro, como no BaiakIdle - papel, nome, vocação, HP/MP/XP
+              e atalhos (Helper do membro; Outfit só do próprio personagem). Claude (Opus 5.5). */}
+          <div className="party-cards">
             {(character.caveParty?.length
               ? character.caveParty
               : [{ id: character.id, name: character.name, level: character.level, vocationId: character.vocation.id, self: true, appearance: character.appearance }]
-            ).map((mate) => (
-              <div key={`${mate.id}-${mate.name}`} className={`party-member ${mate.self ? 'self' : ''}`}>
-                <div className="party-member-info">
-                  <div className="party-name">{mate.self ? character.name : mate.name}</div>
-                  <div className="party-sub">
-                    {mate.self
-                      ? `${character.vocation.name} - lvl ${character.level}`
-                      : `lvl ${mate.level}`}
+            ).map((mate) => {
+              const eu = Boolean(mate.self);
+              const hp = eu ? character.health : (mate.health ?? 0);
+              const hpMax = eu ? character.maxHealth : (mate.maxHealth ?? 1);
+              const mp = eu ? character.mana : (mate.mana ?? 0);
+              const mpMax = eu ? character.maxMana : (mate.maxMana ?? 1);
+              const xpPct = eu ? xp.percent : (mate.xpPercent ?? 0);
+              const papel = mate.papel ?? (/knight/i.test(character.vocation.name) ? 'TANK' : /druid/i.test(character.vocation.name) ? 'SUP' : 'DPS');
+              const vocacao = eu ? character.vocation.name : (mate.vocationName ?? '');
+              return (
+                <div key={`${mate.id}-${mate.name}`} className={`party-card ${eu ? 'self' : ''}`}>
+                  <div className="party-card-head">
+                    <span className={`party-role ${papel.toLowerCase()}`}>{papel}</span>
+                    <strong className="party-card-name" title={mate.name}>{eu ? character.name : mate.name}</strong>
+                  </div>
+                  <div className="party-card-body">
+                    <div className="party-card-left">
+                      <div className="party-card-sub">{vocacao} · lvl {mate.level}</div>
+                      <div className="party-card-btns">
+                        <button type="button" className="party-icon-btn" title="Helper (magias, poções, táticas)" disabled={busy} onClick={() => onHelperFor(mate.id)}>⚙</button>
+                        {eu && (
+                          <button type="button" className="party-icon-btn" title="Outfit" disabled={busy} onClick={onOutfit}>👕</button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="party-card-bars">
+                      <div className="party-bar hp" title={`HP ${hp}/${hpMax}`}><i style={{ width: `${(hp / Math.max(1, hpMax)) * 100}%` }} /></div>
+                      <div className="party-bar mp" title={`MP ${mp}/${mpMax}`}><i style={{ width: `${(mp / Math.max(1, mpMax)) * 100}%` }} /></div>
+                      <div className="party-bar xp" title={`XP ${Math.round(xpPct)}%`}><i style={{ width: `${xpPct}%` }} /></div>
+                    </div>
                   </div>
                 </div>
-                {mate.self ? (
-                  <button type="button" className="btn gold party-outfit-btn" disabled={busy} onClick={onOutfit}>
-                    Outfit
-                  </button>
-                ) : (
-                  <span className="party-outfit-locked meta" title="Só você pode mudar a própria aparência">—</span>
-                )}
-              </div>
-            ))}
-          </div>
-          <div className="bars">
-            <div className="barline">
-              <span>HP</span>
-              <div className="meter hp"><i style={{ width: `${(character.health / Math.max(1, character.maxHealth)) * 100}%` }} /></div>
-              <span>{character.health}</span>
-            </div>
-            <div className="barline">
-              <span>MP</span>
-              <div className="meter mana"><i style={{ width: `${(character.mana / Math.max(1, character.maxMana)) * 100}%` }} /></div>
-              <span>{character.mana}</span>
-            </div>
-            <div className="barline">
-              <span>XP</span>
-              <div className="meter xp"><i style={{ width: `${xp.percent}%` }} /></div>
-              <span>{Math.round(xp.percent)}%</span>
-            </div>
+              );
+            })}
           </div>
           {character.partySlots < 2 && (
             <div className="locked-slot">

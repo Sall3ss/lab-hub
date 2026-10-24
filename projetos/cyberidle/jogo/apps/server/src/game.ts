@@ -9,7 +9,7 @@ import {
   lootSlotUpgradeCost, supplySlotUpgradeCost, lootSlotCoinCost, supplySlotCoinCost,
   LOOT_SLOT_DEFAULT, SUPPLY_SLOT_DEFAULT,
   availableExerciseHits,
-  partyExperienceShare, isPromoted,
+  partyExperienceShare, isPromoted, addExperience, expForLevel,
   type CharacterState, type HuntSession, type PartyHunter,
 } from '@tibia-idle/sim';
 import { isAdminUsername } from './auth.js';
@@ -116,17 +116,85 @@ function opcoesDeParty(db: Database, loaded: LoadedCharacter): Array<{ id: numbe
     });
 }
 
-function cavePartyView(loaded: LoadedCharacter): Array<PartyHunter & { self: boolean }> {
-  const self: PartyHunter & { self: boolean } = {
+/** Ficha de um membro para o painel da party: vida, mana, XP e papel. Claude (Opus 5.5). */
+interface FichaParty {
+  vocationName: string;
+  papel: 'TANK' | 'SUP' | 'DPS';
+  health: number;
+  maxHealth: number;
+  mana: number;
+  maxMana: number;
+  xpPercent: number;
+}
+
+function fichaDe(estado: CharacterState): FichaParty {
+  const stats = deriveStats(estado);
+  const vocation = getVocation(estado.vocationId);
+  const nome = vocation.name;
+  const papel = /knight/i.test(nome) ? 'TANK' : /druid/i.test(nome) ? 'SUP' : 'DPS';
+  const base = expForLevel(estado.level);
+  const proximo = expForLevel(estado.level + 1);
+  const xpPercent = proximo > base ? Math.max(0, Math.min(100, ((estado.experience - base) / (proximo - base)) * 100)) : 0;
+  return {
+    vocationName: nome,
+    papel,
+    health: Math.min(estado.health ?? stats.maxHealth, stats.maxHealth),
+    maxHealth: stats.maxHealth,
+    mana: Math.min(estado.mana ?? stats.maxMana, stats.maxMana),
+    maxMana: stats.maxMana,
+    xpPercent,
+  };
+}
+
+function estadoAtual(row: CharacterRow): CharacterState | null {
+  try {
+    const estado = (row.session ? (JSON.parse(row.session) as HuntSession).character : JSON.parse(row.state)) as CharacterState;
+    normalizeCharacter(estado);
+    return estado;
+  } catch {
+    return null;
+  }
+}
+
+function cavePartyView(loaded: LoadedCharacter, db?: Database): Array<PartyHunter & { self: boolean } & Partial<FichaParty>> {
+  const self = {
     id: loaded.row.id,
     name: loaded.character.name,
     level: loaded.character.level,
     vocationId: loaded.character.vocationId,
     appearance: loaded.character.appearance,
     self: true,
+    ...fichaDe(loaded.character),
   };
-  const others = (loaded.session?.partyMembers ?? []).map((hunter) => ({ ...hunter, self: false }));
+  const others = (loaded.session?.partyMembers ?? []).map((hunter) => {
+    const row = db?.findCharacter(hunter.id);
+    const estado = row && row.accountId === loaded.row.accountId ? estadoAtual(row) : null;
+    return { ...hunter, self: false, ...(estado ? fichaDe(estado) : {}) };
+  });
   return [self, ...others];
+}
+
+/**
+ * Party do Cyberidle: os companheiros caçam junto com o líder, então ganham a mesma XP que
+ * ele ganhou desde a última vez (em caça, inclusive offline). Quem estiver caçando sozinho
+ * em outro lugar não recebe. Lab Hub, Claude (Opus 5.5).
+ */
+function repassarXpParaParty(db: Database, loaded: LoadedCharacter): void {
+  const atual = loaded.character.experience;
+  const visto = loaded.character.partyXpVisto;
+  loaded.character.partyXpVisto = atual;
+  if (visto === undefined || atual <= visto || !loaded.session) return;
+  const ganho = atual - visto;
+  const vagas = Math.max(0, (loaded.character.partySlots ?? 1) - 1);
+  for (const id of (loaded.character.partyIds ?? []).slice(0, vagas)) {
+    if (!id || id === loaded.row.id) continue;
+    const row = db.findCharacter(id);
+    if (!row || row.accountId !== loaded.row.accountId || row.session) continue;
+    const estado = estadoAtual(row);
+    if (!estado) continue;
+    addExperience(estado, ganho);
+    db.saveCharacter(row.id, JSON.stringify(estado), null, row.settledAt);
+  }
 }
 
 function persist(db: Database, loaded: LoadedCharacter, now: number): void {
@@ -276,6 +344,7 @@ export function loadCharacter(
     trainOffline(loaded.character, now - row.settledAt);
   }
 
+  repassarXpParaParty(db, loaded);
   if (settlement.elapsedSeconds > 0 || loaded.session === null) {
     persist(db, loaded, now);
   }
@@ -532,7 +601,7 @@ export function describeCharacter(loaded: LoadedCharacter, db?: Database) {
     appearance: character.appearance,
     partySlots: character.partySlots ?? 1,
     partyBonus: Math.round((partyShare - 1) * 100),
-    caveParty: cavePartyView(loaded),
+    caveParty: cavePartyView(loaded, db),
     partyIds: loaded.character.partyIds ?? [],
     partyOptions: db ? opcoesDeParty(db, loaded) : [],
     guildId: character.guildId,

@@ -218,6 +218,14 @@ export interface CharacterView {
     vocationId: number;
     self?: boolean;
     appearance?: { outfit: number; head: number; body: number; legs: number; feet: number; aura?: number; mount?: number; addons?: number };
+    /** Ficha para o painel da party (Cyberidle). */
+    vocationName?: string;
+    papel?: 'TANK' | 'SUP' | 'DPS';
+    health?: number;
+    maxHealth?: number;
+    mana?: number;
+    maxMana?: number;
+    xpPercent?: number;
   }>;
   guildId: number | null;
   decorations: string[];

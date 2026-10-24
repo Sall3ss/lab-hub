@@ -1400,6 +1400,31 @@ h2.window-head-title { font-size: 13px; }
   font-size: 10px;
 }
 .locked-slot .btn { margin-top: 6px; width: 100%; font-size: 10px; padding: 4px; }
+/* Cyberidle: cartões da party no estilo BaiakIdle. */
+.party-cards { display: grid; gap: 8px; }
+.party-card { border: 1px solid #2c3340; border-radius: 6px; padding: 7px 8px; background: #151922; }
+.party-card.self { border-color: #5a4a1c; }
+.party-card-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; min-width: 0; }
+.party-card-name { font-size: 13px; color: #f2f3f5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.party-card.self .party-card-name { color: #f0c040; }
+.party-role { flex-shrink: 0; font-size: 9px; font-weight: 800; letter-spacing: .04em; padding: 2px 5px; border-radius: 3px; }
+.party-role.tank { background: #3a3218; color: #e8c860; }
+.party-role.sup { background: #1c3424; color: #6fdc8c; }
+.party-role.dps { background: #2c2440; color: #b9a2f0; }
+.party-card-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 8px; align-items: center; }
+.party-card-sub { font-size: 10px; color: var(--muted); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.party-card-btns { display: flex; gap: 4px; }
+.party-icon-btn {
+  width: 28px; height: 28px; display: grid; place-items: center; font-size: 13px; cursor: pointer;
+  background: #1d222c; border: 1px solid #343b49; border-radius: 4px; color: #c9ccd3;
+}
+.party-icon-btn:hover:not(:disabled) { border-color: #6b7180; }
+.party-card-bars { display: grid; gap: 5px; }
+.party-bar { height: 7px; border-radius: 4px; background: #0d1015; overflow: hidden; }
+.party-bar i { display: block; height: 100%; border-radius: 4px; transition: width .4s; }
+.party-bar.hp i { background: #3ccf5a; }
+.party-bar.mp i { background: #3d7bea; }
+.party-bar.xp i { background: #d8b03a; }
 /* Cyberidle: escolha de quem vai em cada slot de party. */
 .party-pick { margin-top: 8px; display: grid; gap: 6px; }
 .party-pick-slot { display: grid; grid-template-columns: 44px 1fr; gap: 6px; align-items: center; font-size: 10px; color: var(--muted); }
@@ -2714,6 +2739,15 @@ h2.window-head-title { font-size: 13px; }
   padding-top: 4px;
 }
 .helper-modes { display: flex; gap: 4px; }
+/* Cyberidle: abas dos membros da party no Helper. */
+.helper-membros { display: flex; gap: 4px; margin-right: 10px; flex-wrap: wrap; }
+.helper-membros button {
+  display: flex; align-items: center; gap: 5px; max-width: 150px;
+  background: #1a1f28; border: 1px solid #2c3340; border-radius: 6px; padding: 4px 8px; color: var(--muted); font-size: 11px;
+}
+.helper-membros button b { color: #e8c860; font-size: 10px; }
+.helper-membros button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.helper-membros button.on { border-color: #d8b03a; color: #f2f3f5; background: #2a2414; }
 .helper-modes button {
   background: #1a1f28;
   border: 1px solid #2c3340;
