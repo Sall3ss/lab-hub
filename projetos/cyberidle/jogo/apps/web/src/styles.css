@@ -1425,8 +1425,19 @@ h2.window-head-title { font-size: 13px; }
 .party-bar.hp i { background: #3ccf5a; }
 .party-bar.mp i { background: #3d7bea; }
 .party-bar.xp i { background: #d8b03a; }
+/* Cyberidle: engrenagem do painel "Party" e janela de configuração dos slots. */
+.party-gear {
+  width: 24px; height: 24px; display: grid; place-items: center; font-size: 13px; cursor: pointer;
+  background: #1d222c; border: 1px solid #343b49; border-radius: 4px; color: #c9ccd3;
+}
+.party-gear:hover { border-color: #d8b03a; color: #f0c040; }
+.helper-card.party-config-card { width: min(420px, 100%); }
+.party-config-body { padding: 14px 16px 16px; display: grid; gap: 6px; }
+.party-config-body .party-pick-slot { grid-template-columns: 56px 1fr; font-size: 12px; }
+.party-config-body .party-pick-slot select { min-height: 34px; font-size: 13px; }
+.party-config-body .party-sub { font-size: 12px; }
 /* Cyberidle: janela de equipamento do companheiro. */
-.equip-companheiro { width: min(520px, 100%); }
+.helper-card.equip-companheiro { width: min(520px, 100%); }
 .equip-companheiro-body { display: grid; grid-template-columns: auto 1fr; gap: 18px; padding: 16px; align-items: start; }
 .equip-companheiro-info { display: grid; gap: 8px; font-size: 12px; }
 .equip-companheiro-info > div { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); }

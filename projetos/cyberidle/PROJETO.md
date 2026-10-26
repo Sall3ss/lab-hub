@@ -101,6 +101,10 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
   aparência dele, com presets) e 🛡 Equipamento (set dele e "Organizar equipamento", que usa
   o ouro dele). O principal tem ⚙ e 👕 no cartão e o painel Set logo abaixo. Conferido no
   navegador de teste com a party fora de caça.
+- 26/10/2026: painel renomeado para **"Party"** e só com os cartões dos membros. A escolha
+  dos slots 2 e 3 (e o desbloqueio deles) foi para a **engrenagem ⚙** no topo do painel,
+  que abre a janela "Configurar party". Conferido: esvaziar e voltar o slot 3 pela janela
+  atualiza os cartões na hora.
 - **Limite atual da party:** na simulação de combate só o líder age (ataca, cura, gasta
   poção). Os companheiros aparecem na cena, ganham XP e têm Helper próprio salvo, mas ainda
   não lutam com as magias deles. Fazer a party lutar de verdade é mexer no núcleo do

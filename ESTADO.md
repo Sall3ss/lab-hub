@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 24/10/2026 (Cyberidle: party com cartões, XP compartilhada e Helper por membro).**
+**Atualizado em 26/10/2026 (Cyberidle: painel "Party" com engrenagem para os slots).**
 
 ## Pronto
 
@@ -34,7 +34,7 @@
    para lá. Detalhes em `projetos/cyberidle/PROJETO.md`.
    24/10: a cada wave o personagem anda 2-4 SQMs dentro de uma região contínua do mapa
    (letreiro "WAVE N", monstros novos chegam depois) e os slots de party levam outros
-   personagens da conta, escolhidos no "Party Config" (pedidos do dono). Party com cartões
+   personagens da conta, escolhidos na engrenagem do painel "Party" (pedidos do dono). Party com cartões
    HP/MP/XP por membro, XP igual à do líder e Helper com aba por membro. ❓ Próximo grande,
    se o dono quiser: companheiros lutando de verdade na simulação (hoje só o líder age).
 3. Rotas de sessão/login - só quando um projeto precisar gravar no servidor.

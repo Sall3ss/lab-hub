@@ -8,6 +8,7 @@ import { useLocale } from '../i18n/Locale.js';
 import { BlessingModal } from './BlessingModal.js';
 import { BackpackModal } from './BackpackModal.js';
 import { DockBox } from './DockBox.js';
+import { WindowHead } from './WindowHead.js';
 import { ItemInspectModal } from './ItemInspectModal.js';
 import { ItemSlot } from './ItemSlot.js';
 import { blessingSetButtonIcon } from '../render/blessingIcon.js';
@@ -126,6 +127,8 @@ export function RightDock({
   const { t } = useLocale();
   const [rare, setRare] = useState(false);
   const [backpackOpen, setBackpackOpen] = useState(false);
+  // Cyberidle: a escolha dos slots da party fica numa janela própria (engrenagem do "Party").
+  const [partyConfigOpen, setPartyConfigOpen] = useState(false);
   const [blessOpen, setBlessOpen] = useState(false);
   const [lootPage, setLootPage] = useState(0);
   const [supplyPage, setSupplyPage] = useState(0);
@@ -207,7 +210,20 @@ export function RightDock({
 
   return (
     <aside className="dock right">
-      <DockBox id="party-config" title="Party Config">
+      <DockBox
+        id="party-config"
+        title="Party"
+        extra={(
+          <button
+            type="button"
+            className="party-gear"
+            title="Configurar party (slots 2 e 3)"
+            onClick={(event) => { event.stopPropagation(); setPartyConfigOpen(true); }}
+          >
+            ⚙
+          </button>
+        )}
+      >
           {/* Cyberidle: cartão por membro, como no BaiakIdle - papel, nome, vocação, HP/MP/XP
               e atalhos (Helper do membro; Outfit só do próprio personagem). Claude (Opus 5.5). */}
           <div className="party-cards">
@@ -250,51 +266,6 @@ export function RightDock({
               );
             })}
           </div>
-          {character.partySlots < 2 && (
-            <div className="locked-slot">
-              SLOT BLOQUEADO
-              <button className="btn" disabled={busy} onClick={onParty}>desbloquear 10.000 gold</button>
-            </div>
-          )}
-          {character.partySlots < 3 && (
-            <div className="locked-slot">
-              SLOT BLOQUEADO
-              <button className="btn" disabled={busy || character.partySlots < 2} onClick={onParty}>desbloquear 75 coins</button>
-            </div>
-          )}
-          {character.partySlots > 1 && (
-            <div className="party-pick">
-              {Array.from({ length: character.partySlots - 1 }, (_, vaga) => (
-                <label key={vaga} className="party-pick-slot">
-                  <span>Slot {vaga + 2}</span>
-                  <select
-                    value={character.partyIds?.[vaga] || ''}
-                    disabled={busy || !(character.partyOptions?.length)}
-                    onChange={(event) => onPartyMember(vaga, event.target.value ? Number(event.target.value) : null)}
-                  >
-                    <option value="">— vazio —</option>
-                    {(character.partyOptions ?? []).map((opcao) => (
-                      <option key={opcao.id} value={opcao.id}>{opcao.name} · lvl {opcao.level}</option>
-                    ))}
-                  </select>
-                </label>
-              ))}
-              {!character.partyOptions?.length && (
-                <div className="party-sub">
-                  Para levar alguém na party, crie outro personagem (botão "sair" → novo personagem) e volte aqui.
-                </div>
-              )}
-              {!character.session && Boolean(character.partyOptions?.length) && (
-                <div className="party-sub">A party aparece na cena quando você estiver caçando.</div>
-              )}
-            </div>
-          )}
-          {character.partySlots > 1 && (
-            <div className="party-sub">
-              Party {character.partySlots}/3 · compartilha XP com até {character.partySlots - 1} caçador{character.partySlots > 2 ? 'es' : ''} na cave
-              {character.partyBonus > 0 ? ` · +${character.partyBonus}% agora` : ''}
-            </div>
-          )}
       </DockBox>
 
       <DockBox id="set" title={t('setTitle')} extra={<span>{worn} / 10</span>}>
@@ -536,6 +507,60 @@ export function RightDock({
           onBuy={(index) => void onBlessing({ blessIndex: index })}
           onBuyAll={() => void onBlessing({ buyAll: true }).then(() => setBlessOpen(false))}
         />
+      )}
+      {partyConfigOpen && (
+        <div className="modal" onClick={() => setPartyConfigOpen(false)}>
+          <div className="helper-card party-config-card" onClick={(event) => event.stopPropagation()}>
+            <WindowHead title="Configurar party" onClose={() => setPartyConfigOpen(false)} closeLabel="Fechar" />
+            <div className="party-config-body">
+                {character.partySlots < 2 && (
+                  <div className="locked-slot">
+                    SLOT BLOQUEADO
+                    <button className="btn" disabled={busy} onClick={onParty}>desbloquear 10.000 gold</button>
+                  </div>
+                )}
+                {character.partySlots < 3 && (
+                  <div className="locked-slot">
+                    SLOT BLOQUEADO
+                    <button className="btn" disabled={busy || character.partySlots < 2} onClick={onParty}>desbloquear 75 coins</button>
+                  </div>
+                )}
+                {character.partySlots > 1 && (
+                  <div className="party-pick">
+                    {Array.from({ length: character.partySlots - 1 }, (_, vaga) => (
+                      <label key={vaga} className="party-pick-slot">
+                        <span>Slot {vaga + 2}</span>
+                        <select
+                          value={character.partyIds?.[vaga] || ''}
+                          disabled={busy || !(character.partyOptions?.length)}
+                          onChange={(event) => onPartyMember(vaga, event.target.value ? Number(event.target.value) : null)}
+                        >
+                          <option value="">— vazio —</option>
+                          {(character.partyOptions ?? []).map((opcao) => (
+                            <option key={opcao.id} value={opcao.id}>{opcao.name} · lvl {opcao.level}</option>
+                          ))}
+                        </select>
+                      </label>
+                    ))}
+                    {!character.partyOptions?.length && (
+                      <div className="party-sub">
+                        Para levar alguém na party, crie outro personagem (botão "sair" → novo personagem) e volte aqui.
+                      </div>
+                    )}
+                    {!character.session && Boolean(character.partyOptions?.length) && (
+                      <div className="party-sub">A party aparece na cena quando você estiver caçando.</div>
+                    )}
+                  </div>
+                )}
+                {character.partySlots > 1 && (
+                  <div className="party-sub">
+                    Party {character.partySlots}/3 · compartilha XP com até {character.partySlots - 1} caçador{character.partySlots > 2 ? 'es' : ''} na cave
+                    {character.partyBonus > 0 ? ` · +${character.partyBonus}% agora` : ''}
+                  </div>
+                )}
+            </div>
+          </div>
+        </div>
       )}
     </aside>
   );
