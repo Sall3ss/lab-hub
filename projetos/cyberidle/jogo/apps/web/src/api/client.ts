@@ -39,12 +39,15 @@ async function comNuvemNova(username: string, password: string, local: () => Pro
  */
 async function entrarComNuvem(username: string, password: string): Promise<Autenticado> {
   let naNuvem = true;
+  let contaSoLocal = false;
   try {
     await nuvemEntrar(username, password);
   } catch (erro) {
     if (erro instanceof ErroNuvem && erro.status === 0) naNuvem = false; // sem rede
-    else if (erro instanceof ErroNuvem && erro.status === 401 && await temContaLocal(username)) naNuvem = false; // conta só local (antiga)
-    else erroDaNuvem(erro);
+    else if (erro instanceof ErroNuvem && erro.status === 401 && await temContaLocal(username)) {
+      naNuvem = false; // conta criada só neste aparelho (antes da nuvem)
+      contaSoLocal = true;
+    } else erroDaNuvem(erro);
   }
   if (naNuvem) {
     const conhecida = contaNuvem()?.versao ?? 0;
@@ -68,7 +71,16 @@ async function entrarComNuvem(username: string, password: string): Promise<Auten
       return r;
     }
   }
-  return request<Autenticado>('POST', '/api/login', { username, password });
+  const r = await request<Autenticado>('POST', '/api/login', { username, password });
+  if (contaSoLocal) {
+    // Senha conferida no aparelho: leva a conta para a nuvem (se o nome estiver livre lá).
+    storeToken(r.token);
+    try {
+      await nuvemRegistrar(username, password);
+      await enviarParaNuvem(true);
+    } catch { /* nome já usado na nuvem ou sem rede: continua só neste aparelho */ }
+  }
+  return r;
 }
 
 /**

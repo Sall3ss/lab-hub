@@ -77,7 +77,9 @@ nuvem: "Criar conta" e "Reivindicar conta" criam também a conta na nuvem e envi
 "Entrar" em outro aparelho baixa o progresso e entra direto nos personagens. O navegador envia
 o banco do jogo (comprimido, ~7 KB) a cada 90 s quando algo mudou e ao sair da aba. Se outro
 aparelho gravou depois, não sobrescreve: avisa e oferece carregar o mais novo. Convidado
-continua só no aparelho até reivindicar. A senha não sai do navegador (PBKDF2 local; o servidor
+continua só no aparelho até reivindicar. Conta criada antes da nuvem (só no aparelho): ao
+"Entrar" com a senha certa, a conta é criada na nuvem e o save enviado (se o nome estiver
+livre lá; conferido em teste com uma conta antiga aberta depois em outro navegador). A senha não sai do navegador (PBKDF2 local; o servidor
 guarda SHA-256 com sal). Tudo na Cloudflare (Functions + D1 grátis), **nada na VPS**.
 Conferido: rotas testadas com D1 de teste (registrar, repetido, senha errada, conflito de
 versão, sair) e ponta a ponta com dois navegadores (A cria e reivindica; B entra e vê o
