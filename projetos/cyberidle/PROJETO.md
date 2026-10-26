@@ -70,6 +70,12 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
 
 ## Estado
 
+**Pausado em 26/10/2026** pelo dono (voltar ao hub). No ar e estável em
+https://cyberidle-game.pages.dev. Ideias anotadas para quando voltar: monstros batendo também
+nos companheiros (não só no líder/tank), animação própria das magias dos companheiros, tirar a
+dica "reivindicar conta", e começar a troca da arte para cyberpunk.
+
+
 - 20/10/2026: jogo original rodando em modo local, servido como arquivo estático. Conferido
   com navegador de teste no PC (1366) e no celular (390): convidado, criação de personagem,
   hunt animada (Venore Rotworm Cave), XP, loot, skills, task, analyzer; personagem continua

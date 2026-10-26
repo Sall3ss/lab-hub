@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 26/10/2026 (Cyberidle: party lutando de verdade).**
+**Atualizado em 26/10/2026 (Cyberidle pausado; de volta ao hub).**
 
 ## Pronto
 
@@ -37,7 +37,9 @@
    personagens da conta, escolhidos na engrenagem do painel "Party" (pedidos do dono). Party com cartões
    HP/MP/XP por membro, XP igual à do líder e Helper com aba por membro. 26/10: os
    companheiros lutam de verdade (dano, cura, poções pelo Helper de cada um; Knight segura
-   dano do líder).
+   dano do líder). **Pausado em 26/10** - estado e próximos passos na ficha dele.
+7. Combinado em 26/10: uma conversa por projeto, com etiqueta `[Hub]` / `[Cyberidle]` no
+   começo; o andamento de cada projeto fica na ficha dele (ver CLAUDE.md da pasta).
 3. Rotas de sessão/login - só quando um projeto precisar gravar no servidor.
 
 ## ClipStudio: arquivado em 15/10/2026
