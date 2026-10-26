@@ -88,8 +88,25 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          cp -r projetos/cyberidle/site "$RUNNER_TEMP/cyberidle"
-          cd "$RUNNER_TEMP/cyberidle"
+          D="$RUNNER_TEMP/cyberidle"
+          mkdir -p "$D"
+          cp -r projetos/cyberidle/site "$D/site"
+          # Salvamento na nuvem (26/10/2026): funções em projetos/cyberidle/nuvem/functions,
+          # usando o MESMO D1 do hub (tabelas cyberidle_*, migration 0002 aplicada acima).
+          # O wrangler.toml fica FORA de site/ para não ser publicado como arquivo.
+          cp -r projetos/cyberidle/nuvem/functions "$D/functions"
+          D1_ID=$(grep -m1 '^database_id' wrangler.toml | sed -E 's/.*"([^"]+)".*/\1/')
+          printf '%s\n' \
+            "name = \"${CYBERIDLE_PROJECT}\"" \
+            'pages_build_output_dir = "site"' \
+            'compatibility_date = "2025-09-23"' \
+            '' \
+            '[[d1_databases]]' \
+            'binding = "DB"' \
+            "database_name = \"${D1_DATABASE}\"" \
+            "database_id = \"${D1_ID}\"" > "$D/wrangler.toml"
+          cat "$D/wrangler.toml"
+          cd "$D"
           npx --yes wrangler@${WRANGLER_VERSION} pages project create "${CYBERIDLE_PROJECT}" --production-branch main \
             || echo "projeto ja existe (ou falhou a criacao; o deploy abaixo acusa)"
-          npx --yes wrangler@${WRANGLER_VERSION} pages deploy . --project-name "${CYBERIDLE_PROJECT}" --branch main
+          npx --yes wrangler@${WRANGLER_VERSION} pages deploy --project-name "${CYBERIDLE_PROJECT}" --branch main

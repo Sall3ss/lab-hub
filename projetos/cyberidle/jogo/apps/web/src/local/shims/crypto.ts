@@ -6,7 +6,7 @@
 // (reivindicar conta / entrar) continuar funcionando.
 
 class Bytes extends Uint8Array {
-  toString(encoding?: string): string {
+  override toString(encoding?: string): string {
     if (encoding === 'hex' || encoding === undefined) {
       return Array.from(this, (b) => b.toString(16).padStart(2, '0')).join('');
     }

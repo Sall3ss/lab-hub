@@ -1,5 +1,75 @@
 import type { AccountView, BossView, CharacterView, HuntView, Settlement, WorldView } from './types.js';
-import { assinar, chamar } from '../local/servidor.js';
+import { assinar, chamar, enviarParaNuvem, importarSave, personagensDeOutrasContas, temContaLocal } from '../local/servidor.js';
+import { contaNuvem, ErroNuvem, nuvemBaixar, nuvemEntrar, nuvemRegistrar, nuvemSair } from '../local/nuvem.js';
+
+type Autenticado = { token: string; accountId: number; username: string; guest?: boolean };
+
+const USUARIO_OK = /^[a-zA-Z0-9_-]{3,20}$/;
+
+/** Mesmas regras do servidor do jogo, checadas antes de criar a conta na nuvem. */
+function conferirCredenciais(username: string, password: string): void {
+  if (!USUARIO_OK.test(username) || /^guest_/i.test(username)) {
+    throw new ApiError('Usuário: 3 a 20 letras, números, hífen ou sublinhado.', 400);
+  }
+  if (password.length < 8) throw new ApiError('A senha precisa de pelo menos 8 caracteres.', 400);
+}
+
+function erroDaNuvem(erro: unknown): never {
+  if (erro instanceof ErroNuvem) throw new ApiError(erro.message, erro.status || 503);
+  throw erro;
+}
+
+/**
+ * Cyberidle: criar conta / reivindicar cria também a conta na nuvem e envia o save, para o
+ * mesmo personagem abrir em outro aparelho. Lab Hub, Claude (Opus 5.5).
+ */
+async function comNuvemNova(username: string, password: string, local: () => Promise<Autenticado>): Promise<Autenticado> {
+  conferirCredenciais(username, password);
+  if (await temContaLocal(username)) throw new ApiError('Esse usuário já existe neste aparelho. Use "Entrar".', 409);
+  await nuvemRegistrar(username, password).catch(erroDaNuvem);
+  const r = await local();
+  storeToken(r.token);
+  await enviarParaNuvem(true);
+  return r;
+}
+
+/**
+ * Entrar: confere na nuvem; se lá houver um progresso mais novo do que o deste aparelho,
+ * baixa e recarrega a página já dentro da conta. Sem internet, entra só com o local.
+ */
+async function entrarComNuvem(username: string, password: string): Promise<Autenticado> {
+  let naNuvem = true;
+  try {
+    await nuvemEntrar(username, password);
+  } catch (erro) {
+    if (erro instanceof ErroNuvem && erro.status === 0) naNuvem = false; // sem rede
+    else if (erro instanceof ErroNuvem && erro.status === 401 && await temContaLocal(username)) naNuvem = false; // conta só local (antiga)
+    else erroDaNuvem(erro);
+  }
+  if (naNuvem) {
+    const conhecida = contaNuvem()?.versao ?? 0;
+    const save = await nuvemBaixar().catch(erroDaNuvem);
+    const temAqui = await temContaLocal(username);
+    if (save.bytes && (!temAqui || save.versao > conhecida)) {
+      const outros = await personagensDeOutrasContas(username);
+      const ok = outros === 0 || window.confirm(
+        `Este aparelho tem ${outros} personagem(ns) de outra conta que serão substituídos pelo progresso da conta ${username}. Continuar?`,
+      );
+      if (!ok) throw new ApiError('Entrada cancelada.', 400);
+      await importarSave(save.bytes, save.versao, username);
+      location.reload();
+      return new Promise<Autenticado>(() => {});
+    }
+    if (!temAqui) {
+      // Conta na nuvem sem save ainda: cria a conta local com as mesmas credenciais.
+      const r = await request<Autenticado>('POST', '/api/register', { username, password });
+      storeToken(r.token);
+      await enviarParaNuvem(true);
+      return r;
+    }
+  }
+  return request<Autenticado>('POST', '/api/login', { username, password });
+}
 
 /**
  * Thin wrapper over the REST API.
@@ -51,18 +121,21 @@ export const api = {
   health: () => request<HealthView>('GET', '/api/health'),
 
   register: (username: string, password: string, invite?: string) =>
-    request<{ token: string; accountId: number; username: string; guest?: boolean }>('POST', '/api/register', { username, password, invite }),
+    comNuvemNova(username, password, () => request<Autenticado>('POST', '/api/register', { username, password, invite })),
 
   guest: () =>
     request<{ token: string; accountId: number; username: string; guest?: boolean }>('POST', '/api/guest'),
 
   claim: (username: string, password: string) =>
-    request<{ token: string; accountId: number; username: string; guest?: boolean }>('POST', '/api/claim', { username, password }),
+    comNuvemNova(username, password, () => request<Autenticado>('POST', '/api/claim', { username, password })),
 
-  login: (username: string, password: string) =>
-    request<{ token: string; accountId: number; username: string; guest?: boolean }>('POST', '/api/login', { username, password }),
+  login: (username: string, password: string) => entrarComNuvem(username, password),
 
-  logout: () => request<{ ok: boolean }>('POST', '/api/logout'),
+  logout: async () => {
+    await enviarParaNuvem();
+    await nuvemSair();
+    return request<{ ok: boolean }>('POST', '/api/logout');
+  },
 
   characters: () => request<{ characters: CharacterView[]; account: AccountView }>('GET', '/api/characters'),
 

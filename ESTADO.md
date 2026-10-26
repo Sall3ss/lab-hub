@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 26/10/2026 (Cyberidle pausado; de volta ao hub).**
+**Atualizado em 26/10/2026 (Cyberidle: salvamento na nuvem).**
 
 ## Pronto
 
@@ -37,7 +37,10 @@
    personagens da conta, escolhidos na engrenagem do painel "Party" (pedidos do dono). Party com cartões
    HP/MP/XP por membro, XP igual à do líder e Helper com aba por membro. 26/10: os
    companheiros lutam de verdade (dano, cura, poções pelo Helper de cada um; Knight segura
-   dano do líder). **Pausado em 26/10** - estado e próximos passos na ficha dele.
+   dano do líder). 26/10: salvamento na nuvem (Functions + D1 do hub, tabelas cyberidle_*;
+   mesmo personagem no PC e no celular). Estado e próximos passos na ficha dele.
+8. Regra do dono (26/10): nenhum projeto do hub pode rodar na VPS ou pesar nela - tudo no
+   navegador ou na Cloudflare.
 7. Combinado em 26/10: uma conversa por projeto, com etiqueta `[Hub]` / `[Cyberidle]` no
    começo; o andamento de cada projeto fica na ficha dele (ver CLAUDE.md da pasta).
 3. Rotas de sessão/login - só quando um projeto precisar gravar no servidor.

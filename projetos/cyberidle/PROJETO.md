@@ -24,6 +24,8 @@ Beta.
 | Código do jogo (monorepo pnpm) | `projetos/cyberidle/jogo/` |
 | Jogo compilado + sprites (o que vai ao ar) | `projetos/cyberidle/site/` (`index.html`, `app/`, `assets/`) |
 | Endereço no ar (projeto Pages `cyberidle-game`, separado do hub) | https://cyberidle-game.pages.dev |
+| Salvamento na nuvem (Pages Functions, publicadas junto com o jogo) | `projetos/cyberidle/nuvem/functions/api/nuvem/[[rota]].js` |
+| Tabelas da nuvem (D1 do hub, prefixo `cyberidle_`) | `migrations/0002_cyberidle_nuvem.sql` |
 | Esta ficha | `projetos/cyberidle/PROJETO.md` |
 | Rotas de servidor do hub | `projetos/cyberidle/api.js` (só `/ping`; o jogo não usa) |
 
@@ -70,7 +72,20 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
 
 ## Estado
 
-**Pausado em 26/10/2026** pelo dono (voltar ao hub). No ar e estável em
+**26/10/2026 - salvamento na nuvem (pedido do dono, item "B").** Conta do jogo = conta na
+nuvem: "Criar conta" e "Reivindicar conta" criam também a conta na nuvem e enviam o save;
+"Entrar" em outro aparelho baixa o progresso e entra direto nos personagens. O navegador envia
+o banco do jogo (comprimido, ~7 KB) a cada 90 s quando algo mudou e ao sair da aba. Se outro
+aparelho gravou depois, não sobrescreve: avisa e oferece carregar o mais novo. Convidado
+continua só no aparelho até reivindicar. A senha não sai do navegador (PBKDF2 local; o servidor
+guarda SHA-256 com sal). Tudo na Cloudflare (Functions + D1 grátis), **nada na VPS**.
+Conferido: rotas testadas com D1 de teste (registrar, repetido, senha errada, conflito de
+versão, sair) e ponta a ponta com dois navegadores (A cria e reivindica; B entra e vê o
+personagem caçando; com os dois jogando, o segundo a gravar recebe o aviso).
+Decisão do dono: chat, ranking e mercado ficam (o jogo vai ser aberto para mais pessoas).
+Hoje cada jogador ainda tem o mundo dele; juntar todos num mundo só é um passo à parte.
+
+Antes disso: **pausado em 26/10/2026** pelo dono (voltar ao hub). No ar e estável em
 https://cyberidle-game.pages.dev. Ideias anotadas para quando voltar: monstros batendo também
 nos companheiros (não só no líder/tank), animação própria das magias dos companheiros, tirar a
 dica "reivindicar conta", e começar a troca da arte para cyberpunk.
@@ -133,6 +148,15 @@ dica "reivindicar conta", e começar a troca da arte para cyberpunk.
   ("weapon attack fx club") aparece às vezes e não trava nada.
 
 ## Decisões
+
+- 26/10/2026 - **Nuvem no D1 do hub, não num banco próprio:** é a regra do hub (tabelas com
+  prefixo por projeto) e não exigiu nada do dono. O projeto Pages `cyberidle-game` recebe o
+  binding `DB` por um `wrangler.toml` gerado no deploy (fora da pasta publicada).
+- 26/10/2026 - **Jogo continua rodando no navegador; a nuvem só guarda o save.** Simular o
+  combate no servidor (o certo para um mundo compartilhado e contra trapaça) não cabe no
+  limite de CPU do plano grátis da Cloudflare (10 ms por requisição; liquidar horas offline
+  passa muito disso). Fica para quando houver plano pago (Workers Paid, ~US$ 5/mês) ou outra
+  decisão do dono. Regra do dono: nenhum projeto pode depender ou pesar na VPS.
 
 - 20/10/2026 - **Jogo em endereço próprio, aberto: https://cyberidle-game.pages.dev**
   (opção A do dono, no lugar do Cloudflare Access). Projeto Pages separado na mesma conta:

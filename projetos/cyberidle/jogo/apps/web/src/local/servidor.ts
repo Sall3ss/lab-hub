@@ -5,8 +5,10 @@ import { loadWorldEvent } from '../../../server/src/admin.js';
 import { describeCharacter, loadCharacter, reconcileHunts } from '../../../server/src/game.js';
 import { registerRoutes } from '../../../server/src/routes.js';
 import { publicSettlement } from '../../../server/src/settle.js';
-import { accountFromHeader } from '../../../server/src/auth.js';
+import { accountFromHeader, issueToken } from '../../../server/src/auth.js';
 import { criarDriver } from './sqljs.js';
+import { contaNuvem, ErroNuvem, marcarVersao, nuvemBaixar, nuvemEnviar } from './nuvem.js';
+import type { Database as SqlJsDatabase } from 'sql.js';
 
 /**
  * Modo local do Cyberidle: o "servidor" do jogo roda dentro do navegador.
@@ -100,11 +102,17 @@ async function gravarBanco(bytes: Uint8Array): Promise<void> {
 
 // ---------------------------------------------------------------- inicio
 let pronto: Promise<Database> | null = null;
+let banco: SqlJsDatabase | null = null;
+let alterado = false;
+let conflito = false;
+const TOKEN_JOGO = 'tibia-idle.token';
+const ENVIO_MS = 90_000;
 
 export function iniciar(): Promise<Database> {
   pronto ??= (async () => {
     const SQL = await initSqlJs({ locateFile: () => wasmUrl });
     const bruto = new SQL.Database((await lerBanco()) ?? undefined);
+    banco = bruto;
 
     let pendente: number | null = null;
     const salvarJa = (): void => {
@@ -112,10 +120,16 @@ export function iniciar(): Promise<Database> {
       void gravarBanco(bruto.export());
     };
     const salvarLogo = (): void => {
+      alterado = true;
       if (pendente === null) pendente = window.setTimeout(salvarJa, 1500);
     };
     window.addEventListener('pagehide', salvarJa);
-    document.addEventListener('visibilitychange', () => { if (document.hidden) salvarJa(); });
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) return;
+      salvarJa();
+      void enviarParaNuvem();
+    });
+    window.setInterval(() => { void enviarParaNuvem(); }, ENVIO_MS);
 
     const db = new Database(criarDriver(bruto, salvarLogo));
     loadWorldEvent(db);
@@ -125,6 +139,73 @@ export function iniciar(): Promise<Database> {
     return db;
   })();
   return pronto;
+}
+
+// ---------------------------------------------------------------- nuvem (Cyberidle)
+// O banco inteiro deste navegador vai para a nuvem (comprimido) quando a pessoa tem conta
+// e algo mudou, a cada 90 s e ao sair da aba. Em outro aparelho, entrar na conta baixa
+// esse banco. Se outro aparelho gravou depois, não sobrescreve: avisa e oferece o mais novo.
+
+export async function temContaLocal(usuario: string): Promise<boolean> {
+  const db = await iniciar();
+  return Boolean(db.findAccount(usuario));
+}
+
+/** Personagens de OUTRAS contas neste navegador (que um save baixado substituiria). */
+export async function personagensDeOutrasContas(usuario: string): Promise<number> {
+  const db = await iniciar();
+  return db.listAccounts()
+    .filter((c) => c.username.toLowerCase() !== usuario.toLowerCase())
+    .reduce((n, c) => n + db.charactersForAccount(c.id).length, 0);
+}
+
+/**
+ * Troca o banco deste navegador pelo baixado e já deixa uma sessão do jogo aberta na conta,
+ * para a página recarregar direto nos personagens (o jogo lê a sessão antes de abrir o banco).
+ */
+export async function importarSave(bytes: Uint8Array, versao: number, usuario: string): Promise<void> {
+  const SQL = await initSqlJs({ locateFile: () => wasmUrl });
+  const copia = new SQL.Database(bytes);
+  const db = new Database(criarDriver(copia, () => {}));
+  const conta = db.findAccount(usuario);
+  if (conta) {
+    const sessao = issueToken(db, conta.id, conta.username);
+    try { localStorage.setItem(TOKEN_JOGO, sessao.token); } catch { /* sem armazenamento */ }
+  }
+  await gravarBanco(copia.export());
+  copia.close();
+  marcarVersao(versao);
+}
+
+/** Envia agora (ex.: logo depois de criar a conta). */
+export async function enviarParaNuvem(forcar = false): Promise<void> {
+  if (!banco || conflito || !contaNuvem() || (!alterado && !forcar)) return;
+  alterado = false;
+  try {
+    await nuvemEnviar(banco.export());
+  } catch (erro) {
+    if (erro instanceof ErroNuvem && erro.status === 409) {
+      conflito = true;
+      avisarConflito();
+      return;
+    }
+    alterado = true; // sem rede: tenta de novo no próximo ciclo
+  }
+}
+
+function avisarConflito(): void {
+  const usuario = contaNuvem()?.usuario ?? '';
+  const ok = window.confirm(
+    'Seu progresso foi salvo mais recentemente em outro aparelho.\n\n'
+    + 'OK: carregar o progresso mais novo (o deste aparelho desde a última gravação se perde).\n'
+    + 'Cancelar: continuar aqui sem gravar na nuvem até recarregar a página.',
+  );
+  if (!ok) return;
+  void nuvemBaixar().then(async (save) => {
+    if (!save.bytes) return;
+    await importarSave(save.bytes, save.versao, usuario);
+    location.reload();
+  }).catch(() => { conflito = false; });
 }
 
 /** Mesmo contrato do fetch da API: devolve status e corpo JSON. */
