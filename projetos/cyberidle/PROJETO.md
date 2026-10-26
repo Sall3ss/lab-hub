@@ -105,10 +105,23 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
   dos slots 2 e 3 (e o desbloqueio deles) foi para a **engrenagem ⚙** no topo do painel,
   que abre a janela "Configurar party". Conferido: esvaziar e voltar o slot 3 pela janela
   atualiza os cartões na hora.
-- **Limite atual da party:** na simulação de combate só o líder age (ataca, cura, gasta
-  poção). Os companheiros aparecem na cena, ganham XP e têm Helper próprio salvo, mas ainda
-  não lutam com as magias deles. Fazer a party lutar de verdade é mexer no núcleo do
-  `packages/sim` (hoje um personagem por sessão) - próximo passo grande, se o dono quiser.
+- 26/10/2026: **companheiros lutam de verdade** (`turnoDosAliados` em `packages/sim/src/
+  combat.ts`; `session.aliados` montado pelo servidor em `montarAliados`, `game.ts`). Cada
+  um ataca o alvo 1x/s com o dano dele (nível, skills, equipamento e magia de ataque do
+  Helper dele, gastando a mana dele; sem mana, só arma), cura o membro mais ferido com a
+  magia de cura do Helper dele (quem cura guarda mana para 3 curas), toma as próprias poções
+  nos limites do Helper dele (descontadas do estoque dele) e, se for Knight e o líder não,
+  segura 70% do dano que iria no líder. Caído volta em 30 s com 30% de vida (cartão mostra
+  "caído"). Abates contam para o líder; a XP vai para todos. Números fixos calculados no
+  servidor e guardados na sessão: cliente e servidor simulam igual.
+  Medido (30 min simulados): rotworms, Knight 8 sozinho 509 abates x com Druid+Knight 716;
+  dragões, Sorcerer 60 sozinho caiu/fugiu cedo (2-17 abates) x com party 52-57 abates e o
+  Knight segurando o dano. Testes: servidor 74/74; `packages/sim` 244/246 - as 2 falhas
+  (calibration "never exceeds a zone official rate" e determinism "ticks are chunked") já
+  falhavam no código original, sem a party.
+- Limite da party: monstros só batem no líder (ou no tank, quando há); os outros
+  companheiros não tomam dano. Ataque dos companheiros aparece como dano nos monstros, sem
+  animação própria de magia saindo deles.
 - Conhecido: a dica "Reivindicar conta para não perder o personagem" aparece, mas no modo
   local o convidado já fica salvo no navegador. Um erro de console de efeito de ataque
   ("weapon attack fx club") aparece às vezes e não trava nada.

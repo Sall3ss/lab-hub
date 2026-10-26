@@ -10,7 +10,8 @@ import {
   LOOT_SLOT_DEFAULT, SUPPLY_SLOT_DEFAULT,
   availableExerciseHits,
   partyExperienceShare, isPromoted, addExperience, expForLevel,
-  type CharacterState, type HuntSession, type PartyHunter,
+  chooseSpell, spellsFor, HEAL_SPELLS, healAmount, HEALTH_POTION_TIERS, MANA_POTION_TIERS,
+  type CharacterState, type HuntSession, type PartyHunter, type AliadoSessao, type PotionTier,
 } from '@tibia-idle/sim';
 import { isAdminUsername } from './auth.js';
 import type { CharacterRow, Database } from './db.js';
@@ -78,6 +79,100 @@ function attachCaveParty(db: Database, loaded: LoadedCharacter): void {
     .filter((hunter) => hunter.id !== loaded.row.id && online.has(hunter.id));
   const vistos = new Set(escolhidos.map((h) => h.id));
   loaded.session.partyMembers = [...escolhidos, ...naCave.filter((h) => !vistos.has(h.id))];
+  montarAliados(db, loaded, escolhidos);
+}
+
+/**
+ * Companheiros que lutam (Cyberidle): números do combate calculados a partir do personagem
+ * e do Helper dele; o estado de luta (vida, mana, recargas) passa de uma carga para a outra.
+ * Quem estiver caçando sozinho em outro lugar não entra. Lab Hub, Claude (Opus 5.5).
+ */
+function montarAliados(db: Database, loaded: LoadedCharacter, escolhidos: PartyHunter[]): void {
+  if (!loaded.session) return;
+  const anteriores = new Map((loaded.session.aliados ?? []).map((a) => [a.id, a]));
+  const aliados: AliadoSessao[] = [];
+  for (const membro of escolhidos) {
+    const row = db.findCharacter(membro.id);
+    if (!row || row.session) continue;
+    const estado = estadoAtual(row);
+    if (!estado) continue;
+    aliados.push(montarAliado(row.id, estado, anteriores.get(row.id)));
+  }
+  loaded.session.aliados = aliados;
+}
+
+function escolherPocao(estado: CharacterState, tiers: readonly PotionTier[], escolhida: number, limite: number) {
+  if (escolhida < 0) return null;
+  const temNoEstoque = (id: number) => estado.supplies.find((s) => s.itemId === id)?.count ?? 0;
+  const tier = escolhida > 0
+    ? tiers.find((t) => t.itemId === escolhida)
+    : [...tiers].reverse().find((t) => estado.level >= t.level && temNoEstoque(t.itemId) > 0);
+  if (!tier || estado.level < tier.level) return null;
+  const qtd = temNoEstoque(tier.itemId);
+  return qtd > 0 ? { itemId: tier.itemId, min: tier.min, max: tier.max, limite, qtd } : null;
+}
+
+function montarAliado(id: number, estado: CharacterState, antes?: AliadoSessao): AliadoSessao {
+  const stats = deriveStats(estado);
+  const policy = estado.policy;
+  const vocacao = getVocation(estado.vocationId).name;
+  const semMagia = JSON.parse(JSON.stringify(estado)) as CharacterState;
+  semMagia.policy = { ...semMagia.policy, disabledSpells: spellsFor(estado.vocationId).map((s) => s.id), runeId: -1 };
+  const dpsSemMagia = estimateDamagePerSecond(semMagia, 1);
+  const dpsComMagia = estimateDamagePerSecond(estado, 1);
+  const magia = chooseSpell(estado.vocationId, estado.level, Infinity, 1, policy);
+  const manaMagiaPorSeg = magia && dpsComMagia > dpsSemMagia ? magia.mana / Math.max(1, magia.cooldown / 1000) : 0;
+  const heal = policy.healSpellId
+    ? HEAL_SPELLS.find((s) => s.id === policy.healSpellId && estado.level >= s.level && s.vocations.includes(estado.vocationId))
+    : undefined;
+  const faixa = heal ? healAmount(heal, estado.level, estado.magicLevel) : null;
+  const tipoDano = !stats.isMagic ? 'COMBAT_PHYSICALDAMAGE' as const
+    : /druid/i.test(vocacao) ? 'COMBAT_ICEDAMAGE' as const : 'COMBAT_ENERGYDAMAGE' as const;
+  return {
+    id,
+    nome: estado.name,
+    vocationId: estado.vocationId,
+    tanque: /knight/i.test(vocacao),
+    hp: Math.min(stats.maxHealth, antes?.hp ?? estado.health ?? stats.maxHealth),
+    hpMax: stats.maxHealth,
+    mp: Math.min(stats.maxMana, antes?.mp ?? estado.mana ?? stats.maxMana),
+    mpMax: stats.maxMana,
+    regenHpTick: stats.healthRegenPerTick,
+    regenMpTick: stats.manaRegenPerTick,
+    regenHpAcc: antes?.regenHpAcc ?? 0,
+    regenMpAcc: antes?.regenMpAcc ?? 0,
+    dpsComMagia: Math.round(dpsComMagia),
+    dpsSemMagia: Math.round(dpsSemMagia),
+    manaMagiaPorSeg: Math.round(manaMagiaPorSeg),
+    tipoDano,
+    ataqueMs: antes?.ataqueMs ?? 0,
+    cura: heal && faixa ? { palavras: heal.words, mana: heal.mana, min: faixa.min, max: faixa.max, limite: policy.healSpellAt ?? 0.7 } : null,
+    curaCd: antes?.curaCd ?? 0,
+    pocaoHp: escolherPocao(estado, HEALTH_POTION_TIERS, policy.healthPotionId, policy.healthPotionAt),
+    pocaoMp: escolherPocao(estado, MANA_POTION_TIERS, policy.manaPotionId, policy.manaPotionAt),
+    pocaoCd: antes?.pocaoCd ?? 0,
+    gastos: {},
+    caido: antes?.caido ?? false,
+    voltaNoTick: antes?.voltaNoTick ?? 0,
+  };
+}
+
+/** Desconta do estoque de cada companheiro as poções que ele tomou na luta. */
+function gravarGastosDosAliados(db: Database, loaded: LoadedCharacter): void {
+  for (const aliado of loaded.session?.aliados ?? []) {
+    const itens = Object.entries(aliado.gastos ?? {});
+    if (!itens.length) continue;
+    aliado.gastos = {};
+    const row = db.findCharacter(aliado.id);
+    if (!row || row.accountId !== loaded.row.accountId || row.session) continue;
+    const estado = estadoAtual(row);
+    if (!estado) continue;
+    for (const [itemId, qtd] of itens) {
+      const pilha = estado.supplies.find((s) => s.itemId === Number(itemId));
+      if (pilha) pilha.count = Math.max(0, pilha.count - qtd);
+    }
+    db.saveCharacter(row.id, JSON.stringify(estado), null, row.settledAt);
+  }
 }
 
 /**
@@ -172,7 +267,11 @@ function cavePartyView(loaded: LoadedCharacter, db?: Database): Array<PartyHunte
   const others = membros.map((hunter) => {
     const row = db?.findCharacter(hunter.id);
     const estado = row && row.accountId === loaded.row.accountId ? estadoAtual(row) : null;
-    return { ...hunter, self: false, ...(estado ? fichaDe(estado) : {}) };
+    const ficha = estado ? fichaDe(estado) : {};
+    // Em luta, vida e mana vêm da sessão (o que ele está gastando agora).
+    const emLuta = loaded.session?.aliados?.find((a) => a.id === hunter.id);
+    const vivo = emLuta ? { health: emLuta.hp, maxHealth: emLuta.hpMax, mana: emLuta.mp, maxMana: emLuta.mpMax, caido: emLuta.caido } : {};
+    return { ...hunter, self: false, ...ficha, ...vivo };
   });
   return [self, ...others];
 }
@@ -347,6 +446,7 @@ export function loadCharacter(
     trainOffline(loaded.character, now - row.settledAt);
   }
 
+  gravarGastosDosAliados(db, loaded);
   repassarXpParaParty(db, loaded);
   if (settlement.elapsedSeconds > 0 || loaded.session === null) {
     persist(db, loaded, now);

@@ -240,10 +240,11 @@ export function RightDock({
               const papel = mate.papel ?? (/knight/i.test(character.vocation.name) ? 'TANK' : /druid/i.test(character.vocation.name) ? 'SUP' : 'DPS');
               const vocacao = eu ? character.vocation.name : (mate.vocationName ?? '');
               return (
-                <div key={`${mate.id}-${mate.name}`} className={`party-card ${eu ? 'self' : ''}`}>
+                <div key={`${mate.id}-${mate.name}`} className={`party-card ${eu ? 'self' : ''} ${mate.caido ? 'caido' : ''}`}>
                   <div className="party-card-head">
                     <span className={`party-role ${papel.toLowerCase()}`}>{papel}</span>
                     <strong className="party-card-name" title={mate.name}>{eu ? character.name : mate.name}</strong>
+                    {mate.caido && <span className="party-caido" title="Volta à luta em até 30 s com 30% de vida">caído</span>}
                   </div>
                   <div className="party-card-body">
                     <div className="party-card-left">

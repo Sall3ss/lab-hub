@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 26/10/2026 (Cyberidle: painel "Party" com engrenagem para os slots).**
+**Atualizado em 26/10/2026 (Cyberidle: party lutando de verdade).**
 
 ## Pronto
 
@@ -35,8 +35,9 @@
    24/10: a cada wave o personagem anda 2-4 SQMs dentro de uma região contínua do mapa
    (letreiro "WAVE N", monstros novos chegam depois) e os slots de party levam outros
    personagens da conta, escolhidos na engrenagem do painel "Party" (pedidos do dono). Party com cartões
-   HP/MP/XP por membro, XP igual à do líder e Helper com aba por membro. ❓ Próximo grande,
-   se o dono quiser: companheiros lutando de verdade na simulação (hoje só o líder age).
+   HP/MP/XP por membro, XP igual à do líder e Helper com aba por membro. 26/10: os
+   companheiros lutam de verdade (dano, cura, poções pelo Helper de cada um; Knight segura
+   dano do líder).
 3. Rotas de sessão/login - só quando um projeto precisar gravar no servidor.
 
 ## ClipStudio: arquivado em 15/10/2026

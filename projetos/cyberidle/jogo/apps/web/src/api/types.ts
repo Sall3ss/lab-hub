@@ -226,6 +226,8 @@ export interface CharacterView {
     mana?: number;
     maxMana?: number;
     xpPercent?: number;
+    /** Caiu na luta e volta em instantes (Cyberidle). */
+    caido?: boolean;
   }>;
   guildId: number | null;
   decorations: string[];

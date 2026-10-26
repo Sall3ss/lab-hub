@@ -519,6 +519,42 @@ export function emptyTotals(): SessionTotals {
 export type SessionStatus = 'active' | 'out_of_supplies' | 'fled' | 'no_stamina' | 'died' | 'stopped' | 'boss_cleared';
 
 /** Other hunters occupying the same cave. Used for party XP and ally sprites. */
+/**
+ * Companheiro de party lutando dentro da sessão do líder (Cyberidle, Lab Hub - Claude
+ * Opus 5.5). Os números fixos (dano, cura, poções) são calculados pelo servidor a partir do
+ * personagem e do Helper dele; a simulação só os usa, para cliente e servidor darem igual.
+ */
+export interface AliadoSessao {
+  id: number;
+  nome: string;
+  vocationId: number;
+  /** Knight: segura parte do dano que iria no líder. */
+  tanque: boolean;
+  hp: number;
+  hpMax: number;
+  mp: number;
+  mpMax: number;
+  regenHpTick: number;
+  regenMpTick: number;
+  regenHpAcc: number;
+  regenMpAcc: number;
+  /** Dano por segundo usando a magia de ataque do Helper (gasta mana) e sem ela. */
+  dpsComMagia: number;
+  dpsSemMagia: number;
+  manaMagiaPorSeg: number;
+  tipoDano: import('@tibia-idle/data').CombatType;
+  ataqueMs: number;
+  cura: { palavras: string; mana: number; min: number; max: number; limite: number } | null;
+  curaCd: number;
+  pocaoHp: { itemId: number; min: number; max: number; limite: number; qtd: number } | null;
+  pocaoMp: { itemId: number; min: number; max: number; limite: number; qtd: number } | null;
+  pocaoCd: number;
+  /** Poções gastas desde a última gravação (o servidor desconta do estoque dele). */
+  gastos: Record<number, number>;
+  caido: boolean;
+  voltaNoTick: number;
+}
+
 export interface PartyHunter {
   id: number;
   name: string;
@@ -568,6 +604,8 @@ export interface HuntSession {
   comboTick: number;
   /** Live cave-mates, refreshed on each load. Not a purchased slot list. */
   partyMembers?: PartyHunter[];
+  /** Companheiros que lutam junto (Cyberidle). Montados pelo servidor a cada carga. */
+  aliados?: AliadoSessao[];
   /** Remaining ticks of utani hur / utani gran hur. */
   hasteTicks: number;
   /** Remaining ticks of the last eaten food. */

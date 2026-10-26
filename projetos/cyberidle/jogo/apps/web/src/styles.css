@@ -1404,6 +1404,8 @@ h2.window-head-title { font-size: 13px; }
 .party-cards { display: grid; gap: 8px; }
 .party-card { border: 1px solid #2c3340; border-radius: 6px; padding: 7px 8px; background: #151922; }
 .party-card.self { border-color: #5a4a1c; }
+.party-card.caido { opacity: .55; }
+.party-caido { margin-left: auto; font-size: 9px; font-weight: 700; color: #ff6b6b; text-transform: uppercase; }
 .party-card-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; min-width: 0; }
 .party-card-name { font-size: 13px; color: #f2f3f5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .party-card.self .party-card-name { color: #f0c040; }

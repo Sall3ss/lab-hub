@@ -355,6 +355,7 @@ export function advance(session: HuntSession, ticks: number, options: AdvanceOpt
     // centered on the impact SQM (Crystal createCombatArea), not the whole floor.
     layoutPackMonsters(session.active);
     playerTurn(session, stats, rates, rng, emit, policy);
+    turnoDosAliados(session, stats, rng, emit, rates);
     tickMonsterDots(session, rng, emit, rates);
     summonTurn(session, rng, emit, rates);
     tryChallenge(session, pool, rng, emit, policy);
@@ -1152,6 +1153,132 @@ function damageMonster(
   }
 }
 
+// ------------------------------------------------------------------ party (Cyberidle)
+// Companheiros lutando junto com o líder. Cada um ataca o alvo atual 1x por segundo com o
+// dano dele, cura o membro mais ferido com a magia de cura do Helper dele, toma as próprias
+// poções e, se for Knight (e o líder não), segura 70% do dano que iria no líder. Caído volta
+// em 30 s com 30% de vida. Os abates contam para o líder (e a XP é repassada pelo servidor).
+// Lab Hub, Claude (Opus 5.5).
+
+const ALIADO_ATAQUE_MS = 1000;
+const ALIADO_VOLTA_MS = 30_000;
+const TANQUE_PARTE = 0.7;
+
+function tanqueSegura(session: HuntSession, dano: number): number {
+  if (dano <= 0 || !session.aliados?.length) return dano;
+  if (/knight/i.test(getVocation(session.character.vocationId).name)) return dano;
+  const tanque = session.aliados.find((a) => a.tanque && !a.caido);
+  if (!tanque) return dano;
+  const parte = Math.round(dano * TANQUE_PARTE);
+  tanque.hp -= parte;
+  if (tanque.hp <= 0) {
+    tanque.hp = 0;
+    tanque.caido = true;
+    tanque.voltaNoTick = session.tick + msToTicks(ALIADO_VOLTA_MS);
+  }
+  return dano - parte;
+}
+
+function turnoDosAliados(
+  session: HuntSession,
+  liderStats: DerivedStats,
+  rng: Rng,
+  emit: (event: SimEvent) => void,
+  rates: SimRates,
+): void {
+  const aliados = session.aliados;
+  if (!aliados?.length) return;
+  const lider = session.character;
+  for (const a of aliados) {
+    if (a.caido) {
+      if (session.tick < a.voltaNoTick) continue;
+      a.caido = false;
+      a.hp = Math.max(1, Math.round(a.hpMax * 0.3));
+    }
+    // regeneração natural
+    a.regenHpAcc += a.regenHpTick;
+    a.regenMpAcc += a.regenMpTick;
+    const ganhoHp = Math.floor(a.regenHpAcc);
+    const ganhoMp = Math.floor(a.regenMpAcc);
+    a.regenHpAcc -= ganhoHp;
+    a.regenMpAcc -= ganhoMp;
+    a.hp = Math.min(a.hpMax, a.hp + ganhoHp);
+    a.mp = Math.min(a.mpMax, a.mp + ganhoMp);
+    if (a.curaCd > 0) a.curaCd -= 1;
+    if (a.pocaoCd > 0) a.pocaoCd -= 1;
+
+    // cura: o membro mais ferido abaixo do limite do Helper dele
+    if (a.cura && a.curaCd <= 0 && a.mp >= a.cura.mana) {
+      let alvo: { fracao: number; curar: (v: number) => number } | null = null;
+      const fracaoLider = lider.health / Math.max(1, liderStats.maxHealth);
+      if (fracaoLider < a.cura.limite) {
+        alvo = { fracao: fracaoLider, curar: (v) => { const c = Math.min(v, liderStats.maxHealth - lider.health); lider.health += c; return c; } };
+      }
+      for (const b of aliados) {
+        if (b.caido) continue;
+        const f = b.hp / Math.max(1, b.hpMax);
+        if (f < a.cura.limite && (!alvo || f < alvo.fracao)) {
+          alvo = { fracao: f, curar: (v) => { const c = Math.min(v, b.hpMax - b.hp); b.hp += c; return c; } };
+        }
+      }
+      if (alvo) {
+        a.mp -= a.cura.mana;
+        const curado = alvo.curar(rng.normal(a.cura.min, a.cura.max));
+        session.totals.healingDone += curado;
+        a.curaCd = msToTicks(HEAL_EXHAUST_MS);
+        emit({ tick: session.tick, type: 'heal', amount: curado, words: a.cura.palavras });
+      }
+    }
+
+    // poções próprias, nos limites do Helper dele
+    if (a.pocaoCd <= 0) {
+      const p = a.pocaoHp && a.pocaoHp.qtd > 0 && a.hp / a.hpMax < a.pocaoHp.limite ? { pot: a.pocaoHp, hp: true }
+        : a.pocaoMp && a.pocaoMp.qtd > 0 && a.mp / Math.max(1, a.mpMax) < a.pocaoMp.limite ? { pot: a.pocaoMp, hp: false }
+          : null;
+      if (p) {
+        const valor = rng.uniform(p.pot.min, p.pot.max);
+        if (p.hp) a.hp = Math.min(a.hpMax, a.hp + valor);
+        else a.mp = Math.min(a.mpMax, a.mp + valor);
+        p.pot.qtd -= 1;
+        a.gastos[p.pot.itemId] = (a.gastos[p.pot.itemId] ?? 0) + 1;
+        a.pocaoCd = msToTicks(HEAL_EXHAUST_MS);
+      }
+    }
+
+    // ataque no alvo atual
+    const alvo = session.active.find((m) => m.health > 0);
+    if (!alvo) continue;
+    a.ataqueMs += TICK_MS;
+    if (a.ataqueMs < ALIADO_ATAQUE_MS) continue;
+    a.ataqueMs -= ALIADO_ATAQUE_MS;
+    let dps = a.dpsSemMagia;
+    // Quem cura guarda mana para 3 curas antes de gastar com magia de ataque.
+    const reserva = a.cura ? a.cura.mana * 3 : 0;
+    if (a.manaMagiaPorSeg > 0 && a.mp - a.manaMagiaPorSeg >= reserva) {
+      a.mp -= a.manaMagiaPorSeg;
+      dps = a.dpsComMagia;
+    }
+    const monstro = getMonster(alvo.monsterId);
+    if (monstro.immunities.includes(a.tipoDano)) continue;
+    const bruto = Math.max(1, Math.round(dps * (0.85 + 0.3 * rng.next())));
+    const fisico = a.tipoDano === 'COMBAT_PHYSICALDAMAGE';
+    const resistido = applyElementalResistance(bruto, monstro.elements[a.tipoDano] ?? 0);
+    const final = applyDefenses(resistido, {
+      defense: monstro.defense,
+      armor: fisico ? monstro.armor : 0,
+      mitigation: monsterMitigation(monstro.mitigation),
+      canUseDefense: fisico,
+    }, rng);
+    alvo.health -= final;
+    session.totals.damageDealt += final;
+    emit({
+      tick: session.tick, type: 'player_attack', uid: alvo.uid, monsterId: monstro.id,
+      amount: final, damageType: a.tipoDano, blocked: final === 0,
+    });
+    if (alvo.health <= 0) killMonster(session, alvo, monstro, rng, emit, rates);
+  }
+}
+
 function killMonster(
   session: HuntSession,
   target: ActiveMonster,
@@ -1393,6 +1520,7 @@ function monsterTurn(
         final -= Math.ceil((final * AVATAR_FORGE_DAMAGE_REDUCTION) / 100);
         final = Math.max(0, final);
       }
+      final = tanqueSegura(session, final);
       character.health -= final;
       session.totals.damageTaken += final;
       emit({
