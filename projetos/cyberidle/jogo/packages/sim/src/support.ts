@@ -1,3 +1,4 @@
+import { nomeBase } from './nome.js';
 import { itemsById } from '@tibia-idle/data';
 import { deriveStats, isMagicVocation } from './character.js';
 import { clearCondition } from './conditions.js';
@@ -143,7 +144,7 @@ export function foodDurationMs(itemId: number): number {
 }
 
 export function isFoodItem(itemId: number): boolean {
-  return FOOD_IDS.has(itemId) || (itemsById.get(itemId)?.name ?? '').toLowerCase().includes('mushroom');
+  return FOOD_IDS.has(itemId) || nomeBase(itemsById.get(itemId)).toLowerCase().includes('mushroom');
 }
 
 export function pickFood(character: CharacterState): number | null {

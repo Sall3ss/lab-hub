@@ -6,7 +6,7 @@ import {
   emptyPreySlot, estimateDamagePerSecond, getWorldEvent, GOLD_PER_COIN, GUILD_COST, IMBUEMENTS,
   imbueReagentsFor, IMBUEMENT_DURATION_MS, itemImbuementSlots, nextImbueIndex,
   LOOT_SLOT_CAP, LOOT_SLOT_DEFAULT, LOOT_SLOT_STEP, lootSlotUpgradeCost, lootSlotCoinCost,
-  SUPPLY_SLOT_CAP, SUPPLY_SLOT_STEP, supplySlotUpgradeCost, supplySlotCoinCost, MARKET_CATALOG, isMarketItem, marketBuyPrice, PARTY_SLOT_COINS, PARTY_SLOT_GOLD,
+  nomeBase, SUPPLY_SLOT_CAP, SUPPLY_SLOT_STEP, supplySlotUpgradeCost, supplySlotCoinCost, MARKET_CATALOG, isMarketItem, marketBuyPrice, PARTY_SLOT_COINS, PARTY_SLOT_GOLD,
   PRESET_CAP, PREY_DURATION_MS, PREY_WILDCARD_AUTO_BONUS, PREY_WILDCARD_LOCK, PREY_WILDCARD_PICK,
   activatePreyMonster, ensurePreySlots, isPreyActive, isPreySelecting, preyListRerollGold, preyPool,
   preySlotCount, preyWildcards, rerollPreyList, rollPreyBonusReroll, syncPreyWildcards,
@@ -1033,7 +1033,7 @@ export function act(
       const count = Math.max(1, Number(body.count ?? 1));
       const item = itemsById.get(itemId);
       const unit = item ? marketBuyPrice(item) : null;
-      if (!item || unit === null || !isMarketItem(item.name)) throw new GameError('The merchant does not sell that.');
+      if (!item || unit === null || !isMarketItem(nomeBase(item))) throw new GameError('The merchant does not sell that.');
       const cost = unit * count;
       if (character.gold < cost) throw new GameError('Not enough gold.', 402);
       character.gold -= cost;

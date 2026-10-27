@@ -72,6 +72,18 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
 
 ## Estado
 
+**27/10/2026 - itens e monstros restantes no tema (passo 5).** Itens: troca por palavra em
+`ITENS` (`tema/cyberpunk.ts`): sword -> monoblade, health potion -> health stim, rope ->
+grapple cable, steel helmet -> titanium visor helmet, meat -> vat meat, ring -> ring chip...;
+também nas tabelas de poção do Helper. Monstros sem palavra no dicionário (103 nomes próprios)
+ganham prefixo pela classe do bestiário (Kongra -> Cyber-Kongra, Bonebeast -> Necro-Bonebeast);
+nenhum monstro de caçada ficou com o nome original.
+**Bug corrigido junto:** o motor reconhecia moeda, arco, varinha, cogumelo etc. PELO NOME; com
+as moedas renomeadas no passo 2 ("edinho"), a moeda que caía deixava de ser tratada como
+dinheiro. Agora toda regra por nome usa `nomeBase()` (`packages/sim/src/nome.ts`, nome
+original). Conferido: "Saqueou 8 edinho" cai como dinheiro; testes 74/74 no servidor e
+244/246 no motor (as 2 falhas de sempre, do original).
+
 **27/10/2026 - boas-vindas para quem chega pelo link (passo 4).** `components/BoasVindas.tsx`:
 4 telas curtas no tema (o que é o jogo; caçadas, waves e loot; Helper, equipamento e party;
 conta, nuvem, ranking e mercado), uma vez por navegador (`cyberidle.boasvindas.v1`), com

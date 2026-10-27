@@ -1,3 +1,4 @@
+import { nomeBase } from './nome.js';
 import { itemsById, type CombatType, type Item } from '@tibia-idle/data';
 import {
   combatAreaOffsets, isInCombatArea, meleeSurroundSpots, PLAYER_TILE, type CombatAreaId,
@@ -137,7 +138,7 @@ function kindOf(item: Item): AmmoKind {
   const ammo = (item.ammoType ?? '').toLowerCase();
   if (ammo === 'bolt') return 'bolt';
   if (ammo === 'arrow') return 'arrow';
-  const name = item.name.toLowerCase();
+  const name = nomeBase(item).toLowerCase();
   if (name.includes('bolt')) return 'bolt';
   if (name.includes('spear')) return 'spear';
   if (name.includes('arrow')) return 'arrow';
@@ -154,7 +155,7 @@ export function isAmmoItem(item: Item | null | undefined): boolean {
   if (!item) return false;
   if (item.weaponType === 'ammunition' || item.weaponType === 'ammo') return true;
   if (item.ammoType) return true;
-  const name = item.name.toLowerCase();
+  const name = nomeBase(item).toLowerCase();
   return /\b(arrow|bolt)\b/.test(name) || name === 'spear';
 }
 
@@ -190,7 +191,7 @@ export function equippedBowAttack(character: CharacterState): number {
     if (!id) continue;
     const item = itemsById.get(id);
     if (!item) continue;
-    if (item.weaponType === 'distance' || /\b(bow|crossbow)\b/i.test(item.name)) {
+    if (item.weaponType === 'distance' || /\b(bow|crossbow)\b/i.test(nomeBase(item))) {
       return Math.max(0, item.attack);
     }
   }

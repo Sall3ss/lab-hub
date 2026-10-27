@@ -1,3 +1,4 @@
+import { nomeBase } from './nome.js';
 /**
  * Gold shop catalog — mirrors Crystal Server supply stash + common NPC shops
  * (Cornelia armor, Baltim weapons, rune/potion vendors).
@@ -296,5 +297,5 @@ const MARKET_BUY_FALLBACK: Record<string, number> = {
 /** Effective gold cost to buy from the NPC market. */
 export function marketBuyPrice(item: { name: string; buyPrice: number | null }): number | null {
   if (item.buyPrice !== null && item.buyPrice > 0) return item.buyPrice;
-  return MARKET_BUY_FALLBACK[item.name.toLowerCase()] ?? null;
+  return MARKET_BUY_FALLBACK[nomeBase(item).toLowerCase()] ?? null;
 }

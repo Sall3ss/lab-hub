@@ -1,3 +1,4 @@
+import { nomeBase } from './nome.js';
 import { getVocation, itemsById, outfitsCatalog, SKILL_NAMES, type Item, type SkillName, type Vocation } from '@tibia-idle/data';
 import {
   expForLevel, levelGains, maxWeaponDamage, minWeaponDamage,
@@ -87,7 +88,7 @@ export function deriveStats(character: CharacterState): DerivedStats {
   // Crystal WeaponDistance: ammo attack (+ element handled in ammo.ts) + bow attack.
   // Fist fallback is 7 when nothing is equipped (Weapon::useFist).
   const bowAttack = isDistance && weapon
-    && (weapon.weaponType === 'distance' || /\b(bow|crossbow)\b/i.test(weapon.name))
+    && (weapon.weaponType === 'distance' || /\b(bow|crossbow)\b/i.test(nomeBase(weapon)))
     ? weapon.attack
     : 0;
   const attackValue = isDistance && ammo

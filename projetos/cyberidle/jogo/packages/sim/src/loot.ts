@@ -1,3 +1,4 @@
+import { nomeBase } from './nome.js';
 import { itemsById, type Item } from '@tibia-idle/data';
 import { deriveStats } from './character.js';
 import { DEPOT_SLOT_CAP, LOOT_SLOT_DEFAULT } from './progression.js';
@@ -12,11 +13,11 @@ const MONEY_UNITS: Record<string, number> = {
 
 export function isMoneyItem(item: Item | undefined): boolean {
   if (!item) return false;
-  return Object.hasOwn(MONEY_UNITS, item.name.toLowerCase());
+  return Object.hasOwn(MONEY_UNITS, nomeBase(item).toLowerCase());
 }
 
 export function moneyUnitValue(item: Item): number {
-  return item.sellPrice ?? MONEY_UNITS[item.name.toLowerCase()] ?? 0;
+  return item.sellPrice ?? MONEY_UNITS[nomeBase(item).toLowerCase()] ?? 0;
 }
 
 export function pouchSellValue(session: HuntSession): number {

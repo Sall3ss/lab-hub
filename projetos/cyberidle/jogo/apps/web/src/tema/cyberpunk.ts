@@ -1,4 +1,5 @@
 import { hunts, items, monsters, monstersById, vocations } from '@tibia-idle/data';
+import { HEALTH_POTION_TIERS, MANA_POTION_TIERS, SPIRIT_POTION_TIERS } from '@tibia-idle/sim';
 
 /**
  * Tema cyberpunk do Cyberidle (só nomes; mecânica igual). Lab Hub, Claude (Opus 5.5).
@@ -85,8 +86,10 @@ const PALAVRAS: Record<string, string> = {
   Lizard: 'Lizard Splice', Draken: 'Draken Splice', Asura: 'Asura Unit', Behemoth: 'Behemoth Mech',
   Hellhound: 'Hellhound Bot', Juggernaut: 'Juggernaut Mech', Fury: 'Fury Unit', Nightmare: 'Nightmare.exe',
   Devourer: 'Devourer Bot', Spawn: 'Spawn', Book: 'Data Tome', Fungus: 'Nanofungus', Blob: 'Gel Blob',
-  Bug: 'Bug', Beetle: 'Beetle Drone', Waspoid: 'Wasp Drone', Swarmer: 'Swarm Drone', Human: 'Human',
-  Mutated: 'Mutated', Corpus: 'Corpus', Horror: 'Horror.exe', Insectoid: 'Insect Drone', Glooth: 'Glooth',
+  Bug: 'Bug', Beetle: 'Beetle Drone', Waspoid: 'Wasp Drone', Swarmer: 'Swarm Drone',
+  Mutated: 'Mutated', Human: 'Splicer', Crypt: 'Datacrypt', Squire: 'Corp Cadet', Torturer: 'Interrogator',
+  Plaguesmith: 'Virus Smith', Souleater: 'Data Eater', Lava: 'Plasma', Guardian: 'Guardian Unit',
+  Warden: 'Warden Unit', Widow: 'Widow Bot', Crawler: 'Crawler Drone', Brimstone: 'Sulfur', Corpus: 'Corpus', Horror: 'Horror.exe', Insectoid: 'Insect Drone', Glooth: 'Glooth',
   // lugares
   Cave: 'Sewers', Caves: 'Sewers', Lair: 'Nest', Tomb: 'Server Vault', Temple: 'Data Temple', Camp: 'Squat',
   Tower: 'Arcology', Laboratory: 'Lab', Ruins: 'Ruins', Island: 'Island', Mountain: 'Tower Block',
@@ -95,6 +98,45 @@ const PALAVRAS: Record<string, string> = {
   Jungle: 'Toxic Canopy', Desert: 'Dust Sprawl', Dojo: 'Dojo', Hive: 'Hive Node', Surface: 'Surface',
   Underground: 'Undercity', Sewer: 'Sewers', Fortress: 'Bunker', Castle: 'Corp Tower', Port: 'Port',
 };
+
+/**
+ * Monstro cujo nome não tem nenhuma palavra no dicionário (nomes próprios como "Kongra")
+ * ganha um prefixo pela classe do bestiário: "Kongra" -> "Cyber-Kongra".
+ */
+const PREFIXO_CLASSE: Record<string, string> = {
+  Vermin: 'Bio-', Undead: 'Necro-', Demon: 'Daemon ', Construct: 'Mech ', Magical: 'Hex ',
+  Human: 'Ganger ', Humanoid: 'Mutant ', Elemental: 'Plasma ', Plant: 'Toxi-', Reptile: 'Scale ',
+  Mammal: 'Cyber-', 'Extra Dimensional': 'Void ', Aquatic: 'Hydro ', Dragon: 'Mecha-',
+  Lycanthrope: 'Splice ', Giant: 'Titan ', Inkborn: 'Glitch ', Bird: 'Jet ', Slime: 'Gel ', Amphibic: 'Toxi-',
+};
+
+/** Itens (minúsculo, como no jogo). Troca palavra inteira; o resto do nome fica. */
+const ITENS: Record<string, string> = {
+  sword: 'monoblade', blade: 'monoblade', sabre: 'plasma sabre', katana: 'mono-katana', rapier: 'laser rapier',
+  axe: 'power axe', hatchet: 'power hatchet', club: 'shock baton', mace: 'shock mace', hammer: 'pneumatic hammer',
+  morning: 'morning', star: 'star', staff: 'neuro staff', bow: 'rail bow', crossbow: 'rail crossbow',
+  arrow: 'smart dart', bolt: 'rail slug', spear: 'ion spear', dagger: 'vibro dagger', knife: 'vibro knife',
+  wand: 'neuro wand', rod: 'bio rod', shield: 'energy shield', armor: 'armor rig', robe: 'smart robe',
+  helmet: 'visor helmet', hat: 'smart cap', legs: 'leg servos', boots: 'jet boots', sandals: 'grip soles',
+  ring: 'ring chip', amulet: 'amulet chip', necklace: 'neural link', potion: 'stim', rune: 'code chip',
+  backpack: 'cyberpack', bag: 'data bag', torch: 'glowstick', rope: 'grapple cable', shovel: 'dig drill',
+  pick: 'laser pick', fish: 'synth fish', meat: 'vat meat', ham: 'vat ham', bread: 'nutri bar', apple: 'synth apple',
+  mushroom: 'lab mushroom', leather: 'synth-leather', steel: 'titanium', iron: 'alloy', copper: 'circuit',
+  crystal: 'quantum', magic: 'neon', dragon: 'mecha-dragon', demon: 'daemon', knight: 'enforcer',
+  plate: 'plate', scale: 'kevlar', chain: 'mesh', studded: 'riveted', golden: 'gold-plated', royal: 'corporate',
+  ancient: 'legacy', elven: 'neon-elf', dwarven: 'mech', orcish: 'ganger', skull: 'chrome skull', bone: 'chrome bone',
+  spellbook: 'datapad', book: 'data tome', scroll: 'data scroll', gem: 'data gem', pearl: 'data pearl',
+};
+
+function trocarItem(nome: string): string {
+  return nome.replace(/[A-Za-z][A-Za-z'-]*/g, (palavra) => {
+    const minus = palavra.toLowerCase();
+    let novo = ITENS[minus];
+    if (!novo && minus.endsWith('s') && ITENS[minus.slice(0, -1)]) novo = `${ITENS[minus.slice(0, -1)]}s`;
+    if (!novo) return palavra;
+    return palavra[0] === palavra[0]!.toUpperCase() ? novo[0]!.toUpperCase() + novo.slice(1) : novo;
+  });
+}
 
 const RE_PALAVRA = /[A-Za-z][A-Za-z'-]*/g;
 
@@ -145,9 +187,11 @@ export function aplicarTema(): void {
   for (const v of vocations as Array<{ id: number; name: string }>) {
     if (VOCACOES[v.id]) marcar(v, VOCACOES[v.id]!);
   }
-  for (const m of monsters as Array<{ name: string }>) {
+  for (const m of monsters as Array<{ name: string; bestiary?: { class?: string } | null }>) {
     const original = m.name;
-    marcar(m, cyberNome(original, false));
+    let novo = cyberNome(original, false);
+    if (novo === original) novo = `${PREFIXO_CLASSE[m.bestiary?.class ?? ''] ?? 'Cyber-'}${original}`;
+    marcar(m, novo);
     porNomeOriginal.set(original.toLowerCase(), m.name);
   }
   for (const h of hunts as Array<{ name: string }>) marcar(h, cyberNome(h.name));
@@ -155,7 +199,17 @@ export function aplicarTema(): void {
     if (MOEDAS[i.id]) {
       marcar(i, MOEDAS[i.id]!);
       i.plural = `${MOEDAS[i.id]!.replace('edinho', 'edinhos')}`;
+      continue;
     }
+    const novo = trocarItem(i.name);
+    if (novo !== i.name) {
+      marcar(i, novo);
+      if (i.plural) i.plural = trocarItem(i.plural);
+    }
+  }
+  // Tabelas de poção do Helper têm o nome escrito à parte (só exibição).
+  for (const tier of [...HEALTH_POTION_TIERS, ...MANA_POTION_TIERS, ...SPIRIT_POTION_TIERS] as Array<{ name: string }>) {
+    tier.name = trocarItem(tier.name);
   }
 }
 

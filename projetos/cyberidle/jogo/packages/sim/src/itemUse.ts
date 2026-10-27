@@ -1,3 +1,4 @@
+import { nomeBase } from './nome.js';
 import { itemsById, type Item } from '@tibia-idle/data';
 import { deriveStats } from './character.js';
 import { slotFor } from './gear.js';
@@ -43,7 +44,7 @@ export const ITEM_MARKET_CATEGORIES: ReadonlyArray<{ id: number; name: string }>
 
 export function isConsumableItem(item: Item): boolean {
   const type = (item.type ?? '').toLowerCase();
-  const name = item.name.toLowerCase();
+  const name = nomeBase(item).toLowerCase();
   if (item.runeSpellName || type.includes('rune')) return true;
   if (type.includes('liquid') || type.includes('potion')) return true;
   if (name.includes('potion') || name.endsWith(' rune')) return true;

@@ -1,3 +1,4 @@
+import { nomeBase } from './nome.js';
 import { itemsById } from '@tibia-idle/data';
 import type { AmmoProfile } from './ammo.js';
 import type { CharacterState, DerivedStats } from './types.js';
@@ -14,7 +15,7 @@ function equippedBowHitChance(character: CharacterState): number {
     if (!id) continue;
     const item = itemsById.get(id);
     if (!item) continue;
-    if (item.weaponType === 'distance' || /\b(bow|crossbow)\b/i.test(item.name)) {
+    if (item.weaponType === 'distance' || /\b(bow|crossbow)\b/i.test(nomeBase(item))) {
       return Math.max(0, item.hitChance ?? 0);
     }
   }

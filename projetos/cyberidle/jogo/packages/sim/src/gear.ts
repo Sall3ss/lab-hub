@@ -1,3 +1,4 @@
+import { nomeBase } from './nome.js';
 import { getVocation, items, itemsById, wandsById, type Item } from '@tibia-idle/data';
 import { jewelrySlot } from './jewelry.js';
 import type { CharacterState, EquipSlot } from './types.js';
@@ -184,7 +185,7 @@ export function bestLoadout(
 
     if (slot === 'left') {
       if (preferMagic) {
-        const rod = item.type === 'rods' || /\brod\b/i.test(item.name);
+        const rod = item.type === 'rods' || /\brod\b/i.test(nomeBase(item));
         if (item.weaponType !== 'wand') continue;
         if ([2, 6].includes(vocation.id) && !rod) continue;
         if ([1, 5].includes(vocation.id) && rod) continue;

@@ -1,3 +1,4 @@
+import { nomeBase } from './nome.js';
 import { itemsById, wandsById, type CombatType, type Item, type WandStats } from '@tibia-idle/data';
 import { isMagicVocation } from './character.js';
 import type { CharacterState } from './types.js';
@@ -27,7 +28,7 @@ export function isWandWeapon(item: Item | null | undefined): boolean {
 }
 
 export function isRodWeapon(item: Item): boolean {
-  return item.type === 'rods' || /\brod\b/i.test(item.name);
+  return item.type === 'rods' || /\brod\b/i.test(nomeBase(item));
 }
 
 /** Sorcerers use wands; druids use rods. Both are `weaponType=wand` in items.xml. */

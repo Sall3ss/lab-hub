@@ -1,3 +1,4 @@
+import { nomeBase } from './nome.js';
 import { itemsById, type Item } from '@tibia-idle/data';
 import { wearItem } from './equip.js';
 import { DEFAULT_BACKPACK_ID, slotFor } from './gear.js';
@@ -8,7 +9,7 @@ import type { CharacterState } from './types.js';
 /** Potions, runes, and ammunition — everything else goes to the worn backpack. */
 export function isSupplyPouchItem(item: Item): boolean {
   const type = (item.type ?? '').toLowerCase();
-  const name = item.name.toLowerCase();
+  const name = nomeBase(item).toLowerCase();
   if (item.runeSpellName || type.includes('rune') || name.endsWith(' rune')) return true;
   if (type.includes('liquid') || type.includes('potion') || name.includes('potion')) return true;
   if (slotFor(item) === 'ammo') return true;

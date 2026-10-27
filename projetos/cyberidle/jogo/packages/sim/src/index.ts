@@ -42,3 +42,4 @@ export * from './training.js';
 export * from './accuracy.js';
 export * from './bossEncounters.js';
 export * from './roleta.js';
+export * from './nome.js';
