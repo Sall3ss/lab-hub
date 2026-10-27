@@ -72,6 +72,17 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
 
 ## Estado
 
+**27/10/2026 - arte própria, etapa 1: mapas neon (passo 7).** `render/neonMapa.ts` desenha o
+cenário POR CÓDIGO (nada do cliente original): placas de metal com emendas e rebites, grades,
+poças com reflexo, faixas de luz, prédios com janelas acesas e linha neon, e objetos de rua
+(caixa, barril tóxico, terminal, poste, cabos, holograma). Do mapa original só se usa o
+formato: onde não havia chão ou havia algo em cima (parede de caverna, rocha, árvore) vira
+prédio; perto dos centros de câmera a rua fica sempre livre para a luta. Cada distrito tem a
+sua cor (tema da caçada). Texturas 32x32 feitas uma vez em canvas e reaproveitadas.
+Conferido em Neon Underbelly Rustworm Sewers e The Tainted Ghosts Sewers, com a party
+lutando, sem erros. **Ainda são do original:** monstros, personagens e itens (etapas 2 e 3),
+o treino online e as decorações da casa (ainda usam o atlas de tiles).
+
 **27/10/2026 - party v2: animação por classe e foco no tank (passo 6).**
 - Cada companheiro tem ataque com a cara da classe, saindo DELE no mapa (evento com `aliado`):
   Street Samurai = golpe de espada, Cyber Monk = soco, Gunslinger = flecha (com magia: holy),

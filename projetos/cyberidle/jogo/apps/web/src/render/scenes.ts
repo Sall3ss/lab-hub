@@ -1,3 +1,4 @@
+import { pintarNeon } from './neonMapa.js';
 import { AnimatedSprite, Container, Graphics, Sprite } from 'pixi.js';
 import { huntMaps, huntsById, type HuntMapRoom } from '@tibia-idle/data';
 import { trainingRoom, type TrainingRoom } from '../trainingRooms.js';
@@ -414,13 +415,13 @@ function paintProceduralRoom(parent: Container, tiles: Atlas, huntId: string): v
  * WayPath.Position (with themed underlay so missing sprites never go black);
  * falls back to a clean themed procedural room.
  */
-export function paintHuntScene(parent: Container, tiles: Atlas, huntId: string): void {
+export function paintHuntScene(parent: Container, _tiles: Atlas, huntId: string): void {
+  // Cyberidle: cenário neon gerado por código (render/neonMapa.ts), só com o formato da sala.
   const room = huntMaps[huntId];
-  if (room && room.filled >= 40) {
-    paintOtbmRoom(parent, tiles, room, huntId);
-    return;
-  }
-  paintProceduralRoom(parent, tiles, huntId);
+  const vazio = Array.from({ length: SCENE_ROWS }, () => Array<number>(SCENE_COLS).fill(0));
+  const pilhas = Array.from({ length: SCENE_ROWS }, () => Array.from({ length: SCENE_COLS }, () => [] as number[]));
+  if (room && room.filled >= 40) pintarNeon(parent, room.ground, room.stack, themeForHunt(huntId), huntId);
+  else pintarNeon(parent, vazio, pilhas, themeForHunt(huntId), huntId);
 }
 
 /**
@@ -446,15 +447,10 @@ export function paintHuntRegion(parent: Container, tiles: Atlas, huntId: string)
   const props = new Container();
   area.addChild(floor);
   area.addChild(props);
-  const random = rng(hashId(huntId) ^ 0x9e3779b9);
-  for (let y = 0; y < rows; y += 1) {
-    for (let x = 0; x < cols; x += 1) {
-      const ground = regiao.ground[y]?.[x] ?? 0;
-      if (ground && canPaint(tiles, ground)) placeGround(floor, tiles, ground, x, y);
-      else placeGround(floor, tiles, themeFloorId(tiles, huntId, x, y, random), x, y);
-      for (const itemId of regiao.stack[y]?.[x] ?? []) placeProp(props, tiles, itemId, x, y);
-    }
-  }
+  // Cyberidle: cenário neon gerado por código no formato da região (render/neonMapa.ts).
+  void tiles; void floor; void props;
+  const centros = regiao.paradas.map(([ox, oy]) => [regiao.raio + Math.floor(SCENE_COLS / 2) + ox, regiao.raio + Math.floor(SCENE_ROWS / 2) + oy] as [number, number]);
+  pintarNeon(area, regiao.ground, regiao.stack, themeForHunt(huntId), huntId, centros);
   parent.addChild(area);
   return true;
 }
