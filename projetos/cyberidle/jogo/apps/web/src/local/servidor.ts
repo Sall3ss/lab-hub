@@ -7,7 +7,9 @@ import { registerRoutes } from '../../../server/src/routes.js';
 import { publicSettlement } from '../../../server/src/settle.js';
 import { accountFromHeader, issueToken } from '../../../server/src/auth.js';
 import { criarDriver } from './sqljs.js';
-import { contaNuvem, ErroNuvem, marcarVersao, nuvemBaixar, nuvemEnviar } from './nuvem.js';
+import { contaNuvem, ErroNuvem, marcarVersao, nuvemBaixar, nuvemConfirmarEntregas, nuvemEntregas, nuvemEnviar, nuvemEnviarRanking } from './nuvem.js';
+import { act, combatSkill } from '../../../server/src/systems.js';
+import { charmPointsEarned, type CharacterState, type HuntSession } from '@tibia-idle/sim';
 import type { Database as SqlJsDatabase } from 'sql.js';
 
 /**
@@ -183,6 +185,8 @@ export async function enviarParaNuvem(forcar = false): Promise<void> {
   alterado = false;
   try {
     await nuvemEnviar(banco.export());
+    await enviarRanking();
+    await processarEntregas();
   } catch (erro) {
     if (erro instanceof ErroNuvem && erro.status === 409) {
       conflito = true;
@@ -191,6 +195,76 @@ export async function enviarParaNuvem(forcar = false): Promise<void> {
     }
     alterado = true; // sem rede: tenta de novo no próximo ciclo
   }
+}
+
+/** Personagens da conta da nuvem neste aparelho (o mesmo nome de usuário). */
+async function personagensDaConta(): Promise<{ db: Database; contaId: number; lista: Array<{ id: number; estado: CharacterState }> } | null> {
+  const c = contaNuvem();
+  if (!c) return null;
+  const db = await iniciar();
+  const conta = db.findAccount(c.usuario);
+  if (!conta) return null;
+  const lista = db.charactersForAccount(conta.id).map((row) => ({
+    id: row.id,
+    estado: (row.session ? (JSON.parse(row.session) as HuntSession).character : JSON.parse(row.state)) as CharacterState,
+  }));
+  return { db, contaId: conta.id, lista };
+}
+
+/** Manda nível, skill, gold e bestiário dos personagens para o ranking geral. */
+async function enviarRanking(): Promise<void> {
+  const dados = await personagensDaConta();
+  if (!dados || !dados.lista.length) return;
+  await nuvemEnviarRanking(dados.lista.map(({ estado }) => ({
+    nome: estado.name,
+    vocacao: estado.vocationId,
+    nivel: estado.level,
+    experiencia: estado.experience,
+    skill: combatSkill(estado),
+    gold: estado.gold,
+    bestiario: charmPointsEarned(estado),
+  })));
+}
+
+const ENTREGUES = 'cyberidle.entregues';
+
+/**
+ * Aplica o que a nuvem entregou (item comprado, gold de venda, item devolvido) no
+ * personagem certo e confirma. Guarda os ids aplicados para nunca aplicar duas vezes.
+ */
+let entregando: Promise<string[]> | null = null;
+
+export function processarEntregas(): Promise<string[]> {
+  // Uma de cada vez: duas chamadas juntas poderiam aplicar a mesma entrega duas vezes.
+  entregando ??= aplicarEntregas().finally(() => { entregando = null; });
+  return entregando;
+}
+
+async function aplicarEntregas(): Promise<string[]> {
+  const dados = await personagensDaConta();
+  if (!dados || !dados.lista.length) return [];
+  const pendentes = await nuvemEntregas();
+  if (!pendentes.length) return [];
+  let feitos: number[] = [];
+  try { feitos = JSON.parse(localStorage.getItem(ENTREGUES) || '[]') as number[]; } catch { feitos = []; }
+  const avisos: string[] = [];
+  const confirmar: number[] = [];
+  for (const e of pendentes) {
+    if (!feitos.includes(e.id)) {
+      const alvo = dados.lista.find((p) => p.estado.name.toLowerCase() === e.personagem.toLowerCase()) ?? dados.lista[0]!;
+      act(dados.db, dados.contaId, alvo.id, {
+        type: 'nuvem-receber',
+        gold: e.gold,
+        itens: e.item_id ? [{ itemId: e.item_id, count: e.qtd }] : [],
+      });
+      feitos.push(e.id);
+      avisos.push(e.gold ? `${alvo.estado.name}: +${e.gold.toLocaleString('pt-BR')} gp (${e.motivo})` : `${alvo.estado.name}: item recebido no armazém (${e.motivo})`);
+    }
+    confirmar.push(e.id);
+  }
+  try { localStorage.setItem(ENTREGUES, JSON.stringify(feitos.slice(-300))); } catch { /* idem */ }
+  await nuvemConfirmarEntregas(confirmar);
+  return avisos;
 }
 
 function avisarConflito(): void {

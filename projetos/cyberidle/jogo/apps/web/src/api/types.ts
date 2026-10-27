@@ -311,6 +311,8 @@ export interface MarketListing {
   count: number;
   price: number;
   currency: string;
+  /** Anúncio do próprio jogador (mercado geral do Cyberidle). */
+  mine?: boolean;
 }
 
 export interface ChatMessage {

@@ -55,7 +55,7 @@ function preyExcludeMonsters(character: CharacterState, slotIndex: number): stri
 const HEAL_EXHAUST_MS = 1000;
 const HEAL_EXHAUST_TICKS = Math.max(1, Math.round(HEAL_EXHAUST_MS / TICK_MS));
 
-function combatSkill(state: CharacterState): number {
+export function combatSkill(state: CharacterState): number {
   const skills = state.skills ?? {};
   return Math.max(
     state.magicLevel ?? 0,
@@ -144,6 +144,7 @@ export type ActBody = {
   price?: unknown;
   currency?: unknown;
   listingId?: unknown;
+  itens?: unknown;
   name?: unknown;
   guildId?: unknown;
   characterId?: unknown;
@@ -1162,6 +1163,45 @@ export function act(
       if (character.gold < deco.cost) throw new GameError('Not enough gold.', 402);
       character.gold -= deco.cost;
       character.decorations.push(id);
+      persist(db, loaded, now);
+      return { loaded };
+    }
+
+    // ---- Mercado geral do Cyberidle (Lab Hub, Claude Opus 5.5) ----------------------
+    // O anúncio e a compra acontecem na nuvem; aqui só se mexe no personagem local:
+    // reservar o item anunciado, pagar a compra e receber o que a nuvem entregou.
+    case 'nuvem-reservar': {
+      // Pode anunciar caçando: o armazém não é usado na caçada.
+      const itemId = Number(body.itemId);
+      const count = Math.max(1, Math.floor(Number(body.count ?? 1)));
+      takeStack(character.warehouse, itemId, count);
+      persist(db, loaded, now);
+      return { loaded };
+    }
+
+    case 'nuvem-pagar': {
+      const gold = Math.floor(Number(body.gold));
+      if (!Number.isFinite(gold) || gold <= 0) throw new GameError('Valor inválido.');
+      if (character.gold < gold) throw new GameError('Gold insuficiente.', 402);
+      character.gold -= gold;
+      if (loaded.session) loaded.session.character.gold = character.gold;
+      persist(db, loaded, now);
+      return { loaded };
+    }
+
+    case 'nuvem-receber': {
+      const gold = Math.max(0, Math.floor(Number(body.gold ?? 0)));
+      character.gold += gold;
+      const itens = Array.isArray(body.itens) ? body.itens as Array<{ itemId: number; count: number }> : [];
+      for (const item of itens) {
+        const id = Number(item.itemId);
+        const qtd = Math.max(0, Math.floor(Number(item.count)));
+        if (id > 0 && qtd > 0) addStack(character.warehouse, id, qtd);
+      }
+      if (loaded.session) {
+        loaded.session.character.gold = character.gold;
+        loaded.session.character.warehouse = character.warehouse;
+      }
       persist(db, loaded, now);
       return { loaded };
     }

@@ -25,7 +25,7 @@ Beta.
 | Jogo compilado + sprites (o que vai ao ar) | `projetos/cyberidle/site/` (`index.html`, `app/`, `assets/`) |
 | Endereço no ar (projeto Pages `cyberidle-game`, separado do hub) | https://cyberidle-game.pages.dev |
 | Salvamento na nuvem (Pages Functions, publicadas junto com o jogo) | `projetos/cyberidle/nuvem/functions/api/nuvem/[[rota]].js` |
-| Tabelas da nuvem (D1 do hub, prefixo `cyberidle_`) | `migrations/0002_cyberidle_nuvem.sql` |
+| Tabelas da nuvem (D1 do hub, prefixo `cyberidle_`) | `migrations/0002_cyberidle_nuvem.sql`, `0003_cyberidle_mundo.sql` |
 | Esta ficha | `projetos/cyberidle/PROJETO.md` |
 | Rotas de servidor do hub | `projetos/cyberidle/api.js` (só `/ping`; o jogo não usa) |
 
@@ -71,6 +71,28 @@ Depois, commit e push na main: o deploy publica o hub (`public/`) e, no mesmo jo
 antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
 
 ## Estado
+
+**27/10/2026 - ranking e mercado gerais; chat tirado; telas de entrada responsivas.**
+- Ranking geral: cada aparelho com conta envia nível, XP, skill, gold e bestiário junto com
+  o save; a nuvem recusa números impossíveis (XP que não bate com o nível, XP demais para o
+  tempo, valores fora do jogo) e tira o personagem do placar (`suspeito`, permanente). O
+  painel "Rank" mostra o placar de todos (público).
+- Mercado geral (Mercado → aba "Jogadores"), só em gold. Travas: só itens do jogo (lista
+  gerada em `nuvem/lib/itens.js` por `jogo/tools/gerar-itens-nuvem.mjs`, sem moedas); preço
+  até 100x o valor de NPC do lote (mínimo 5.000); até 100 unidades; 10 anúncios abertos e
+  30 por dia por conta; 50 compras por dia; taxa 2%; anúncio vence em 14 dias. O item sai do
+  armazém ao anunciar e fica guardado na nuvem; a compra fecha o anúncio só se ainda estiver
+  aberto (duas compras juntas não levam o mesmo item); item, gold da venda e devoluções
+  chegam como "entregas" aplicadas uma única vez. Pode anunciar caçando.
+- Chat entre jogadores tirado (ficam Log de combate, Loot e Help).
+- Conferido: rotas com D1 de teste (moeda recusada, teto de preço, comprar o próprio,
+  compra dupla, cancelar alheio, devolução, limite de 10) e ponta a ponta com dois
+  navegadores (A anuncia 2 espadas, B compra, A recebe o gold, os dois no Rank).
+- Tela de personagens/entrada: a página rola sozinha e fica compacta em monitor baixo;
+  conferida em 1366x640, 1280x600 e 390x740 (botão "Criar personagem" alcançável, sem
+  rolagem lateral).
+- Risco aceito pelo dono: o combate roda no navegador, então quem mexer nos próprios dados
+  ainda pode gerar itens; as travas limitam o estrago, não zeram.
 
 **26/10/2026 - salvamento na nuvem (pedido do dono, item "B").** Conta do jogo = conta na
 nuvem: "Criar conta" e "Reivindicar conta" criam também a conta na nuvem e enviam o save;

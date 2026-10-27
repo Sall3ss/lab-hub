@@ -534,6 +534,8 @@ function GoldMercado({
 }) {
   const categories = world?.catalogs.npc ?? [];
   const [tab, setTab] = useState(categories[0]?.id ?? 'potions');
+  // Cyberidle: aba do mercado geral entre jogadores (nuvem), ao lado da loja de NPC.
+  const [lado, setLado] = useState<'npc' | 'jogadores'>('npc');
   const [query, setQuery] = useState('');
   const needle = query.trim().toLowerCase();
 
@@ -547,8 +549,24 @@ function GoldMercado({
       .sort((a, b) => (a.buyPrice ?? 0) - (b.buyPrice ?? 0) || a.name.localeCompare(b.name));
   }, [categories, active, needle]);
 
+  const abas = (
+    <div className="compact-tabs mercado-lados">
+      <button type="button" className={lado === 'npc' ? 'on' : ''} onClick={() => setLado('npc')}>Loja (NPC)</button>
+      <button type="button" className={lado === 'jogadores' ? 'on' : ''} onClick={() => setLado('jogadores')}>Jogadores</button>
+    </div>
+  );
+  if (lado === 'jogadores') {
+    return (
+      <div className="compact-panel">
+        {abas}
+        <Market character={character} world={world} busy={busy} onAct={onAct} currency="gold" />
+      </div>
+    );
+  }
+
   return (
     <div className="compact-panel">
+      {abas}
       <div className="compact-toolbar">
         <span className="compact-gold">{formatNumber(character.gold)} gold</span>
         <input
@@ -620,24 +638,53 @@ function Market({
 }) {
   const [itemId, setItemId] = useState(character.warehouse[0]?.itemId ?? 0);
   const [price, setPrice] = useState('1000');
+  const [qtd, setQtd] = useState('1');
+  const pilha = character.warehouse.find((stack) => stack.itemId === itemId);
+  const maxQtd = Math.min(100, pilha?.count ?? 1);
   const listings = (world?.market ?? []).filter((row) => row.currency === currency);
   return (
     <div>
+      <p className="party-sub">
+        Mercado geral: anúncios de todos os jogadores, só em gold. O item sai do seu armazém
+        enquanto está à venda e volta se você cancelar (ou em 14 dias). Até 10 anúncios abertos.
+      </p>
       <h3>Anunciar do armazém</h3>
       <select value={itemId} onChange={(event) => setItemId(Number(event.target.value))}>
         {character.warehouse.map((stack) => <option key={stack.itemId} value={stack.itemId}>{stack.name} ×{stack.count}</option>)}
       </select>
       <div className="row" style={{ margin: '8px 0' }}>
-        <input value={price} onChange={(event) => setPrice(event.target.value)} />
-        <button className="btn gold" disabled={busy || !itemId} onClick={() => void onAct({ type: 'market-list', itemId, count: 1, price: Number(price), currency })}>Listar</button>
+        <input type="number" min={1} max={maxQtd} value={qtd} title="Quantidade" style={{ width: 70 }} onChange={(event) => setQtd(event.target.value)} />
+        <input type="number" min={1} value={price} title="Preço total em gold" onChange={(event) => setPrice(event.target.value)} />
+        <button
+          className="btn gold"
+          disabled={busy || !itemId || Number(qtd) < 1 || Number(qtd) > maxQtd || Number(price) < 1}
+          onClick={() => void onAct({ type: 'market-list', itemId, count: Math.floor(Number(qtd)), price: Math.floor(Number(price)), currency })}
+        >
+          Listar
+        </button>
       </div>
       <h3>Ofertas</h3>
       {listings.map((listing) => (
         <div className="hunt-row" key={listing.id}>
           <div>{listing.name} ×{listing.count}<div className="meta">{listing.seller}</div></div>
-          <button className="btn" disabled={busy} onClick={() => void onAct({ type: 'market-buy', listingId: listing.id })}>
-            {formatNumber(listing.price)} {listing.currency}
-          </button>
+          {listing.mine ? (
+            <button
+              className="btn"
+              disabled={busy}
+              title={`Seu anúncio por ${formatNumber(listing.price)} gold`}
+              onClick={() => {
+                if (window.confirm(`Cancelar o anúncio de ${listing.name}? O item volta para o seu armazém.`)) {
+                  void onAct({ type: 'market-cancel', listingId: listing.id });
+                }
+              }}
+            >
+              Cancelar · {formatNumber(listing.price)}
+            </button>
+          ) : (
+            <button className="btn" disabled={busy} onClick={() => void onAct({ type: 'market-buy', listingId: listing.id })}>
+              {formatNumber(listing.price)} {listing.currency}
+            </button>
+          )}
         </div>
       ))}
       {listings.length === 0 && <p className="soon">Nenhuma oferta nesta moeda.</p>}

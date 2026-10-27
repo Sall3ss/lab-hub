@@ -95,6 +95,7 @@ jobs:
           # usando o MESMO D1 do hub (tabelas cyberidle_*, migration 0002 aplicada acima).
           # O wrangler.toml fica FORA de site/ para não ser publicado como arquivo.
           cp -r projetos/cyberidle/nuvem/functions "$D/functions"
+          cp -r projetos/cyberidle/nuvem/lib "$D/lib"
           D1_ID=$(grep -m1 '^database_id' wrangler.toml | sed -E 's/.*"([^"]+)".*/\1/')
           printf '%s\n' \
             "name = \"${CYBERIDLE_PROJECT}\"" \

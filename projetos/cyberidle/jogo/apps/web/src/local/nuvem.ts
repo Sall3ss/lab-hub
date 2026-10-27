@@ -127,3 +127,50 @@ export async function nuvemEnviar(bytes: Uint8Array): Promise<number> {
   marcarVersao(r.versao);
   return r.versao;
 }
+
+// ---------------------------------------------------------------- ranking e mercado gerais
+export interface LinhaRanking { nome: string; vocacao: number; nivel: number; experiencia: number; skill: number; gold: number; bestiario: number }
+export interface AnuncioNuvem { id: number; vendedor: string; itemId: number; qtd: number; preco: number; criadoEm: number; meu: boolean }
+export interface EntregaNuvem { id: number; personagem: string; item_id: number | null; qtd: number; gold: number; motivo: string }
+
+function tokenOuErro(): string {
+  const c = contaNuvem();
+  if (!c) throw new ErroNuvem('Entre na sua conta para usar o mercado geral.', 401);
+  return c.token;
+}
+
+export async function nuvemLerRanking(tipo: 'level' | 'skill' | 'gold' | 'bestiary'): Promise<LinhaRanking[]> {
+  const r = await pedir<{ linhas: LinhaRanking[] }>('GET', `ranking?tipo=${tipo}`);
+  return r.linhas;
+}
+
+export async function nuvemEnviarRanking(personagens: Array<Omit<LinhaRanking, never>>): Promise<void> {
+  await pedir('POST', 'ranking', { personagens }, tokenOuErro());
+}
+
+export async function nuvemMercado(): Promise<AnuncioNuvem[]> {
+  const r = await pedir<{ anuncios: AnuncioNuvem[] }>('GET', 'mercado', undefined, tokenOuErro());
+  return r.anuncios;
+}
+
+export async function nuvemAnunciar(personagem: string, itemId: number, qtd: number, preco: number): Promise<number> {
+  const r = await pedir<{ anuncioId: number }>('POST', 'mercado/anunciar', { personagem, itemId, qtd, preco }, tokenOuErro());
+  return r.anuncioId;
+}
+
+export async function nuvemComprar(personagem: string, anuncioId: number): Promise<void> {
+  await pedir('POST', 'mercado/comprar', { personagem, anuncioId }, tokenOuErro());
+}
+
+export async function nuvemCancelar(anuncioId: number): Promise<void> {
+  await pedir('POST', 'mercado/cancelar', { anuncioId }, tokenOuErro());
+}
+
+export async function nuvemEntregas(): Promise<EntregaNuvem[]> {
+  const r = await pedir<{ entregas: EntregaNuvem[] }>('GET', 'entregas', undefined, tokenOuErro());
+  return r.entregas;
+}
+
+export async function nuvemConfirmarEntregas(ids: number[]): Promise<void> {
+  if (ids.length) await pedir('POST', 'entregas/confirmar', { ids }, tokenOuErro());
+}

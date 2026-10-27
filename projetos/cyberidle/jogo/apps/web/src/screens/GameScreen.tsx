@@ -100,7 +100,8 @@ export function GameScreen({
   const lastHours = useRef(1);
   const userStopped = useRef(false);
   const bestiaryTold = useRef(false);
-  const [chatTab, setChatTab] = useState('geral');
+  // Cyberidle: sem chat entre jogadores; ficam só os logs. Claude (Opus 5.5).
+  const [chatTab, setChatTab] = useState('combat');
   const [log, setLog] = useState<CombatLogLine[]>(() => [{ kind: 'sys', text: t('welcome') }]);
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [worldEvent, setWorldEvent] = useState<WorldView['event'] | null>(null);
@@ -589,7 +590,7 @@ export function GameScreen({
             <div className="chat-console">
               <div className="chat-console__head">
                 <div className="chat-console__tabs">
-                  {([['geral', 'Geral'], ['combat', 'Log de combat'], ['loot', 'Loot'], ['comunicados', 'Comunicados'], ['help', 'Help'], ['market', 'Market']] as const).map(([id, label]) => (
+                  {([['combat', 'Log de combat'], ['loot', 'Loot'], ['help', 'Help']] as const).map(([id, label]) => (
                     <button key={id} type="button" className={chatTab === id ? 'on' : ''} onClick={() => setChatTab(id)}>
                       {label}
                     </button>

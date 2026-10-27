@@ -1,6 +1,10 @@
 import type { AccountView, BossView, CharacterView, HuntView, Settlement, WorldView } from './types.js';
-import { assinar, chamar, enviarParaNuvem, importarSave, personagensDeOutrasContas, temContaLocal } from '../local/servidor.js';
-import { contaNuvem, ErroNuvem, nuvemBaixar, nuvemEntrar, nuvemRegistrar, nuvemSair } from '../local/nuvem.js';
+import { assinar, chamar, enviarParaNuvem, importarSave, personagensDeOutrasContas, processarEntregas, temContaLocal } from '../local/servidor.js';
+import {
+  contaNuvem, ErroNuvem, nuvemAnunciar, nuvemBaixar, nuvemCancelar, nuvemComprar, nuvemEntrar, nuvemLerRanking,
+  nuvemMercado, nuvemRegistrar, nuvemSair, type AnuncioNuvem,
+} from '../local/nuvem.js';
+import { itemsById } from '@tibia-idle/data';
 
 type Autenticado = { token: string; accountId: number; username: string; guest?: boolean };
 
@@ -120,6 +124,96 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
   return payload as T;
 }
 
+// ---------------------------------------------------------------- mundo compartilhado
+// Cyberidle: o combate é de cada um (no navegador); ranking e mercado são gerais (nuvem).
+// O chat entre jogadores foi tirado. Lab Hub, Claude (Opus 5.5).
+
+const anunciosVistos = new Map<number, AnuncioNuvem>();
+
+async function mundo(channel: string): Promise<WorldView> {
+  const local = await request<WorldView>('GET', `/api/world?channel=${encodeURIComponent(channel)}`);
+  const linhas = async (tipo: 'level' | 'skill' | 'gold' | 'bestiary') => {
+    const rows = await nuvemLerRanking(tipo).catch(() => null);
+    if (!rows) return local.ranks[tipo];
+    return rows.map((r, i) => ({
+      id: -(i + 1),
+      name: r.nome,
+      value: tipo === 'level' ? r.nivel : tipo === 'skill' ? r.skill : tipo === 'gold' ? r.gold : r.bestiario,
+      extra: tipo === 'level' ? r.experiencia : tipo === 'skill' ? r.nivel : undefined,
+    }));
+  };
+  const [level, skill, gold, bestiary] = await Promise.all([linhas('level'), linhas('skill'), linhas('gold'), linhas('bestiary')]);
+  let market: WorldView['market'] = [];
+  if (contaNuvem()) {
+    void processarEntregas().catch(() => []);
+    const anuncios = await nuvemMercado().catch(() => [] as AnuncioNuvem[]);
+    anunciosVistos.clear();
+    for (const a of anuncios) anunciosVistos.set(a.id, a);
+    market = anuncios.map((a) => ({
+      id: a.id,
+      seller: a.meu ? `${a.vendedor} (seu)` : a.vendedor,
+      itemId: a.itemId,
+      name: itemsById.get(a.itemId)?.name ?? 'item',
+      count: a.qtd,
+      price: a.preco,
+      currency: 'gold',
+      mine: a.meu,
+    }));
+  }
+  return { ...local, ranks: { level, skill, gold, bestiary }, market, chat: [] };
+}
+
+type Agir = { character: CharacterView } & Record<string, unknown>;
+
+/** Mercado geral: as ações de anunciar/comprar/cancelar passam pela nuvem. */
+async function agir(id: number, body: Record<string, unknown>): Promise<Agir> {
+  const tipo = String(body['type'] ?? '');
+  if (tipo === 'chat') throw new ApiError('O chat entre jogadores foi desligado.', 400);
+  if (tipo !== 'market-list' && tipo !== 'market-buy' && tipo !== 'market-cancel') {
+    return request<Agir>('POST', `/api/characters/${id}/act`, body);
+  }
+  if (!contaNuvem()) throw new ApiError('Entre na sua conta (ou reivindique o convidado) para usar o mercado geral.', 401);
+  const eu = (await request<{ character: CharacterView }>('GET', `/api/characters/${id}`)).character;
+
+  if (tipo === 'market-list') {
+    if (body['currency'] === 'coins') throw new ApiError('O mercado geral negocia só em gold.', 400);
+    const itemId = Number(body['itemId']);
+    const count = Math.max(1, Math.floor(Number(body['count'] ?? 1)));
+    const price = Math.floor(Number(body['price']));
+    if (!Number.isFinite(price) || price <= 0) throw new ApiError('Preço inválido.', 400);
+    // 1) tira do armazém; 2) anuncia; se a nuvem recusar, devolve o item.
+    const reservado = await request<Agir>('POST', `/api/characters/${id}/act`, { type: 'nuvem-reservar', itemId, count });
+    try {
+      await nuvemAnunciar(eu.name, itemId, count, price);
+    } catch (erro) {
+      await request('POST', `/api/characters/${id}/act`, { type: 'nuvem-receber', itens: [{ itemId, count }] });
+      erroDaNuvem(erro);
+    }
+    void enviarParaNuvem(true);
+    return reservado;
+  }
+
+  if (tipo === 'market-cancel') {
+    await nuvemCancelar(Number(body['listingId'])).catch(erroDaNuvem);
+    await processarEntregas().catch(() => []);
+    return request<Agir>('GET', `/api/characters/${id}`);
+  }
+
+  // market-buy: paga aqui, compra na nuvem; se a nuvem recusar, devolve o gold.
+  const anuncio = anunciosVistos.get(Number(body['listingId']));
+  if (!anuncio) throw new ApiError('Esse anúncio não está mais à venda. Atualize o mercado.', 404);
+  await request('POST', `/api/characters/${id}/act`, { type: 'nuvem-pagar', gold: anuncio.preco });
+  try {
+    await nuvemComprar(eu.name, anuncio.id);
+  } catch (erro) {
+    await request('POST', `/api/characters/${id}/act`, { type: 'nuvem-receber', gold: anuncio.preco });
+    erroDaNuvem(erro);
+  }
+  await processarEntregas().catch(() => []);
+  void enviarParaNuvem(true);
+  return request<Agir>('GET', `/api/characters/${id}`);
+}
+
 export interface HealthView {
   ok: boolean;
   tickMs: number;
@@ -179,10 +273,9 @@ export const api = {
   stashPouch: (id: number) =>
     request<{ character: CharacterView; items: number }>('POST', `/api/characters/${id}/stash`),
 
-  act: (id: number, body: Record<string, unknown>) =>
-    request<{ character: CharacterView } & Record<string, unknown>>('POST', `/api/characters/${id}/act`, body),
+  act: (id: number, body: Record<string, unknown>) => agir(id, body),
 
-  world: (channel = 'geral') => request<WorldView>('GET', `/api/world?channel=${encodeURIComponent(channel)}`),
+  world: (channel = 'geral') => mundo(channel),
 
   admin: () => request<{
     accounts: Array<{ id: number; username: string; admin: boolean; characters: Array<{ id: number; name: string; level: number; gold: number; coins: number }> }>;
