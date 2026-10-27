@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 27/10/2026 (Cyberidle: ranking e mercado gerais).**
+**Atualizado em 27/10/2026 (Cyberidle: mapas de rua com arte própria).**
 
 ## Pronto
 
@@ -39,7 +39,10 @@
    companheiros lutam de verdade (dano, cura, poções pelo Helper de cada um; Knight segura
    dano do líder). 26/10: salvamento na nuvem (Functions + D1 do hub, tabelas cyberidle_*;
    mesmo personagem no PC e no celular). 27/10: ranking e mercado gerais com travas, chat
-   tirado, telas de entrada responsivas. Estado e próximos passos na ficha dele.
+   tirado, telas de entrada responsivas; tema cyberpunk (Edinho), visual neon, boas-vindas,
+   party v2 e mapas de rua com arte própria. ❓ 🔴 Aguardando o dono: arte própria etapa 2
+   (monstros e personagens) - (a) pacote comunitário recolorido ou (b) desenhos dele.
+   Estado e próximos passos na ficha dele.
 8. Regra do dono (26/10): nenhum projeto do hub pode rodar na VPS ou pesar nela - tudo no
    navegador ou na Cloudflare.
 7. Combinado em 26/10: uma conversa por projeto, com etiqueta `[Hub]` / `[Cyberidle]` no
