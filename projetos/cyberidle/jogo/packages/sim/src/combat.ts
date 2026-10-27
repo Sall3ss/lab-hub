@@ -48,7 +48,7 @@ import {
 } from './procs.js';
 import {
   emptyTotals, TICK_MS, TICKS_PER_HOUR, normalizeSession, policyForMode, policyForWave,
-  type ActiveMonster, type CharacterState, type DerivedStats,
+  type ActiveMonster, type AliadoSessao, type CharacterState, type DerivedStats,
   type HuntSession, type SimEvent, type SimRates,
 } from './types.js';
 import { DEFAULT_RATES } from './types.js';
@@ -1162,12 +1162,32 @@ function damageMonster(
 
 const ALIADO_ATAQUE_MS = 1000;
 const ALIADO_VOLTA_MS = 30_000;
-const TANQUE_PARTE = 0.7;
+/**
+ * Decisão do dono (27/10/2026, para rever depois): os monstros focam SÓ no tank. Se o líder
+ * não for Knight e houver um Knight na party de pé, ele recebe todo o dano que iria no líder.
+ * Para voltar a dividir, baixe este número (ex.: 0.7 = 70% no tank).
+ */
+const TANQUE_PARTE = 1;
+
+/** Visual do ataque de cada classe de companheiro (projétil ou golpe, palavras da magia). */
+function estiloAliado(vocationId: number, comMagia: boolean): { shoot?: string; attackEffect?: string; words?: string } {
+  if ([4, 8].includes(vocationId)) return { attackEffect: 'sword' };
+  if ([9, 10].includes(vocationId)) return { attackEffect: 'fist' };
+  if ([3, 7].includes(vocationId)) return comMagia ? { shoot: 'CONST_ANI_HOLY', words: 'exori san' } : { shoot: 'CONST_ANI_ARROW' };
+  if ([2, 6].includes(vocationId)) return comMagia ? { shoot: 'CONST_ANI_ICE', words: 'exori frigo' } : { shoot: 'CONST_ANI_SMALLICE' };
+  return comMagia ? { shoot: 'CONST_ANI_ENERGYBALL', words: 'exori vis' } : { shoot: 'CONST_ANI_ENERGY' };
+}
+
+/** Quem recebe o golpe do monstro agora: o tank da party (se houver) ou o líder. */
+function tanqueAtivo(session: HuntSession): AliadoSessao | null {
+  if (!session.aliados?.length) return null;
+  if ([4, 8].includes(session.character.vocationId)) return null; // líder Knight já é o tank
+  return session.aliados.find((a) => a.tanque && !a.caido) ?? null;
+}
 
 function tanqueSegura(session: HuntSession, dano: number): number {
-  if (dano <= 0 || !session.aliados?.length) return dano;
-  if ([4, 8].includes(session.character.vocationId)) return dano; // líder Knight não precisa de tank
-  const tanque = session.aliados.find((a) => a.tanque && !a.caido);
+  if (dano <= 0) return dano;
+  const tanque = tanqueAtivo(session);
   if (!tanque) return dano;
   const parte = Math.round(dano * TANQUE_PARTE);
   tanque.hp -= parte;
@@ -1226,7 +1246,7 @@ function turnoDosAliados(
         const curado = alvo.curar(rng.normal(a.cura.min, a.cura.max));
         session.totals.healingDone += curado;
         a.curaCd = msToTicks(HEAL_EXHAUST_MS);
-        emit({ tick: session.tick, type: 'heal', amount: curado, words: a.cura.palavras });
+        emit({ tick: session.tick, type: 'heal', amount: curado, words: a.cura.palavras, aliado: a.nome });
       }
     }
 
@@ -1252,11 +1272,13 @@ function turnoDosAliados(
     if (a.ataqueMs < ALIADO_ATAQUE_MS) continue;
     a.ataqueMs -= ALIADO_ATAQUE_MS;
     let dps = a.dpsSemMagia;
+    let comMagia = false;
     // Quem cura guarda mana para 3 curas antes de gastar com magia de ataque.
     const reserva = a.cura ? a.cura.mana * 3 : 0;
     if (a.manaMagiaPorSeg > 0 && a.mp - a.manaMagiaPorSeg >= reserva) {
       a.mp -= a.manaMagiaPorSeg;
       dps = a.dpsComMagia;
+      comMagia = true;
     }
     const monstro = getMonster(alvo.monsterId);
     if (monstro.immunities.includes(a.tipoDano)) continue;
@@ -1274,6 +1296,7 @@ function turnoDosAliados(
     emit({
       tick: session.tick, type: 'player_attack', uid: alvo.uid, monsterId: monstro.id,
       amount: final, damageType: a.tipoDano, blocked: final === 0,
+      aliado: a.nome, ...estiloAliado(a.vocationId, comMagia),
     });
     if (alvo.health <= 0) killMonster(session, alvo, monstro, rng, emit, rates);
   }
@@ -1522,13 +1545,15 @@ function monsterTurn(
         final -= Math.ceil((final * AVATAR_FORGE_DAMAGE_REDUCTION) / 100);
         final = Math.max(0, final);
       }
+      const tanque = tanqueAtivo(session);
+      const brutoNoTanque = final;
       final = tanqueSegura(session, final);
       character.health -= final;
       session.totals.damageTaken += final;
       emit({
         tick: session.tick, type: 'monster_attack', uid: active.uid,
-        monsterId: monster.id, amount: final, damageType: attack.damageType, blocked: final === 0,
-        shoot: attack.shootEffect ?? undefined,
+        monsterId: monster.id, amount: tanque ? brutoNoTanque - final : final, damageType: attack.damageType,
+        blocked: brutoNoTanque === 0, shoot: attack.shootEffect ?? undefined, aliado: tanque?.nome,
       });
       if (final > 0) {
         const cleared = charmCleanse(

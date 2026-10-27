@@ -468,6 +468,8 @@ export interface SimEvent {
   areaDirection?: number;
   /** Knight / monk melee swing sprite (sword, axe, club, fist, monk-staff, monk-daggers). */
   attackEffect?: string;
+  /** Cyberidle: nome do companheiro de party que causou (ataque/cura) ou recebeu (tank) o evento. */
+  aliado?: string;
 }
 
 /** Running totals that power the Hunt, Loot and Supply analysers. */

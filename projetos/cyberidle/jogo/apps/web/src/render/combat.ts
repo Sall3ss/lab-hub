@@ -755,15 +755,22 @@ export class CombatScene {
       const count = event.count && event.count > 1 ? ` x${event.count}` : '';
       this.floatFree(6.5 * TILE, 4 * TILE, `${name}${count}`, 0xe8c547);
     } else if (event.type === 'heal' || event.type === 'potion') {
-      if (event.words && this.player) {
-        this.floatFree(this.player.root.x, this.player.root.y - 22, event.words, 0xe07030, 9);
+      const autor = this.quem(event);
+      if (event.words && autor) {
+        this.floatFree(autor.root.x, autor.root.y - 22, event.words, event.aliado ? 0x7af5ff : 0xe07030, 9);
       }
       if (this.player && (event.amount ?? 0) > 0) this.float(this.player, event.amount ?? 0, 0x6ecf7a, '+');
     } else if (event.type === 'level_up') {
       if (this.player) this.floatFree(this.player.root.x, this.player.root.y - 40, `Level ${event.level}!`, 0xe8c547, 11);
     } else if (event.type === 'player_attack') {
-      if (event.words && this.player) {
-        this.floatFree(this.player.root.x, this.player.root.y - 22, event.words, 0xe07030, 9);
+      const autor = this.quem(event);
+      if (event.words && autor) {
+        this.floatFree(autor.root.x, autor.root.y - 22, event.words, event.aliado ? 0x7af5ff : 0xe07030, 9);
+      }
+      // Companheiro: só o golpe/projétil saindo dele (sem área do caster).
+      if (event.aliado) {
+        this.playStrike(event);
+        return;
       }
       // Caster-centered area spells: paint SQM tiles once, not on each target sprite.
       if (event.area && event.words) {
@@ -871,7 +878,7 @@ export class CombatScene {
       sprite.x = target.root.x;
       sprite.y = target.root.y - TILE * 0.42;
 
-      const player = this.player;
+      const player = this.quem(event);
       if (player) {
         const facing = faceOf(target.tileX - player.tileX, target.tileY - player.tileY);
         sprite.scale.x = facing.scaleX;
@@ -926,17 +933,30 @@ export class CombatScene {
         this.floatDamage(this.player, event.leech, 0x66ff66, 'heal');
       }
     } else if (event.type === 'monster_attack' && this.player) {
+      const alvo = this.quem(event) ?? this.player;
       const amount = event.amount ?? 0;
       if (amount > 0) {
-        this.floatDamage(this.player, amount, damageTint(event.damageType), 'in');
+        this.floatDamage(alvo, amount, damageTint(event.damageType), 'in');
       } else if (event.blocked) {
-        this.floatLabel(this.player.root.x, this.player.root.y - 30, '0', 0xb0b0b0, 'in');
+        this.floatLabel(alvo.root.x, alvo.root.y - 30, '0', 0xb0b0b0, 'in');
       }
     } else if (event.type === 'condition' && this.player) {
       const amount = event.amount ?? 0;
       if (amount > 0) this.floatDamage(this.player, amount, damageTint(event.damageType), 'in');
     }
     this.playBursts(event);
+  }
+
+  /**
+   * Cyberidle: de quem é o evento na cena - o companheiro de party que atacou/curou (ou o
+   * tank que levou o golpe), quando o evento traz `aliado`; senão, o personagem principal.
+   */
+  private quem(event: SimEvent): SpriteEntry | null {
+    if (event.aliado) {
+      const aliado = this.allies.get(event.aliado);
+      if (aliado && !aliado.root.destroyed) return aliado;
+    }
+    return this.player;
   }
 
   private resolveMonster(uid: number | undefined): SpriteEntry | undefined {
@@ -947,7 +967,7 @@ export class CombatScene {
   private playBursts(event: SimEvent): void {
     for (const burst of burstsFor(event)) {
       const entry = burst.on === 'player'
-        ? this.player
+        ? this.quem(event)
         : event.uid !== undefined ? this.sprites.get(event.uid) : undefined;
       if (entry) this.playEffect(entry.root.x, entry.root.y - TILE / 2, burst.id);
     }
@@ -1032,15 +1052,16 @@ export class CombatScene {
   }
 
   private launchEventShot(event: SimEvent, onHit?: () => void): boolean {
-    if (!event.shoot || !this.player) return false;
+    const quem = this.quem(event);
+    if (!event.shoot || !quem) return false;
     const monster = event.uid !== undefined ? this.sprites.get(event.uid) : undefined;
     if (!monster) return false;
     if (event.type === 'player_attack') {
-      this.launchShot(this.player, monster, event.shoot, onHit);
+      this.launchShot(quem, monster, event.shoot, onHit);
       return true;
     }
     if (event.type === 'monster_attack') {
-      this.launchShot(monster, this.player, event.shoot, onHit);
+      this.launchShot(monster, quem, event.shoot, onHit);
       return true;
     }
     return false;

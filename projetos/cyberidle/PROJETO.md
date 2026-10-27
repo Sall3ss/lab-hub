@@ -72,6 +72,19 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
 
 ## Estado
 
+**27/10/2026 - party v2: animação por classe e foco no tank (passo 6).**
+- Cada companheiro tem ataque com a cara da classe, saindo DELE no mapa (evento com `aliado`):
+  Street Samurai = golpe de espada, Cyber Monk = soco, Gunslinger = flecha (com magia: holy),
+  Biohacker = gelo pequeno (com magia: gelo), Netrunner = energia (com magia: bola de energia).
+  Palavras da magia e da cura aparecem em ciano sobre quem lançou.
+- **Monstros focam só no tank** (decisão do dono, PARA REVER depois): se o líder não for
+  Knight e houver Knight de pé na party, ele leva 100% dos golpes, e os golpes/números vão
+  para ele na cena. Para dividir de novo: `TANQUE_PARTE` em `packages/sim/src/combat.ts`.
+- Conferido com party Netrunner + Biohacker + Street Samurai em 30 s de caçada: 19 tiros de
+  gelo do Biohacker, 18 golpes de espada do Samurai, 8 de energia do líder; 20 de 20 golpes
+  de monstro no tank; sem erros. Testes do servidor 74/74.
+- Limite: os monstros ainda andam até o líder (só o dano vai no tank).
+
 **27/10/2026 - itens e monstros restantes no tema (passo 5).** Itens: troca por palavra em
 `ITENS` (`tema/cyberpunk.ts`): sword -> monoblade, health potion -> health stim, rope ->
 grapple cable, steel helmet -> titanium visor helmet, meat -> vat meat, ring -> ring chip...;
