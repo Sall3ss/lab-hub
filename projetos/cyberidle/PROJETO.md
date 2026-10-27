@@ -72,6 +72,15 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
 
 ## Estado
 
+**27/10/2026 - visual neon da interface (passo 3 do dono).** Paleta dourada trocada por
+ciano/magenta em `styles.css` (troca direta das cores) e camada própria `tema/neon.css`:
+fundo azul-noite com grade e linhas de varredura, brilho neon em caixas, janelas, barras
+(HP verde, mana azul, XP magenta) e botões, títulos em Orbitron/Rajdhani, chip "E" para o
+Edinho. **Ícones do topo próprios** (SVG neon) no lugar das imagens do cliente original
+(`ui/chrome.ts` sem ícones de imagem) - primeira arte da CipSoft fora da interface. O mapa,
+monstros e itens continuam com os sprites originais (passo 6, arte própria).
+Conferido em 1440x860 e 390x844, sem erros.
+
 **27/10/2026 - cyberpunk nos textos (passo 2 do dono).** Só nomes; mecânica igual. Tudo em
 `apps/web/src/tema/cyberpunk.ts` (tabelas fáceis de editar):
 - Ouro = **"Edinho"** (pedido do dono; moedas viram edinho / edinho de platina / de cristal;

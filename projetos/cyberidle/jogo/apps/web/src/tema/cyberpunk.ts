@@ -205,7 +205,12 @@ function trocarNo(no: Node): void {
     if (!pai || pai.closest('input, textarea, script, style, [data-sem-tema]')) return;
     const antes = no.nodeValue ?? '';
     if (escritos.get(no) === antes) return;
-    const depois = trocarTexto(antes);
+    let depois = trocarTexto(antes);
+    // React separa "350" e "g · 150 XP" em dois textos: olha o número do texto anterior.
+    const anterior = no.previousSibling?.textContent ?? '';
+    if (/\d$/.test(anterior)) {
+      depois = depois.replace(/^g\b/, ` ${MOEDA}`).replace(/^ ?TC\b/, ' CC');
+    }
     escritos.set(no, depois);
     if (depois !== antes) no.nodeValue = depois;
     return;
