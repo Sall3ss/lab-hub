@@ -72,6 +72,14 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
 
 ## Estado
 
+**27/10/2026 - tela se adapta à resolução (pedido do dono).** A interface inteira tem zoom
+automático pelo tamanho da janela (`main.tsx`): desenhada para ~1440x860, encolhe até 0,72 em
+telas menores (nada corta) e cresce até 1,6 em maiores (nada fica miúdo); o `#root` recebe
+largura/altura da janela divididas pelo zoom. O mapa ocupa todo o espaço livre do centro
+(`object-fit: contain`); em telas baixas o log encolhe. Até 1100 px de largura: uma coluna,
+zoom 1, **mapa primeiro** e barra do topo rolando para o lado. Conferido em 1280x720 (mapa de
+~430x364 para ~520x440 na tela), 1024x768, 1366x768, 1920x1080, 2560x1440 e 390x844.
+
 **27/10/2026 - ranking e mercado gerais; chat tirado; telas de entrada responsivas.**
 - Ranking geral: cada aparelho com conta envia nível, XP, skill, gold e bestiário junto com
   o save; a nuvem recusa números impossíveis (XP que não bate com o nível, XP demais para o

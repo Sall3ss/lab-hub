@@ -960,10 +960,10 @@ h2.window-head-title { font-size: 13px; }
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   display: block;
-  max-width: 100%;
-  max-height: 100%;
-  width: auto;
-  height: auto;
+  /* Cyberidle: o mapa ocupa todo o espaço livre do centro, mantendo a proporção. */
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 .banner {
   position: absolute;
@@ -4243,6 +4243,12 @@ button.compact-row.on { background: #1e2430; box-shadow: inset 0 0 0 1px var(--g
   .shell { height: auto; min-height: 100%; }
   .board { grid-template-columns: 1fr; height: auto; }
   .dock { border: 0; }
+  /* Cyberidle: no celular o mapa vem primeiro, e a barra do topo rola para o lado. */
+  .board > .center { order: -1; }
+  .center .viewport { min-height: 300px; aspect-ratio: 13 / 11; max-height: 70vh; }
+  .topnav { overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+  .topnav::-webkit-scrollbar { display: none; }
+  .topnav > * { flex-shrink: 0; }
   .voc-grid { grid-template-columns: 1fr 1fr; }
 }
 
@@ -4256,4 +4262,9 @@ button.compact-row.on { background: #1e2430; box-shadow: inset 0 0 0 1px var(--g
 }
 @media (max-width: 760px) {
   .select-grid { grid-template-columns: 1fr; }
+}
+
+/* Cyberidle: em telas baixas o console de log encolhe para o mapa ganhar altura. */
+@media (max-height: 820px) and (min-width: 901px) {
+  .chat-console__log { max-height: 96px; }
 }
