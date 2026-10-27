@@ -115,7 +115,6 @@ function escolherPocao(estado: CharacterState, tiers: readonly PotionTier[], esc
 function montarAliado(id: number, estado: CharacterState, antes?: AliadoSessao): AliadoSessao {
   const stats = deriveStats(estado);
   const policy = estado.policy;
-  const vocacao = getVocation(estado.vocationId).name;
   const semMagia = JSON.parse(JSON.stringify(estado)) as CharacterState;
   semMagia.policy = { ...semMagia.policy, disabledSpells: spellsFor(estado.vocationId).map((s) => s.id), runeId: -1 };
   const dpsSemMagia = estimateDamagePerSecond(semMagia, 1);
@@ -127,12 +126,12 @@ function montarAliado(id: number, estado: CharacterState, antes?: AliadoSessao):
     : undefined;
   const faixa = heal ? healAmount(heal, estado.level, estado.magicLevel) : null;
   const tipoDano = !stats.isMagic ? 'COMBAT_PHYSICALDAMAGE' as const
-    : /druid/i.test(vocacao) ? 'COMBAT_ICEDAMAGE' as const : 'COMBAT_ENERGYDAMAGE' as const;
+    : [2, 6].includes(estado.vocationId) ? 'COMBAT_ICEDAMAGE' as const : 'COMBAT_ENERGYDAMAGE' as const;
   return {
     id,
     nome: estado.name,
     vocationId: estado.vocationId,
-    tanque: /knight/i.test(vocacao),
+    tanque: [4, 8].includes(estado.vocationId),
     hp: Math.min(stats.maxHealth, antes?.hp ?? estado.health ?? stats.maxHealth),
     hpMax: stats.maxHealth,
     mp: Math.min(stats.maxMana, antes?.mp ?? estado.mana ?? stats.maxMana),
@@ -226,7 +225,8 @@ function fichaDe(estado: CharacterState): FichaParty {
   const stats = deriveStats(estado);
   const vocation = getVocation(estado.vocationId);
   const nome = vocation.name;
-  const papel = /knight/i.test(nome) ? 'TANK' : /druid/i.test(nome) ? 'SUP' : 'DPS';
+  // Por id (o nome muda com o tema): Knight 4/8 = tank, Druid 2/6 = suporte.
+  const papel = [4, 8].includes(estado.vocationId) ? 'TANK' : [2, 6].includes(estado.vocationId) ? 'SUP' : 'DPS';
   const base = expForLevel(estado.level);
   const proximo = expForLevel(estado.level + 1);
   const xpPercent = proximo > base ? Math.max(0, Math.min(100, ((estado.experience - base) / (proximo - base)) * 100)) : 0;

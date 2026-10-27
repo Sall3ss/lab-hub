@@ -3,6 +3,11 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
 import { LocaleProvider } from './i18n/Locale.js';
 import './styles.css';
+import { aplicarTema, observarTextos } from './tema/cyberpunk.js';
+
+// Nomes cyberpunk (monstros, caçadas, vocações, Edinho) antes de qualquer tela ou do
+// servidor local ler os dados. Lab Hub, Claude (Opus 5.5).
+aplicarTema();
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing #root');
@@ -26,6 +31,7 @@ function ajustarZoom(el: HTMLElement): void {
   document.documentElement.style.setProperty('--zoom-ui', String(arred));
 }
 ajustarZoom(root);
+observarTextos(root);
 window.addEventListener('resize', () => ajustarZoom(root));
 
 createRoot(root).render(

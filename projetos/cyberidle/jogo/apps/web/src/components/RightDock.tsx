@@ -237,7 +237,7 @@ export function RightDock({
               const mp = eu ? character.mana : (mate.mana ?? 0);
               const mpMax = eu ? character.maxMana : (mate.maxMana ?? 1);
               const xpPct = eu ? xp.percent : (mate.xpPercent ?? 0);
-              const papel = mate.papel ?? (/knight/i.test(character.vocation.name) ? 'TANK' : /druid/i.test(character.vocation.name) ? 'SUP' : 'DPS');
+              const papel = mate.papel ?? ([4, 8].includes(character.vocation.id) ? 'TANK' : [2, 6].includes(character.vocation.id) ? 'SUP' : 'DPS');
               const vocacao = eu ? character.vocation.name : (mate.vocationName ?? '');
               return (
                 <div key={`${mate.id}-${mate.name}`} className={`party-card ${eu ? 'self' : ''} ${mate.caido ? 'caido' : ''}`}>

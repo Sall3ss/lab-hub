@@ -197,7 +197,9 @@ const LOCATION_THEME: Record<string, HuntTheme> = {
 export function themeForHunt(huntId: string): HuntTheme {
   if (huntId === 'training-dojo') return 'city';
   const hunt = huntsById.get(huntId);
-  const text = `${huntId} ${hunt?.name ?? ''} ${hunt?.location ?? ''}`.toLowerCase();
+  // Nome original (o tema cyberpunk troca o nome exibido, não o tema visual do mapa).
+  const nomeBase = (hunt as { nomeOriginal?: string } | undefined)?.nomeOriginal ?? hunt?.name ?? '';
+  const text = `${huntId} ${nomeBase} ${hunt?.location ?? ''}`.toLowerCase();
   for (const [pattern, theme] of THEME_RULES) {
     if (pattern.test(text)) return theme;
   }

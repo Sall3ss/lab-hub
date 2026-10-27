@@ -72,6 +72,24 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
 
 ## Estado
 
+**27/10/2026 - cyberpunk nos textos (passo 2 do dono).** Só nomes; mecânica igual. Tudo em
+`apps/web/src/tema/cyberpunk.ts` (tabelas fáceis de editar):
+- Ouro = **"Edinho"** (pedido do dono; moedas viram edinho / edinho de platina / de cristal;
+  "gold", "gp", "ouro" e "500g" na interface viram Edinho; Tibia Coins "TC" -> "CC").
+- Vocações: Street Samurai (Knight), Gunslinger (Paladin), Netrunner (Sorcerer), Biohacker
+  (Druid), Cyber Monk (Monk) e as promovidas (Chrome Samurai, Elite Gunslinger, Master
+  Netrunner, Elder Biohacker, Ascended Cyber Monk). Siglas no Helper: SS, GS, NR, BH, CM...
+- Monstros e caçadas: troca por palavra (Rotworm -> Rustworm, Dragon -> Mecha-Dragon,
+  Cave -> Sewers, Lair -> Nest...), em inglês como o original. Locais viram distritos
+  (Venore -> Neon Underbelly, Edron -> Core Mainframe...) e regiões em português (Megacidade,
+  Deserto Radioativo, Selva Tóxica, Ilhas Offshore, Zona Final).
+- Como: `aplicarTema()` troca os nomes nos dados uma vez ao abrir (guardando `nomeOriginal`);
+  um observador troca só o texto exibido para o resto (nunca classes ou campos), sem reagir
+  à própria troca. Lógica que dependia de nome passou a usar o id (papel TANK/SUP, tank da
+  party, tema visual do mapa).
+- Conferido no navegador: nenhuma ocorrência de gold/gp/Rotworm/Knight na tela de jogo,
+  lista de caçadas com distritos e monstros novos, tela de personagens com as vocações novas.
+
 **27/10/2026 - tela se adapta à resolução (pedido do dono).** A interface inteira tem zoom
 automático pelo tamanho da janela (`main.tsx`): desenhada para ~1440x860, encolhe até 0,72 em
 telas menores (nada corta) e cresce até 1,6 em maiores (nada fica miúdo); o `#root` recebe

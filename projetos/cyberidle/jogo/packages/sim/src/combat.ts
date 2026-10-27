@@ -1166,7 +1166,7 @@ const TANQUE_PARTE = 0.7;
 
 function tanqueSegura(session: HuntSession, dano: number): number {
   if (dano <= 0 || !session.aliados?.length) return dano;
-  if (/knight/i.test(getVocation(session.character.vocationId).name)) return dano;
+  if ([4, 8].includes(session.character.vocationId)) return dano; // líder Knight não precisa de tank
   const tanque = session.aliados.find((a) => a.tanque && !a.caido);
   if (!tanque) return dano;
   const parte = Math.round(dano * TANQUE_PARTE);

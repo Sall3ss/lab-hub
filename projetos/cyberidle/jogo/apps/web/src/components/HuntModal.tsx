@@ -1,3 +1,4 @@
+import { nomeMonstro } from '../tema/cyberpunk.js';
 import { useEffect, useMemo, useState } from 'react';
 import type { BossView, CharacterView, HuntView } from '../api/types.js';
 import { buildHuntRegions, sortHunts } from '../huntLocations.js';
@@ -541,7 +542,7 @@ function HuntRow({
             {hunt.slots?.queued ? ` · ${hunt.slots.queued} ${t('queued')}` : ''}
           </div>
           {hunt.monsters.length > 0 && (
-            <div className="meta hunt-row-creatures">{hunt.monsters.join(', ')}</div>
+            <div className="meta hunt-row-creatures">{hunt.monsters.map(nomeMonstro).join(', ')}</div>
           )}
         </div>
       </div>

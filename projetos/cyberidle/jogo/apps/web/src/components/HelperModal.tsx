@@ -5,6 +5,7 @@ import { useLocale } from '../i18n/Locale.js';
 import { ItemSlot } from './ItemSlot.js';
 import { SpellIcon } from './SpellIcon.js';
 import { WindowHead } from './WindowHead.js';
+import { SIGLA_VOCACAO } from '../tema/cyberpunk.js';
 
 const PERCENTS = [0.2, 0.25, 0.35, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9];
 
@@ -22,10 +23,6 @@ const SECTIONS: Array<{ id: Section; label: string }> = [
   { id: 'loot', label: 'Loot' },
 ];
 
-/** Sigla da vocação nas abas da party, como no BaiakIdle (EK, ED, MS, RP...). */
-const SIGLA_VOCACAO: Record<number, string> = {
-  1: 'S', 2: 'D', 3: 'P', 4: 'K', 5: 'MS', 6: 'ED', 7: 'RP', 8: 'EK', 9: 'MK', 10: 'EM',
-};
 
 export function HelperModal({
   character,
