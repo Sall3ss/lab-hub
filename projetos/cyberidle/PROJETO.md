@@ -72,6 +72,15 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
 
 ## Estado
 
+**27/10/2026 - boas-vindas para quem chega pelo link (passo 4).** `components/BoasVindas.tsx`:
+4 telas curtas no tema (o que é o jogo; caçadas, waves e loot; Helper, equipamento e party;
+conta, nuvem, ranking e mercado), uma vez por navegador (`cyberidle.boasvindas.v1`), com
+"Rever boas-vindas" na aba Help. O tutorial antigo do jogo original (dicas sobre o mapa)
+saiu; ao fechar as boas-vindas o passo do tutorial vai para 99. O convite para reivindicar a
+conta ficou: "Crie sua conta para salvar na nuvem, jogar no celular e entrar no ranking."
+Conferido como visitante novo no PC (1366x700) e no celular (390): aparece ao criar o
+personagem, a caçada já começa, não reaparece ao recarregar, sem erros.
+
 **27/10/2026 - zoom maior (pedido do dono: "pequeno demais, um pouco maior, sem exagero").**
 Referência do zoom passou de 1440x860 para 1366x700 de área útil (limites 0,8 a 1,5). No
 monitor do dono (~1320x660 úteis com a barra do navegador) foi de 0,77 para 0,94 (~22% maior);

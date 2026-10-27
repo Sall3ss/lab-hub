@@ -4268,3 +4268,16 @@ button.compact-row.on { background: #151b38; box-shadow: inset 0 0 0 1px var(--g
 @media (max-height: 820px) and (min-width: 901px) {
   .chat-console__log { max-height: 96px; }
 }
+
+/* Cyberidle: boas-vindas. */
+.helper-card.boas-vindas-card { width: min(520px, 100%); }
+.boas-vindas-corpo { padding: 22px 26px 8px; text-align: center; }
+.boas-vindas-corpo h2 { font-size: 20px; margin: 6px 0 12px; color: #e6fdff; text-shadow: 0 0 10px rgba(0, 229, 255, 0.5); }
+.boas-vindas-corpo p { color: #c9d3e8; line-height: 1.5; margin: 0 0 10px; font-size: 13px; }
+.boas-vindas-icone { font-size: 34px; color: var(--gold); text-shadow: 0 0 14px rgba(0, 229, 255, 0.7); }
+.boas-vindas-dica { color: #ffb0ec !important; font-size: 12px !important; }
+.boas-vindas-rodape { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 20px 18px; }
+.boas-vindas-pontos { display: flex; gap: 6px; }
+.boas-vindas-pontos button { width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--gold); background: transparent; padding: 0; }
+.boas-vindas-pontos button.on { background: var(--gold); box-shadow: 0 0 8px rgba(0, 229, 255, 0.7); }
+.boas-vindas-rodape .row { display: flex; gap: 8px; }

@@ -16,7 +16,7 @@ import { TopNav, type OverlayId } from '../components/TopNav.js';
 import { WindowHead } from '../components/WindowHead.js';
 import { formatCombatLog, hotbarSpells, type CombatLogLine, type ExerciseSkill } from '@tibia-idle/sim';
 import type { ChatMessage } from '../api/types.js';
-import { Onboarding } from '../components/Onboarding.js';
+import { BoasVindas, jaViuBoasVindas } from '../components/BoasVindas.js';
 import { OutfitModal, type OutfitDraft } from '../components/OutfitModal.js';
 import { formatDuration, formatNumber, xpProgress } from '../format.js';
 import { useLocale } from '../i18n/Locale.js';
@@ -115,6 +115,14 @@ export function GameScreen({
   } | null>(null);
   const liveDeath = useRef<NonNullable<Settlement['deathPenalty']> | null>(null);
   const [claimUser, setClaimUser] = useState('');
+  // Cyberidle: boas-vindas no lugar do tutorial antigo (uma vez por navegador).
+  const [boasVindas, setBoasVindas] = useState(() => !jaViuBoasVindas());
+  useEffect(() => {
+    // Quem já viu (ou fechou) as boas-vindas pula os passos do tutorial antigo.
+    const passo = character.onboardingStep ?? 0;
+    if (boasVindas || passo <= 0 || passo >= 99) return;
+    void act(() => api.act(character.id, { type: 'onboard', step: 99 }).then((result) => onCharacter(result.character)));
+  }, [boasVindas, character.id, character.onboardingStep]);
   const [claimPass, setClaimPass] = useState('');
   const lastWave = useRef<number | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
@@ -462,11 +470,6 @@ export function GameScreen({
                 }}
               />
               {banner && <div className="banner">{banner}</div>}
-              <Onboarding
-                character={character}
-                onAdvance={(step) => void act(() => api.act(character.id, { type: 'onboard', step }).then((result) => onCharacter(result.character)))}
-                onSkip={() => void act(() => api.act(character.id, { type: 'onboard', step: 99 }).then((result) => onCharacter(result.character)))}
-              />
               {guest && (character.onboardingStep ?? 0) >= 99 && (
                 <form className="onboard claim-banner" onSubmit={(event) => {
                   event.preventDefault();
@@ -562,11 +565,6 @@ export function GameScreen({
                   </div>
                 </div>
               )}
-              <Onboarding
-                character={character}
-                onAdvance={(step) => void act(() => api.act(character.id, { type: 'onboard', step }).then((result) => onCharacter(result.character)))}
-                onSkip={() => void act(() => api.act(character.id, { type: 'onboard', step: 99 }).then((result) => onCharacter(result.character)))}
-              />
               {guest && (character.onboardingStep ?? 0) >= 99 && (
                 <form className="onboard claim-banner" onSubmit={(event) => {
                   event.preventDefault();
@@ -606,6 +604,9 @@ export function GameScreen({
                 ))}
                 {chatTab === 'help' && (
                   <>
+                    <div className="chat-line sys">
+                      <button type="button" className="btn" style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => setBoasVindas(true)}>Rever boas-vindas</button>
+                    </div>
                     <div className="chat-line sys">{t('help1')}</div>
                     <div className="chat-line sys">{t('help2')}</div>
                     <div className="chat-line sys">{t('help3')}</div>
@@ -720,6 +721,8 @@ export function GameScreen({
           }))}
         />
       </div>
+
+      {boasVindas && <BoasVindas convidado={Boolean(guest)} onFechar={() => setBoasVindas(false)} />}
 
       {overlay === 'helper' && (helperDe === null || helperOutro?.id === helperDe) && (
         <HelperModal
