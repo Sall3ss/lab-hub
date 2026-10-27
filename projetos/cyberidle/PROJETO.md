@@ -72,6 +72,17 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
 
 ## Estado
 
+**27/10/2026 - mapas viraram ruas de verdade (pedido do dono: "estética de ruas").**
+`render/neonMapa.ts` v2: cada caçada é um bairro em grade (avenidas de 2 faixas a cada 8
+linhas e 9 colunas): asfalto com faixa amarela tracejada, rachaduras, bueiros e poças;
+faixas de pedestre nas saídas dos cruzamentos; calçadas de lajota com meio-fio, postes,
+lixeiras, bancos e hidrantes; fachadas de loja (letreiro neon, toldo, vitrine ou porta)
+voltadas para a calçada; telhados com ar-condicionado, antenas, claraboias e painéis solares;
+carros estacionados e cones. A cor neon do distrito vai nos telhados e fachadas. A câmera
+entre waves agora anda **pela avenida** (só o deslocamento horizontal das paradas,
+`paradasDaHunt` em `scenes.ts`), então a luta é sempre na rua. O formato do mapa original não
+é mais usado (só o tamanho da região e a semente da caçada).
+
 **27/10/2026 - arte própria, etapa 1: mapas neon (passo 7).** `render/neonMapa.ts` desenha o
 cenário POR CÓDIGO (nada do cliente original): placas de metal com emendas e rebites, grades,
 poças com reflexo, faixas de luz, prédios com janelas acesas e linha neon, e objetos de rua

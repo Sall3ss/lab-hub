@@ -449,7 +449,7 @@ export function paintHuntRegion(parent: Container, tiles: Atlas, huntId: string)
   area.addChild(props);
   // Cyberidle: cenário neon gerado por código no formato da região (render/neonMapa.ts).
   void tiles; void floor; void props;
-  const centros = regiao.paradas.map(([ox, oy]) => [regiao.raio + Math.floor(SCENE_COLS / 2) + ox, regiao.raio + Math.floor(SCENE_ROWS / 2) + oy] as [number, number]);
+  const centros = paradasDaHunt(huntId).map(([ox, oy]) => [regiao.raio + Math.floor(SCENE_COLS / 2) + ox, regiao.raio + Math.floor(SCENE_ROWS / 2) + oy] as [number, number]);
   pintarNeon(area, regiao.ground, regiao.stack, themeForHunt(huntId), huntId, centros);
   parent.addChild(area);
   return true;
@@ -459,7 +459,12 @@ export function paintHuntRegion(parent: Container, tiles: Atlas, huntId: string)
 export function paradasDaHunt(huntId: string): Array<[number, number]> {
   const room = huntMaps[huntId];
   const paradas = room && room.filled >= 40 ? room.regiao?.paradas : undefined;
-  return paradas && paradas.length >= 2 ? paradas : [[0, 0]];
+  if (!paradas || paradas.length < 2) return [[0, 0]];
+  // Cyberidle (mapa de cidade): a câmera anda PELA AVENIDA horizontal (só o deslocamento
+  // em x das paradas originais), para a luta acontecer sempre na rua.
+  const naRua: Array<[number, number]> = [];
+  for (const [ox] of paradas) if (!naRua.some(([x]) => x === ox)) naRua.push([ox, 0]);
+  return naRua.length >= 2 ? naRua : [[0, 0], [3, 0], [-3, 0]];
 }
 
 const HOUSE_DECO: Record<string, Array<{ id: number; x: number; y: number; ground?: boolean }>> = {

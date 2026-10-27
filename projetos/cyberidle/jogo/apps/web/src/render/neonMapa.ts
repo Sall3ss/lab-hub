@@ -4,10 +4,8 @@ import type { HuntTheme } from './scenes.js';
 /**
  * Cenário neon do Cyberidle - arte PRÓPRIA, gerada por código (nada do cliente original).
  *
- * Usa só o FORMATO de cada caçada (onde havia chão, onde havia parede, onde havia objetos)
- * e desenha por cima: placas de metal, grades, poças com reflexo, faixas de luz, prédios com
- * janelas acesas e objetos de rua (caixas, barris, terminais, postes). Cada distrito tem a
- * sua cor. As texturas (32x32, estilo pixel) são feitas uma vez num canvas e reaproveitadas.
+ * Cada caçada vira um pedaço de cidade (avenidas, calçadas, fachadas, telhados, carros),
+ * com a área de luta num cruzamento. Cada distrito tem a sua cor. As texturas (32x32, estilo pixel) são feitas uma vez num canvas e reaproveitadas.
  * Lab Hub, Claude (Opus 5.5), 27/10/2026.
  */
 
@@ -58,186 +56,243 @@ function textura(chave: string, desenhar: (g: CanvasRenderingContext2D) => void)
   return tex;
 }
 
-// ---------------------------------------------------------------- peças
+// ---------------------------------------------------------------- rua (versão 2)
+// A pedido do dono: estética de RUA, não só placas e luzes no chão. Cada caçada vira um
+// pedaço de cidade: avenidas de asfalto com faixas, cruzamentos com faixa de pedestre,
+// calçadas com meio-fio, postes e lixo, fachadas de loja com toldo e letreiro, telhados com
+// caixas de ar e antenas, e carros estacionados.
 
-/** Chão: placa de metal com emendas e rebites; variações com grade, poça e faixa de luz. */
-function chao(cor: string, variante: number): Texture {
-  return textura(`chao:${cor}:${variante}`, (g) => {
-    const r = rng(variante * 977 + 13);
-    g.fillStyle = variante % 2 ? '#131726' : '#151a2b';
+const SINAIS = ['#ff3cd2', '#00e5ff', '#ffd23c', '#39ff88', '#ff6b3c'];
+
+function asfalto(variante: number, marca: 'nenhuma' | 'h' | 'v' | 'zebraH' | 'zebraV'): Texture {
+  return textura(`asf:${variante}:${marca}`, (g) => {
+    const r = rng(variante * 313 + 5);
+    g.fillStyle = '#16181f';
     g.fillRect(0, 0, T, T);
-    // ruído de sujeira
-    for (let i = 0; i < 22; i += 1) {
-      g.fillStyle = r() < 0.5 ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.03)';
-      g.fillRect(Math.floor(r() * T), Math.floor(r() * T), 1 + Math.floor(r() * 2), 1);
+    for (let i = 0; i < 40; i += 1) {
+      g.fillStyle = r() < 0.5 ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.04)';
+      g.fillRect(Math.floor(r() * T), Math.floor(r() * T), 1, 1);
     }
-    // emendas
-    g.fillStyle = '#0a0d17';
-    g.fillRect(0, 0, T, 1);
-    g.fillRect(0, 0, 1, T);
-    g.fillStyle = 'rgba(255,255,255,0.05)';
-    g.fillRect(1, 1, T - 1, 1);
-    // rebites
-    g.fillStyle = '#2a3150';
-    for (const [x, y] of [[3, 3], [T - 4, 3], [3, T - 4], [T - 4, T - 4]]) g.fillRect(x!, y!, 1, 1);
-    const tipo = variante % 7;
-    if (tipo === 3) {
-      // grade de ventilação
-      g.fillStyle = '#0b0e18';
-      g.fillRect(8, 8, 16, 16);
-      g.fillStyle = '#232a45';
-      for (let y = 9; y < 24; y += 3) g.fillRect(9, y, 14, 1);
-      g.fillStyle = alfa(cor, 0.18);
-      g.fillRect(8, 8, 16, 16);
-    } else if (tipo === 5) {
-      // poça com reflexo neon
-      g.fillStyle = 'rgba(10, 14, 30, 0.9)';
-      g.beginPath();
-      g.ellipse(16, 18, 11, 6, 0, 0, Math.PI * 2);
-      g.fill();
-      g.fillStyle = alfa(cor, 0.35);
-      g.fillRect(9, 17, 10, 1);
-      g.fillRect(13, 19, 8, 1);
-      g.fillStyle = 'rgba(255, 60, 210, 0.25)';
-      g.fillRect(17, 15, 5, 1);
-    } else if (tipo === 6) {
-      // faixa de luz no chão
-      g.fillStyle = alfa(cor, 0.12);
-      g.fillRect(0, 14, T, 4);
-      g.fillStyle = alfa(cor, 0.85);
-      g.fillRect(0, 15, T, 2);
+    if (variante % 5 === 1) { // rachadura
+      g.fillStyle = '#0b0c11';
+      let x = 6 + Math.floor(r() * 18); let y = 4;
+      while (y < 28) { g.fillRect(x, y, 1, 2); x += Math.floor(r() * 3) - 1; y += 2; }
+    } else if (variante % 5 === 3) { // bueiro
+      g.fillStyle = '#0d0f14'; g.beginPath(); g.arc(16, 16, 7, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#262a36'; for (let k = -5; k <= 5; k += 3) g.fillRect(11, 16 + k, 10, 1);
+    } else if (variante % 5 === 4) { // poça refletindo neon
+      g.fillStyle = 'rgba(8, 12, 26, 0.9)'; g.beginPath(); g.ellipse(14, 20, 10, 5, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(255, 60, 210, 0.4)'; g.fillRect(8, 19, 8, 1);
+      g.fillStyle = 'rgba(0, 229, 255, 0.35)'; g.fillRect(13, 21, 7, 1);
+    }
+    g.fillStyle = 'rgba(255, 210, 60, 0.85)';
+    if (marca === 'h') { g.fillRect(2, 31, 12, 1); g.fillRect(18, 31, 12, 1); }
+    if (marca === 'v') { g.fillRect(31, 2, 1, 12); g.fillRect(31, 18, 1, 12); }
+    g.fillStyle = 'rgba(235, 238, 245, 0.7)';
+    if (marca === 'zebraH') for (let x = 2; x < T; x += 6) g.fillRect(x, 4, 3, 24);
+    if (marca === 'zebraV') for (let y = 2; y < T; y += 6) g.fillRect(4, y, 24, 3);
+  });
+}
+
+/** Calçada: lajotas, com meio-fio nos lados que dão para a rua (máscara N=1 L=2 S=4 O=8). */
+function calcada(mascara: number, variante: number): Texture {
+  return textura(`calc:${mascara}:${variante}`, (g) => {
+    const r = rng(variante * 71 + 3);
+    g.fillStyle = '#2a2e3d';
+    g.fillRect(0, 0, T, T);
+    g.fillStyle = '#20232f';
+    for (let y = 0; y < T; y += 8) g.fillRect(0, y, T, 1);
+    for (let y = 0; y < T; y += 8) for (let x = (y / 8) % 2 ? 4 : 0; x < T; x += 8) g.fillRect(x, y, 1, 8);
+    for (let i = 0; i < 14; i += 1) { g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(Math.floor(r() * T), Math.floor(r() * T), 1, 1); }
+    g.fillStyle = '#585e72';
+    if (mascara & 1) g.fillRect(0, 0, T, 2);
+    if (mascara & 2) g.fillRect(T - 2, 0, 2, T);
+    if (mascara & 4) g.fillRect(0, T - 2, T, 2);
+    if (mascara & 8) g.fillRect(0, 0, 2, T);
+  });
+}
+
+/** Telhado visto de cima, com borda neon onde encosta na calçada e equipamentos. */
+function telhado(cor: string, bordas: number, variante: number): Texture {
+  return textura(`tel:${cor}:${bordas}:${variante}`, (g) => {
+    const r = rng(variante * 197 + 11);
+    g.fillStyle = '#0c0e18'; g.fillRect(0, 0, T, T);
+    g.fillStyle = '#11142a'; g.fillRect(1, 1, T - 2, T - 2);
+    const item = variante % 6;
+    if (item === 0) { // caixa de ar-condicionado
+      g.fillStyle = '#2a2f45'; g.fillRect(8, 9, 14, 12); g.fillStyle = '#1a1e2e';
+      g.beginPath(); g.arc(15, 15, 4, 0, Math.PI * 2); g.fill();
+    } else if (item === 1) { // antena
+      g.fillStyle = '#3a4060'; g.fillRect(15, 6, 2, 18); g.fillRect(10, 10, 12, 1);
+      g.fillStyle = '#ff3b3b'; g.fillRect(15, 5, 2, 2);
+    } else if (item === 2) { // claraboia
+      g.fillStyle = alfa(cor, 0.25); g.fillRect(9, 9, 14, 14); g.fillStyle = alfa(cor, 0.6); g.fillRect(9, 9, 14, 1);
+    } else if (item === 3) { // painel solar
+      g.fillStyle = '#1b2a55'; g.fillRect(6, 8, 20, 14);
+      g.fillStyle = '#2d4790'; for (let x = 6; x < 26; x += 5) g.fillRect(x, 8, 1, 14);
+    }
+    for (let i = 0; i < 8; i += 1) { g.fillStyle = 'rgba(255,255,255,0.03)'; g.fillRect(Math.floor(r() * T), Math.floor(r() * T), 2, 1); }
+    g.fillStyle = alfa(cor, 0.9);
+    if (bordas & 1) g.fillRect(0, 0, T, 1);
+    if (bordas & 2) g.fillRect(T - 1, 0, 1, T);
+    if (bordas & 8) g.fillRect(0, 0, 1, T);
+  });
+}
+
+/** Fachada de loja (prédio com calçada ao sul): parede, vitrine acesa, toldo e letreiro. */
+function fachada(cor: string, variante: number): Texture {
+  return textura(`fach:${cor}:${variante}`, (g) => {
+    const placa = SINAIS[variante % SINAIS.length]!;
+    g.fillStyle = '#11142a'; g.fillRect(0, 0, T, 12);
+    g.fillStyle = '#1b1f33'; g.fillRect(0, 12, T, 20);
+    // letreiro neon
+    g.fillStyle = alfa(placa, 0.2); g.fillRect(4, 2, 24, 9);
+    g.fillStyle = placa; g.fillRect(5, 3, 22, 1); g.fillRect(5, 9, 22, 1);
+    for (let x = 7; x < 25; x += 4) g.fillRect(x, 5, 2, 3);
+    // toldo
+    g.fillStyle = variante % 2 ? '#5b1a6e' : '#0d4a5a';
+    g.fillRect(0, 13, T, 4);
+    g.fillStyle = 'rgba(255,255,255,0.15)'; for (let x = 0; x < T; x += 6) g.fillRect(x, 13, 3, 4);
+    // vitrine e porta
+    if (variante % 3 === 0) {
+      g.fillStyle = '#0a0c14'; g.fillRect(12, 19, 8, 13);
+      g.fillStyle = alfa(cor, 0.5); g.fillRect(12, 19, 8, 1);
+    } else {
+      g.fillStyle = alfa(placa, 0.35); g.fillRect(3, 19, 26, 9);
+      g.fillStyle = 'rgba(255, 220, 160, 0.25)'; g.fillRect(5, 21, 8, 5); g.fillRect(17, 21, 9, 5);
     }
   });
 }
 
-/** Parede/prédio: concreto escuro com janelas acesas e linha neon no topo. */
-function parede(cor: string, variante: number, topo: boolean): Texture {
-  return textura(`parede:${cor}:${variante}:${topo ? 1 : 0}`, (g) => {
-    const r = rng(variante * 131 + 7);
-    g.fillStyle = '#080a13';
-    g.fillRect(0, 0, T, T);
-    g.fillStyle = '#0d1020';
-    g.fillRect(1, 1, T - 2, T - 2);
-    // janelas
-    for (let y = 4; y < T - 3; y += 7) {
-      for (let x = 3; x < T - 3; x += 7) {
-        const acesa = r();
-        g.fillStyle = acesa < 0.18 ? alfa(cor, 0.9) : acesa < 0.3 ? 'rgba(255, 214, 120, 0.75)' : '#05060c';
-        g.fillRect(x, y, 4, 3);
-      }
-    }
-    if (topo) {
-      g.fillStyle = alfa(cor, 0.9);
-      g.fillRect(0, 0, T, 1);
-      g.fillStyle = alfa(cor, 0.25);
-      g.fillRect(0, 1, T, 2);
-    }
-  });
-}
-
-/** Objetos de rua (decoração por cima do chão). */
-function objeto(cor: string, tipo: number): Texture {
-  return textura(`obj:${cor}:${tipo}`, (g) => {
+/** Coisas de calçada e de rua. */
+function enfeite(tipo: 'poste' | 'lixo' | 'banco' | 'hidrante' | 'carro' | 'cone', variante: number): Texture {
+  return textura(`enf:${tipo}:${variante}`, (g) => {
     g.clearRect(0, 0, T, T);
-    switch (tipo % 6) {
-      case 0: // caixa com faixa neon
-        g.fillStyle = 'rgba(0,0,0,0.45)'; g.fillRect(8, 25, 18, 3);
-        g.fillStyle = '#262c45'; g.fillRect(7, 12, 18, 14);
-        g.fillStyle = '#323a5c'; g.fillRect(7, 12, 18, 3);
-        g.fillStyle = alfa(cor, 0.9); g.fillRect(7, 19, 18, 1);
-        g.fillStyle = '#1a1f33'; g.fillRect(15, 15, 2, 10);
-        break;
-      case 1: // barril tóxico
-        g.fillStyle = 'rgba(0,0,0,0.45)'; g.fillRect(10, 26, 12, 3);
-        g.fillStyle = '#2b3350'; g.fillRect(10, 11, 12, 16);
-        g.fillStyle = '#39ff88'; g.fillRect(10, 15, 12, 1); g.fillRect(10, 22, 12, 1);
-        g.fillStyle = 'rgba(57,255,136,0.35)'; g.fillRect(12, 9, 8, 2);
-        break;
-      case 2: // terminal com tela
-        g.fillStyle = 'rgba(0,0,0,0.45)'; g.fillRect(9, 27, 14, 3);
-        g.fillStyle = '#1d2238'; g.fillRect(10, 8, 12, 20);
-        g.fillStyle = alfa(cor, 0.85); g.fillRect(12, 10, 8, 6);
-        g.fillStyle = alfa(cor, 0.3); g.fillRect(12, 18, 8, 1); g.fillRect(12, 20, 6, 1);
-        break;
-      case 3: // poste com luz
-        g.fillStyle = 'rgba(0,0,0,0.4)'; g.fillRect(13, 28, 8, 2);
-        g.fillStyle = '#2a3150'; g.fillRect(15, 6, 2, 22);
-        g.fillStyle = alfa(cor, 0.95); g.fillRect(13, 4, 6, 3);
-        g.fillStyle = alfa(cor, 0.18); g.fillRect(9, 7, 14, 8);
-        break;
-      case 4: // cabos e tubo
-        g.fillStyle = '#1b2034'; g.fillRect(2, 20, 28, 4);
-        g.fillStyle = '#2c3456'; g.fillRect(2, 20, 28, 1);
-        g.fillStyle = 'rgba(255,60,210,0.8)'; g.fillRect(6, 25, 10, 1);
-        g.fillStyle = alfa(cor, 0.8); g.fillRect(18, 26, 9, 1);
-        break;
-      default: // placa neon no chão (holograma)
-        g.fillStyle = alfa(cor, 0.12); g.fillRect(6, 6, 20, 20);
-        g.strokeStyle = alfa(cor, 0.8); g.lineWidth = 1; g.strokeRect(7.5, 7.5, 17, 17);
-        g.fillStyle = alfa(cor, 0.8); g.fillRect(12, 15, 8, 2);
-        break;
+    if (tipo === 'poste') {
+      g.fillStyle = 'rgba(0,229,255,0.12)'; g.beginPath(); g.ellipse(16, 24, 12, 6, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#3a4060'; g.fillRect(15, 4, 2, 22); g.fillRect(15, 4, 8, 2);
+      g.fillStyle = '#bff9ff'; g.fillRect(21, 6, 3, 2);
+    } else if (tipo === 'lixo') {
+      g.fillStyle = 'rgba(0,0,0,0.4)'; g.fillRect(9, 25, 14, 3);
+      g.fillStyle = '#2e5a3a'; g.fillRect(10, 13, 12, 13); g.fillStyle = '#3f7a50'; g.fillRect(9, 12, 14, 2);
+      g.fillStyle = '#c9c9c9'; g.fillRect(20, 24, 4, 2); g.fillStyle = '#8a6a3a'; g.fillRect(6, 26, 3, 2);
+    } else if (tipo === 'banco') {
+      g.fillStyle = '#3d2f2a'; g.fillRect(5, 15, 22, 4); g.fillStyle = '#2a2f45'; g.fillRect(7, 19, 2, 5); g.fillRect(23, 19, 2, 5);
+    } else if (tipo === 'hidrante') {
+      g.fillStyle = 'rgba(0,0,0,0.4)'; g.fillRect(12, 25, 9, 2);
+      g.fillStyle = '#b4232f'; g.fillRect(13, 15, 7, 11); g.fillRect(11, 18, 11, 3); g.fillStyle = '#e04050'; g.fillRect(14, 13, 5, 2);
+    } else if (tipo === 'cone') {
+      g.fillStyle = '#ff7a1a'; g.beginPath(); g.moveTo(16, 10); g.lineTo(21, 25); g.lineTo(11, 25); g.fill();
+      g.fillStyle = '#ffffff'; g.fillRect(13, 18, 6, 2);
+    } else {
+      const cores = ['#7a1f3d', '#1f4a7a', '#2f2f3a', '#6a5a1f'];
+      g.fillStyle = 'rgba(0,0,0,0.45)'; g.fillRect(3, 9, 27, 17);
+      g.fillStyle = cores[variante % cores.length]!; g.fillRect(2, 8, 27, 15);
+      g.fillStyle = '#0d1424'; g.fillRect(8, 10, 6, 11); g.fillRect(19, 10, 5, 11);
+      g.fillStyle = '#fff6c0'; g.fillRect(28, 9, 1, 3); g.fillRect(28, 18, 1, 3);
+      g.fillStyle = '#ff3b3b'; g.fillRect(2, 9, 1, 3); g.fillRect(2, 18, 1, 3);
     }
   });
 }
 
 // ---------------------------------------------------------------- montagem
 
+type Celula = 'rua' | 'calcada' | 'predio';
+
 /**
- * Pinta a grade (ground[y][x] != 0 = chão; 0 = prédio; stack com algo = objeto de rua) em
- * `parent`, a partir da posição (0,0) do container.
+ * Monta um pedaço de cidade do tamanho da grade (`ground` só dá o tamanho e a semente).
+ * Avenidas de 2 faixas passam por cada centro de câmera (onde a luta acontece), com um
+ * cruzamento em volta dele; ao lado de toda rua há calçada; o resto são quarteirões.
  */
 export function pintarNeon(
   parent: Container,
   ground: number[][],
-  stack: number[][][],
+  _stack: number[][][],
   tema: HuntTheme,
   semente: string,
-  /** Centros de câmera (em células desta grade): ao redor deles a rua fica livre para a luta. */
   centros: Array<[number, number]> = [[Math.floor((ground[0]?.length ?? 13) / 2), Math.floor(ground.length / 2)]],
 ): void {
   const cor = COR[tema] ?? COR.cave;
   const r = rng(hash(semente));
   const linhas = ground.length;
   const colunas = ground[0]?.length ?? 0;
-  const camadaChao = new Container();
-  const camadaObj = new Container();
-  parent.addChild(camadaChao);
-  parent.addChild(camadaObj);
-  // Área de luta: perto de qualquer centro de câmera, sempre rua livre.
-  const livre = (x: number, y: number) => centros.some(([cx, cy]) => Math.abs(x - cx) <= 3 && Math.abs(y - cy) <= 2);
-  // Prédio onde o mapa original não tinha chão OU tinha algo em cima (parede de caverna,
-  // rocha, árvore) - fora da área de luta.
-  const ehChao = (x: number, y: number) =>
-    livre(x, y) || (Boolean(ground[y]?.[x]) && (stack[y]?.[x]?.length ?? 0) === 0);
-  let total = 0;
-  for (let y = 0; y < linhas; y += 1) for (let x = 0; x < colunas; x += 1) if (ehChao(x, y)) total += 1;
-  // Sala sem recorte (quase só prédio ou quase só rua): rua com quarteirões nas bordas.
-  const tudoRua = total < linhas * colunas * 0.2;
+  const mapa: Celula[][] = Array.from({ length: linhas }, () => Array<Celula>(colunas).fill('predio'));
+  // Grade de quarteirões: avenidas de 2 faixas a cada 8 linhas e a cada 9 colunas, alinhadas
+  // para o primeiro centro de câmera cair num cruzamento.
+  const [c0x, c0y] = centros[0] ?? [Math.floor(colunas / 2), Math.floor(linhas / 2)];
+  const mod = (n: number, m: number) => ((n % m) + m) % m;
+  const ruaH = new Set<number>();
+  const ruaV = new Set<number>();
+  for (let y = 0; y < linhas; y += 1) if (mod(y - c0y, 8) <= 1) ruaH.add(y);
+  for (let x = 0; x < colunas; x += 1) if (mod(x - c0x + 1, 9) <= 1) ruaV.add(x);
+  // As paradas da câmera ficam todas na avenida horizontal do centro (scenes.ts), então não
+  // precisa abrir pátio no meio do quarteirão.
+  const praca = (_x: number, _y: number) => false;
+  for (let y = 0; y < linhas; y += 1) {
+    for (let x = 0; x < colunas; x += 1) {
+      if (ruaH.has(y) || ruaV.has(x) || praca(x, y)) mapa[y]![x] = 'rua';
+    }
+  }
+  const ehRua = (x: number, y: number) => mapa[y]?.[x] === 'rua';
+  for (let y = 0; y < linhas; y += 1) {
+    for (let x = 0; x < colunas; x += 1) {
+      if (mapa[y]![x] !== 'predio') continue;
+      for (let dy = -1; dy <= 1; dy += 1) for (let dx = -1; dx <= 1; dx += 1) {
+        if (ehRua(x + dx, y + dy)) mapa[y]![x] = 'calcada';
+      }
+    }
+  }
+  const tipo = (x: number, y: number): Celula | null => (y < 0 || y >= linhas || x < 0 || x >= colunas ? null : mapa[y]![x]!);
+
+  const chaoC = new Container();
+  const enfeites = new Container();
+  parent.addChild(chaoC);
+  parent.addChild(enfeites);
+  const por = (camada: Container, tex: Texture, x: number, y: number) => {
+    const s = new Sprite(tex);
+    s.x = x * T; s.y = y * T; s.roundPixels = true;
+    camada.addChild(s);
+  };
 
   for (let y = 0; y < linhas; y += 1) {
     for (let x = 0; x < colunas; x += 1) {
-      const rua = tudoRua || ehChao(x, y);
-      let tex: Texture;
-      if (rua) {
+      const c = mapa[y]![x]!;
+      if (c === 'rua') {
+        let marca: 'nenhuma' | 'h' | 'v' | 'zebraH' | 'zebraV' = 'nenhuma';
+        const emH = ruaH.has(y);
+        const emV = ruaV.has(x);
+        const cruz = emH && emV;
+        if (emH && !emV && (ruaV.has(x - 1) || ruaV.has(x + 1))) marca = 'zebraV';
+        else if (emV && !emH && (ruaH.has(y - 1) || ruaH.has(y + 1))) marca = 'zebraH';
+        else if (emH && !emV && mod(y - c0y, 8) === 0) marca = 'h';
+        else if (emV && !emH && mod(x - c0x + 1, 9) === 0) marca = 'v';
+        // asfalto liso na maior parte; rachadura, bueiro e poça de vez em quando
         const sorteio = r();
-        const variante = sorteio < 0.06 ? 3 : sorteio < 0.1 ? 5 : sorteio < 0.13 ? 6 : Math.floor(r() * 3) * 2;
-        tex = chao(cor, variante);
+        const variante = sorteio < 0.8 ? (sorteio < 0.4 ? 0 : 2) : sorteio < 0.88 ? 1 : sorteio < 0.94 ? 3 : 4;
+        por(chaoC, asfalto(variante, marca), x, y);
+        // carro estacionado na beira da avenida, fora do cruzamento
+        if (!cruz && !praca(x, y) && r() < 0.06 && (tipo(x, y - 1) === 'calcada' || tipo(x, y + 1) === 'calcada')) {
+          por(enfeites, enfeite('carro', Math.floor(r() * 4)), x, y);
+        } else if (!cruz && !praca(x, y) && r() < 0.015) {
+          por(enfeites, enfeite('cone', 0), x, y);
+        }
+      } else if (c === 'calcada') {
+        const m = (tipo(x, y - 1) === 'rua' ? 1 : 0) | (tipo(x + 1, y) === 'rua' ? 2 : 0)
+          | (tipo(x, y + 1) === 'rua' ? 4 : 0) | (tipo(x - 1, y) === 'rua' ? 8 : 0);
+        por(chaoC, calcada(m, Math.floor(r() * 4)), x, y);
+        const sorte = r();
+        if (m && (x + y) % 4 === 0) por(enfeites, enfeite('poste', 0), x, y);
+        else if (sorte < 0.06) por(enfeites, enfeite('lixo', 0), x, y);
+        else if (sorte < 0.09) por(enfeites, enfeite('banco', 0), x, y);
+        else if (sorte < 0.11) por(enfeites, enfeite('hidrante', 0), x, y);
       } else {
-        const topo = y + 1 < linhas && (tudoRua || ehChao(x, y + 1));
-        tex = parede(cor, Math.floor(r() * 6), topo);
-      }
-      const s = new Sprite(tex);
-      s.x = x * T;
-      s.y = y * T;
-      s.roundPixels = true;
-      camadaChao.addChild(s);
-      // objetos de rua espalhados, nunca na área de luta
-      if (rua && !livre(x, y) && r() < 0.1) {
-        const o = new Sprite(objeto(cor, Math.floor(r() * 6)));
-        o.x = x * T;
-        o.y = y * T;
-        o.roundPixels = true;
-        camadaObj.addChild(o);
+        // prédio: fachada se a calçada fica logo abaixo; senão telhado
+        if (tipo(x, y + 1) === 'calcada') {
+          por(chaoC, fachada(cor, Math.floor(r() * 10)), x, y);
+        } else {
+          const b = (tipo(x, y - 1) === 'calcada' ? 1 : 0) | (tipo(x + 1, y) === 'calcada' ? 2 : 0) | (tipo(x - 1, y) === 'calcada' ? 8 : 0);
+          por(chaoC, telhado(cor, b, Math.floor(r() * 12)), x, y);
+        }
       }
     }
   }
