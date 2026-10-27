@@ -72,6 +72,11 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
 
 ## Estado
 
+**27/10/2026 - zoom maior (pedido do dono: "pequeno demais, um pouco maior, sem exagero").**
+Referência do zoom passou de 1440x860 para 1366x700 de área útil (limites 0,8 a 1,5). No
+monitor do dono (~1320x660 úteis com a barra do navegador) foi de 0,77 para 0,94 (~22% maior);
+em 1900x950, 1,36. Ajuste fino: os dois números em `ajustarZoom` (`main.tsx`).
+
 **27/10/2026 - visual neon da interface (passo 3 do dono).** Paleta dourada trocada por
 ciano/magenta em `styles.css` (troca direta das cores) e camada própria `tema/neon.css`:
 fundo azul-noite com grade e linhas de varredura, brilho neon em caixas, janelas, barras
