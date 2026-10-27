@@ -1,3 +1,5 @@
+import { iconeJogador } from './neonAtores.js';
+import { VOCATION_LOOK } from './combat.js';
 import { tibiaColor } from './outfit.js';
 
 interface SpriteGroup {
@@ -113,6 +115,25 @@ function applyRecolor(base: ImageData, mask: ImageData | null, colors: OutfitCol
 }
 
 export async function outfitIconUrl(
+  lookType: number,
+  size = 48,
+  colors?: OutfitColors | null,
+  addon = 0,
+  direction = DIRECTION_SOUTH,
+  mounted = false,
+): Promise<string | null> {
+  // Cyberidle: ciborgue gerado por código; a classe sai do visual base da vocação.
+  void addon; void direction; void mounted;
+  const vocacao = Number(Object.entries(VOCATION_LOOK).find(([, look]) => look === lookType)?.[0] ?? 4);
+  return iconeJogador({
+    vocationId: vocacao,
+    corCabeca: colors ? tibiaColor(colors.head) : undefined,
+    corCorpo: colors ? tibiaColor(colors.body) : undefined,
+    corPernas: colors ? tibiaColor(colors.legs) : undefined,
+  }, size);
+}
+
+export async function outfitIconUrlOriginal(
   lookType: number,
   size = 48,
   colors?: OutfitColors | null,

@@ -6,7 +6,8 @@ import { DIRECTION_NORTH, DIRECTION_SOUTH, DIRECTION_WEST, GROUP_IDLE, GROUP_MOV
 import { attackAnimationSpeed, loadAttackFrames, preloadAttackFrames } from './attackEffects.js';
 import { burstsFor, damageTint, isCustomMeleeSwing, magicEffectId, outgoingDamageTint } from './effects.js';
 import { missileAim, shootEffectId } from './missiles.js';
-import { recoloredFrames, appearancePoseKey, creatureRecolorAppearance } from './outfit.js';
+import { recoloredFrames, appearancePoseKey, creatureRecolorAppearance, tibiaColor } from './outfit.js';
+import { quadrosJogador, quadrosMonstro, type JogadorGerado, type MonstroGerado } from './neonAtores.js';
 import { paintDecorations, paintHuntRegion, paintHuntScene, paradasDaHunt } from './scenes.js';
 import {
   chebyshev, faceOf, MONSTER_STEP_MS, PLAYER_STEP_MS, spawnTile, stepToward, surroundGoal,
@@ -21,9 +22,22 @@ import {
 } from '@tibia-idle/sim';
 
 const TILE = 32;
+const ESCALA_GERADO = 1.35;
 const COLS = 13;
 const ROWS = 11;
 const SCALE = 2;
+
+/** Ciborgue gerado com a classe e as cores do Outfit (cabeça, corpo, pernas). */
+function jogadorGerado(vocationId: number, appearance?: PlayerView['appearance']): SpriteEntry['gerado'] {
+  return {
+    jogador: {
+      vocationId,
+      corCabeca: appearance ? tibiaColor(appearance.head) : undefined,
+      corCorpo: appearance ? tibiaColor(appearance.body) : undefined,
+      corPernas: appearance ? tibiaColor(appearance.legs) : undefined,
+    },
+  };
+}
 
 export const VOCATION_LOOK: Record<number, number> = {
   1: 130,
@@ -68,6 +82,8 @@ interface SpriteEntry {
   scaleX: number;
   moving: boolean;
   stationary?: boolean;
+  /** Cyberidle: desenho gerado por código (neonAtores.ts) no lugar do sprite original. */
+  gerado?: { monstro?: MonstroGerado; jogador?: JogadorGerado };
 }
 
 export interface PlayerView {
@@ -559,7 +575,7 @@ export class CombatScene {
           y,
           DIRECTION_SOUTH,
           ally.name,
-          { appearance: ally.appearance, stepMs: PLAYER_STEP_MS, fill: 0x60c8ff },
+          { appearance: ally.appearance, stepMs: PLAYER_STEP_MS, fill: 0x60c8ff, gerado: jogadorGerado(ally.vocationId, ally.appearance) },
         );
         if (created) {
           created.stationary = true;
@@ -590,6 +606,7 @@ export class CombatScene {
           vitals: true,
           health: player.health,
           stepMs: PLAYER_STEP_MS,
+          gerado: jogadorGerado(player.vocationId, player.appearance),
         },
       ) ?? this.spawnLook(
         this.creatures,
@@ -598,7 +615,7 @@ export class CombatScene {
         PLAYER_TILE.y,
         DIRECTION_SOUTH,
         player.name,
-        { vitals: true, health: player.health, stepMs: PLAYER_STEP_MS },
+        { vitals: true, health: player.health, stepMs: PLAYER_STEP_MS, gerado: jogadorGerado(player.vocationId, player.appearance) },
       );
       if (created) this.player = created;
     }
@@ -610,6 +627,7 @@ export class CombatScene {
     const outfitAtlas = this.outfits ?? this.creatures;
     if (outfitAtlas && (look !== this.player.lookType || poseKey !== this.player.appearanceKey)) {
       this.player.lookType = look;
+      this.player.gerado = jogadorGerado(player.vocationId, player.appearance);
       this.player.atlas = outfitAtlas;
       this.player.appearanceKey = poseKey;
       try {
@@ -690,7 +708,8 @@ export class CombatScene {
   }
 
   private drawMount(entry: SpriteEntry, appearance?: PlayerView['appearance']): void {
-    const mountId = appearance?.mount ?? 0;
+    // Personagem gerado (ciborgue) não monta (as montarias ainda são arte original).
+    const mountId = entry.gerado ? 0 : appearance?.mount ?? 0;
     if (mountId <= 0) {
       if (entry.mountSprite) {
         try { entry.mountSprite.destroy(); } catch { /* gone */ }
@@ -1122,10 +1141,12 @@ export class CombatScene {
     const look = def?.outfit?.lookType ?? def?.lookType ?? 0;
     const name = def?.name ?? monster.monsterId;
     const appearance = creatureRecolorAppearance(this.creatures, look, def?.outfit);
+    const classe = (def as { bestiary?: { class?: string } | null } | undefined)?.bestiary?.class;
     return this.spawnLook(this.creatures, look, tx, ty, DIRECTION_SOUTH, name, {
       health: monster.health,
       stepMs: MONSTER_STEP_MS,
       appearance,
+      gerado: { monstro: { id: monster.monsterId, classe, grande: Boolean(def?.isBoss) } },
     });
   }
 
@@ -1142,12 +1163,17 @@ export class CombatScene {
       health?: number;
       stepMs?: number;
       fill?: number;
+      gerado?: SpriteEntry['gerado'];
     } = {},
   ): SpriteEntry | null {
     const actors = this.actors;
     if (!actors || actors.destroyed) return null;
     let recoloured: Texture[] = [];
-    try {
+    if (options.gerado) {
+      recoloured = options.gerado.monstro
+        ? quadrosMonstro(options.gerado.monstro, direction, true)
+        : options.gerado.jogador ? quadrosJogador(options.gerado.jogador, direction, true) : [];
+    } else try {
       const mounted = (options.appearance?.mount ?? 0) > 0;
       recoloured = atlas && options.appearance
         ? recoloredFrames(atlas, lookType, options.appearance, direction, GROUP_MOVING, { mounted })
@@ -1201,6 +1227,7 @@ export class CombatScene {
       sprite,
       label,
       bar,
+      gerado: options.gerado,
       lastHealth: options.health ?? 1,
       vitals: Boolean(options.vitals),
       tileX: tx,
@@ -1443,7 +1470,10 @@ export class CombatScene {
     entry.direction = facing.direction;
     entry.scaleX = facing.scaleX;
     entry.moving = moving;
-    entry.sprite.scale.x = facing.scaleX;
+    // Desenho gerado (Cyberidle) é feito em 32 px; aparece 35% maior para ter o porte dos originais.
+    const escala = entry.gerado ? ESCALA_GERADO : 1;
+    entry.sprite.scale.x = facing.scaleX * escala;
+    entry.sprite.scale.y = escala;
     if (!force && same && entry.sprite.playing) {
       this.alignEntrySprites(entry);
       return;
@@ -1466,6 +1496,8 @@ export class CombatScene {
   }
 
   private poseTextures(entry: SpriteEntry, direction: number, moving: boolean) {
+    if (entry.gerado?.monstro) return quadrosMonstro(entry.gerado.monstro, direction, moving);
+    if (entry.gerado?.jogador) return quadrosJogador(entry.gerado.jogador, direction, moving);
     const atlas = entry.atlas;
     if (!atlas || !entry.lookType) return [];
     const mounted = (entry.appearance?.mount ?? 0) > 0;
@@ -1502,7 +1534,10 @@ export class CombatScene {
    * centered on the head (players and creatures share the same look).
    */
   private layoutHud(entry: SpriteEntry, hpRatio: number, _manaRatio?: number, targeted = false): void {
-    const headY = visualHeadY(entry.sprite);
+    // Desenho gerado: canvas 32 (48 nos grandes) sem cache de cabeça por quadro do atlas.
+    const headY = entry.gerado
+      ? -Math.round((entry.sprite.texture.height - 4) * ESCALA_GERADO)
+      : visualHeadY(entry.sprite);
     const barTop = headY - BAR_TO_HEAD - BAR_HEIGHT;
     entry.label.y = barTop - NAME_TO_BAR;
     entry.label.anchor.set(0.5, 1);
@@ -1729,6 +1764,13 @@ function opaqueSpriteBounds(texture: Texture): SpriteOpaqueBounds | null {
  * Same rules as `sitOnTile` in scenes.ts, adapted for anchor-at-feet containers.
  */
 function sitSpriteOnTile(sprite: AnimatedSprite, scaleX = 1): void {
+  if (Math.abs(sprite.scale.y - ESCALA_GERADO) < 0.001) {
+    // Desenho gerado (Cyberidle): já centrado no canvas, pés 2 px acima da borda de baixo.
+    sprite.anchor.set(0.5, 1);
+    sprite.x = 0;
+    sprite.y = Math.round(2 * ESCALA_GERADO);
+    return;
+  }
   const frame = sprite.texture.frame;
   const w = frame.width;
   const h = frame.height;

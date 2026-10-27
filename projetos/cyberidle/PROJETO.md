@@ -72,6 +72,20 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
 
 ## Estado
 
+**27/10/2026 - arte própria, etapa 2: monstros e personagens gerados por código.**
+`render/neonAtores.ts`: cada monstro tem formato pela classe do bestiário (Vermin = inseto-
+drone, Construct = mech, Demon = daemon com chifres, Undead = esqueleto cromado, Human/Humanoid
+= ciborgue, Magical/Elemental/Extra Dimensional/Inkborn = holograma com glitch, Dragon/Reptile/
+Mammal/Lycanthrope/Bird = mecha-fera, Aquatic/Slime/Plant/Amphibic = bolha tóxica, Giant = titã;
+chefes em 48 px) e cor fixa por espécie (hash do id). Personagens = ciborgue por classe (Street
+Samurai com katana, Gunslinger com pistola, Netrunner com capuz e luva holo, Biohacker com casaco
+e frasco, Cyber Monk com punhos) nas cores de cabeça/corpo/pernas do Outfit. Quadros parado
+(2) e andando (4), frente e lado; na cena aparecem 35% maiores. Ícones das telas (caçadas,
+bestiário, barra de ações, Outfit) também gerados. Conferido: folha com todas as formas sem
+erro, party lutando na rua, lista de caçadas com ícones novos.
+Efeitos: o modelo escolhido no Outfit não muda mais o corpo (só as cores); montarias não
+aparecem (ainda são arte original). Projéteis/efeitos de magia e itens ainda são do original.
+
 **27/10/2026 - mapas viraram ruas de verdade (pedido do dono: "estética de ruas").**
 `render/neonMapa.ts` v2: cada caçada é um bairro em grade (avenidas de 2 faixas a cada 8
 linhas e 9 colunas): asfalto com faixa amarela tracejada, rachaduras, bueiros e poças;

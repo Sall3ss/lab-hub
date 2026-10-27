@@ -1,3 +1,4 @@
+import { iconeMonstro } from './neonAtores.js';
 import { monstersById } from '@tibia-idle/data';
 import { tibiaColor } from './outfit.js';
 import type { OutfitColors } from './outfitIcon.js';
@@ -223,6 +224,9 @@ function monsterColors(monsterId: string): OutfitColors | null {
 }
 
 export async function creatureIconUrl(monsterId: string, size = 48): Promise<string | null> {
+  // Cyberidle: ícone gerado por código (neonAtores.ts), como na cena.
+  const def = monstersById.get(monsterId) as { bestiary?: { class?: string } | null; isBoss?: boolean } | undefined;
+  if (def) return iconeMonstro({ id: monsterId, classe: def.bestiary?.class ?? undefined, grande: Boolean(def.isBoss) }, size);
   const lookType = monsterLookType(monsterId);
   if (lookType == null) return null;
   const outfit = monstersById.get(monsterId)?.outfit;
@@ -230,5 +234,8 @@ export async function creatureIconUrl(monsterId: string, size = 48): Promise<str
 }
 
 export async function creatureIconUrlByLookType(lookType: number, size = 48): Promise<string | null> {
+  const def = [...monstersById.values()].find((m) => (m.outfit?.lookType ?? m.lookType) === lookType) as
+    { id: string; bestiary?: { class?: string } | null; isBoss?: boolean } | undefined;
+  if (def) return iconeMonstro({ id: def.id, classe: def.bestiary?.class ?? undefined, grande: Boolean(def.isBoss) }, size);
   return iconFromLookType(lookType, size);
 }
