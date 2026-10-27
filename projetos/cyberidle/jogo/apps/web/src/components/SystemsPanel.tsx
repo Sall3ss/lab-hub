@@ -636,22 +636,28 @@ function Market({
   onAct: (body: Record<string, unknown>) => Promise<void>;
   currency: 'gold' | 'coins';
 }) {
-  const [itemId, setItemId] = useState(character.warehouse[0]?.itemId ?? 0);
+  // Só o que caiu de drop pode ir ao mercado geral (pedido do dono).
+  const negociaveis = character.warehouse
+    .map((stack) => ({ ...stack, livre: Math.min(stack.count, character.dropados?.[stack.itemId] ?? 0) }))
+    .filter((stack) => stack.livre > 0);
+  const [itemId, setItemId] = useState(negociaveis[0]?.itemId ?? 0);
   const [price, setPrice] = useState('1000');
   const [qtd, setQtd] = useState('1');
-  const pilha = character.warehouse.find((stack) => stack.itemId === itemId);
-  const maxQtd = Math.min(100, pilha?.count ?? 1);
+  const pilha = negociaveis.find((stack) => stack.itemId === itemId);
+  const maxQtd = Math.min(100, pilha?.livre ?? 0);
   const listings = (world?.market ?? []).filter((row) => row.currency === currency);
   return (
     <div>
       <p className="party-sub">
         Mercado geral: anúncios de todos os jogadores, só em gold. O item sai do seu armazém
         enquanto está à venda e volta se você cancelar (ou em 14 dias). Até 10 anúncios abertos.
+        Só itens que caíram dos monstros (ou comprados aqui de outro jogador).
       </p>
       <h3>Anunciar do armazém</h3>
       <select value={itemId} onChange={(event) => setItemId(Number(event.target.value))}>
-        {character.warehouse.map((stack) => <option key={stack.itemId} value={stack.itemId}>{stack.name} ×{stack.count}</option>)}
+        {negociaveis.map((stack) => <option key={stack.itemId} value={stack.itemId}>{stack.name} ×{stack.livre}</option>)}
       </select>
+      {!negociaveis.length && <p className="soon">Nenhum item de drop no armazém. Só o que cai dos monstros pode ser vendido aqui.</p>}
       <div className="row" style={{ margin: '8px 0' }}>
         <input type="number" min={1} max={maxQtd} value={qtd} title="Quantidade" style={{ width: 70 }} onChange={(event) => setQtd(event.target.value)} />
         <input type="number" min={1} value={price} title="Preço total em gold" onChange={(event) => setPrice(event.target.value)} />

@@ -1387,6 +1387,8 @@ function rollLoot(
       session.character.gold += value;
     } else {
       session.totals.lootByItem[drop.itemId] = (session.totals.lootByItem[drop.itemId] ?? 0) + count;
+      const dropados = (session.character.dropados ??= {});
+      dropados[drop.itemId] = (dropados[drop.itemId] ?? 0) + count;
     }
     emit({ tick: session.tick, type: 'loot', itemId: drop.itemId, count, amount: value });
   }

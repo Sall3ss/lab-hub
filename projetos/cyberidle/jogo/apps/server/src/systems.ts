@@ -1174,7 +1174,12 @@ export function act(
       // Pode anunciar caçando: o armazém não é usado na caçada.
       const itemId = Number(body.itemId);
       const count = Math.max(1, Math.floor(Number(body.count ?? 1)));
+      const dropados = (character.dropados ??= {});
+      if ((dropados[itemId] ?? 0) < count) {
+        throw new GameError(`Só dá para vender no mercado o que caiu em caçada (você tem ${dropados[itemId] ?? 0} desse item de drop).`, 400);
+      }
       takeStack(character.warehouse, itemId, count);
+      dropados[itemId] -= count;
       persist(db, loaded, now);
       return { loaded };
     }
@@ -1196,7 +1201,12 @@ export function act(
       for (const item of itens) {
         const id = Number(item.itemId);
         const qtd = Math.max(0, Math.floor(Number(item.count)));
-        if (id > 0 && qtd > 0) addStack(character.warehouse, id, qtd);
+        if (id > 0 && qtd > 0) {
+          addStack(character.warehouse, id, qtd);
+          // Veio do mercado geral (ou voltou de um anúncio): continua negociável.
+          const dropados = (character.dropados ??= {});
+          dropados[id] = (dropados[id] ?? 0) + qtd;
+        }
       }
       if (loaded.session) {
         loaded.session.character.gold = character.gold;

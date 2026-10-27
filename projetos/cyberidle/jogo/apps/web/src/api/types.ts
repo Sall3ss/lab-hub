@@ -209,6 +209,8 @@ export interface CharacterView {
   partyBonus: number;
   /** Personagens da conta em cada slot extra de party (0 = vazio). Cyberidle. */
   partyIds?: number[];
+  /** Unidades de cada item vindas de drop (as únicas que vão ao mercado geral). */
+  dropados?: Record<number, number>;
   /** Outros personagens da conta que podem ir na party. */
   partyOptions?: Array<{ id: number; name: string; level: number; vocationId: number }>;
   caveParty: Array<{

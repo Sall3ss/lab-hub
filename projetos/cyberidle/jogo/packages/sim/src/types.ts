@@ -239,6 +239,11 @@ export interface CharacterState {
   partyIds?: number[];
   /** XP do líder já repassado à party (base para repassar só o que ganhou depois). */
   partyXpVisto?: number;
+  /**
+   * Cyberidle: quantas unidades de cada item este personagem ganhou de DROP (ou comprou de
+   * outro jogador no mercado geral). Só isso pode ir ao mercado geral; item de NPC não.
+   */
+  dropados?: Record<number, number>;
   guildId: number | null;
   decorations: string[];
   /** Tries granted the last time the exercise dummy ran (idle only). */

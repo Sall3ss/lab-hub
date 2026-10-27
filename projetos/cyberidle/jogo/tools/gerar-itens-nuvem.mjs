@@ -6,9 +6,13 @@ import fs from 'node:fs';
 const itens = JSON.parse(fs.readFileSync('packages/data/generated/items.json', 'utf8'));
 const lista = Array.isArray(itens) ? itens : Object.values(itens);
 const MOEDAS = new Set([3031, 3035, 3043]);
+// Só itens que algum monstro deixa cair (pedido do dono, 27/10): nada de item só de NPC.
+const monstros = JSON.parse(fs.readFileSync('packages/data/generated/monsters.json', 'utf8'));
+const dropaveis = new Set((Array.isArray(monstros) ? monstros : Object.values(monstros))
+  .flatMap((m) => (m.loot ?? []).map((l) => l.itemId)));
 const ok = {};
 for (const i of lista) {
-  if (!i.hasSprite || !i.marketCategory || MOEDAS.has(i.id) || i.type === 'valuables' && /coin/i.test(i.name)) continue;
+  if (!dropaveis.has(i.id) || MOEDAS.has(i.id) || i.type === 'valuables' && /coin/i.test(i.name)) continue;
   ok[i.id] = Math.max(i.sellPrice ?? 0, Math.floor((i.buyPrice ?? 0) / 2), 0);
 }
 const saida = `// GERADO por jogo/tools/gerar-itens-nuvem.mjs - não edite à mão.

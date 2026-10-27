@@ -706,6 +706,7 @@ export function describeCharacter(loaded: LoadedCharacter, db?: Database) {
     partyBonus: Math.round((partyShare - 1) * 100),
     caveParty: cavePartyView(loaded, db),
     partyIds: loaded.character.partyIds ?? [],
+    dropados: loaded.character.dropados ?? {},
     partyOptions: db ? opcoesDeParty(db, loaded) : [],
     guildId: character.guildId,
     decorations: character.decorations ?? [],

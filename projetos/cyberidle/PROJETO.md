@@ -84,6 +84,12 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
   armazém ao anunciar e fica guardado na nuvem; a compra fecha o anúncio só se ainda estiver
   aberto (duas compras juntas não levam o mesmo item); item, gold da venda e devoluções
   chegam como "entregas" aplicadas uma única vez. Pode anunciar caçando.
+- 27/10 (pedido do dono): **mercado só aceita item de drop.** A nuvem só aceita itens que
+  algum monstro deixa cair (2.235, `nuvem/lib/itens.js`); e o jogo anota em `dropados`
+  quantas unidades de cada item o personagem ganhou de drop (ou comprou de outro jogador no
+  mercado). Item comprado de NPC ou que já estava no armazém antes desta versão não pode ser
+  anunciado. Conferido: espada posta no armazém à mão foi recusada; espada caída em caçada e
+  espada comprada no mercado foram aceitas.
 - Chat entre jogadores tirado (ficam Log de combate, Loot e Help).
 - Conferido: rotas com D1 de teste (moeda recusada, teto de preço, comprar o próprio,
   compra dupla, cancelar alheio, devolução, limite de 10) e ponta a ponta com dois
