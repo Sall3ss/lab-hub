@@ -72,6 +72,18 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
 
 ## Estado
 
+**27/10/2026 - sprites v2, mais detalhados (pedido do dono: "não só blocos, dá pra
+identificar o personagem").** `neonAtores.ts` agora desenha em 48 px (chefes 64) com formas
+arredondadas e acabamento automático de pixel art: pixels cheios (sem borrão), luz em cima e
+sombra embaixo/direita de cada parte, contorno escuro de 1 px e os brilhos neon por cima.
+Classes com silhueta própria: Samurai (ombreiras cromadas, coque, katana com fio neon),
+Gunslinger (chapéu, gola, braço cromado, pistola), Netrunner (capuz, casaco longo, luva holo),
+Biohacker (casaco longo, pistola de seringa, brilho verde), Monk (careca, quimono, punhos de
+luz). Monstros: inseto com pernas e antenas, mech com punhos e reator, daemon com asas,
+chifres e cauda, esqueleto com costelas e bacia cromada, ciborgue armado, holograma com
+scanlines e glitch, fera com orelhas/focinho e cauda, bolha com tentáculos. Na cena: escala
+0,92 (`ESCALA_GERADO`). Conferido em folha com todas as formas e no jogo, sem erros.
+
 **27/10/2026 - arte própria, etapa 2: monstros e personagens gerados por código.**
 `render/neonAtores.ts`: cada monstro tem formato pela classe do bestiário (Vermin = inseto-
 drone, Construct = mech, Demon = daemon com chifres, Undead = esqueleto cromado, Human/Humanoid

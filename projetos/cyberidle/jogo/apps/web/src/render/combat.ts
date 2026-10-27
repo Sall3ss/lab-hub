@@ -22,7 +22,7 @@ import {
 } from '@tibia-idle/sim';
 
 const TILE = 32;
-const ESCALA_GERADO = 1.35;
+const ESCALA_GERADO = 0.92; // desenho gerado é feito em 48 px (neonAtores.ts v2)
 const COLS = 13;
 const ROWS = 11;
 const SCALE = 2;
@@ -1470,7 +1470,7 @@ export class CombatScene {
     entry.direction = facing.direction;
     entry.scaleX = facing.scaleX;
     entry.moving = moving;
-    // Desenho gerado (Cyberidle) é feito em 32 px; aparece 35% maior para ter o porte dos originais.
+    // Desenho gerado (Cyberidle) é feito em 48 px; ESCALA_GERADO o deixa no porte dos originais.
     const escala = entry.gerado ? ESCALA_GERADO : 1;
     entry.sprite.scale.x = facing.scaleX * escala;
     entry.sprite.scale.y = escala;
@@ -1768,7 +1768,7 @@ function sitSpriteOnTile(sprite: AnimatedSprite, scaleX = 1): void {
     // Desenho gerado (Cyberidle): já centrado no canvas, pés 2 px acima da borda de baixo.
     sprite.anchor.set(0.5, 1);
     sprite.x = 0;
-    sprite.y = Math.round(2 * ESCALA_GERADO);
+    sprite.y = Math.round(3 * ESCALA_GERADO);
     return;
   }
   const frame = sprite.texture.frame;

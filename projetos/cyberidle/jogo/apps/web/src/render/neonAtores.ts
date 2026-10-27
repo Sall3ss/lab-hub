@@ -2,19 +2,29 @@ import { Texture } from 'pixi.js';
 
 /**
  * Monstros e personagens do Cyberidle - arte PRÓPRIA gerada por código (nada do cliente
- * original), no mesmo estilo pixel/neon dos mapas (neonMapa.ts).
+ * original), no estilo pixel/neon dos mapas (neonMapa.ts).
  *
- * Monstro: o formato vem da classe do bestiário (inseto-drone, mech, daemon, esqueleto
- * cromado, ciborgue, holograma, mecha-fera, bolha tóxica, titã) e a cor de um hash do id,
- * então cada espécie tem sempre a mesma cara. Personagem: ciborgue com o visual da classe
- * (Street Samurai, Gunslinger, Netrunner, Biohacker, Cyber Monk) e as cores do Outfit.
- * Quadros: parado (2, respirando) e andando (4), de frente (sul) e de lado (oeste; leste é o
- * espelho, feito pela cena). Lab Hub, Claude (Opus 5.5), 27/10/2026.
+ * v2 (pedido do dono: "não só blocos quadrados, dá pra identificar o personagem"): desenho em
+ * 48 px com formas arredondadas e o acabamento clássico de pixel art, feito automaticamente:
+ *   1. as partes são desenhadas com formas (elipses, polígonos);
+ *   2. `pixelar` deixa cada pixel 100% cheio ou vazio (nada borrado);
+ *   3. luz por cima e sombra por baixo/direita em cada parte (relevo);
+ *   4. contorno escuro de 1 px em volta da figura;
+ *   5. por último, os brilhos neon (visor, olhos, armas), que ficam por cima do contorno.
+ *
+ * Monstro: formato pela classe do bestiário, cor fixa por espécie (hash do id). Personagem:
+ * ciborgue com a silhueta e o acessório da classe, nas cores do Outfit. Quadros parado (2,
+ * respirando) e andando (4), de frente (sul) e de lado (oeste; leste é o espelho).
+ * Lab Hub, Claude (Opus 5.5), 27/10/2026.
  */
 
 const DIR_SUL = 2;
+/** Tamanho do canvas; a cena mostra com ESCALA_GERADO (combat.ts). */
+const TAM = 48;
+const TAM_GRANDE = 64;
 
 type Ctx = CanvasRenderingContext2D;
+type RGB = [number, number, number];
 
 function hash(texto: string): number {
   let h = 2166136261;
@@ -22,13 +32,28 @@ function hash(texto: string): number {
   return h >>> 0;
 }
 
-function hsl(h: number, s: number, l: number): string {
-  return `hsl(${Math.round(h) % 360}, ${s}%, ${l}%)`;
+function hslRgb(h: number, s: number, l: number): RGB {
+  s /= 100; l /= 100;
+  const k = (n: number) => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
 }
+
+const css = (c: RGB, a = 1) => `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${a})`;
+const mistura = (c: RGB, f: number): RGB => [Math.min(255, Math.round(c[0] * f)), Math.min(255, Math.round(c[1] * f)), Math.min(255, Math.round(c[2] * f))];
 
 const cache = new Map<string, Texture[]>();
 
-function quadros(chave: string, tamanho: number, n: number, desenhar: (g: Ctx, quadro: number) => void): Texture[] {
+/**
+ * Gera os quadros: `corpo` desenha as formas (recebem acabamento), `luzes` desenha os brilhos
+ * por cima depois do acabamento.
+ */
+function quadros(
+  chave: string, tamanho: number, n: number,
+  corpo: (g: Ctx, q: number) => void,
+  luzes?: (g: Ctx, q: number) => void,
+): Texture[] {
   const pronto = cache.get(chave);
   if (pronto && pronto.every((t) => !t.destroyed)) return pronto;
   const lista: Texture[] = [];
@@ -36,9 +61,11 @@ function quadros(chave: string, tamanho: number, n: number, desenhar: (g: Ctx, q
     const c = document.createElement('canvas');
     c.width = tamanho;
     c.height = tamanho;
-    const g = c.getContext('2d')!;
+    const g = c.getContext('2d', { willReadFrequently: true })!;
     g.imageSmoothingEnabled = false;
-    desenhar(g, q);
+    corpo(g, q);
+    acabamento(g, tamanho);
+    if (luzes) luzes(g, q);
     const t = Texture.from(c);
     t.source.scaleMode = 'nearest';
     lista.push(t);
@@ -47,21 +74,165 @@ function quadros(chave: string, tamanho: number, n: number, desenhar: (g: Ctx, q
   return lista;
 }
 
-const px = (g: Ctx, cor: string, x: number, y: number, w = 1, h = 1) => { g.fillStyle = cor; g.fillRect(x, y, w, h); };
-
-function sombra(g: Ctx, cx: number, base: number, larg: number) {
-  g.fillStyle = 'rgba(0,0,0,0.45)';
-  g.beginPath();
-  g.ellipse(cx, base - 1, larg, 2.5, 0, 0, Math.PI * 2);
-  g.fill();
+/** Pixel art: alfa cheio ou vazio, relevo (luz em cima, sombra embaixo/direita) e contorno. */
+function acabamento(g: Ctx, tam: number): void {
+  const img = g.getImageData(0, 0, tam, tam);
+  const d = img.data;
+  const cheio = new Uint8Array(tam * tam);
+  for (let i = 0; i < tam * tam; i += 1) {
+    const a = d[i * 4 + 3]!;
+    if (a >= 110) { cheio[i] = 1; d[i * 4 + 3] = 255; } else d[i * 4 + 3] = 0;
+  }
+  const em = (x: number, y: number) => x >= 0 && y >= 0 && x < tam && y < tam && cheio[y * tam + x] === 1;
+  const mesmaCor = (i: number, j: number) => Math.abs(d[i * 4]! - d[j * 4]!) + Math.abs(d[i * 4 + 1]! - d[j * 4 + 1]!) + Math.abs(d[i * 4 + 2]! - d[j * 4 + 2]!) < 40;
+  const saida = new Uint8ClampedArray(d);
+  for (let y = 0; y < tam; y += 1) {
+    for (let x = 0; x < tam; x += 1) {
+      const i = y * tam + x;
+      if (cheio[i]) {
+        // Relevo por parte: borda de cima de cada região de cor clareia, de baixo/direita escurece.
+        const acima = y > 0 ? i - tam : -1;
+        const abaixo = y < tam - 1 ? i + tam : -1;
+        const dir = x < tam - 1 ? i + 1 : -1;
+        let f = 1;
+        if (acima < 0 || !cheio[acima] || !mesmaCor(i, acima)) f = 1.28;
+        else if (abaixo < 0 || !cheio[abaixo] || !mesmaCor(i, abaixo) || dir < 0 || !cheio[dir] || !mesmaCor(i, dir)) f = 0.72;
+        if (f !== 1) for (let k = 0; k < 3; k += 1) saida[i * 4 + k] = Math.min(255, d[i * 4 + k]! * f);
+      } else if (em(x - 1, y) || em(x + 1, y) || em(x, y - 1) || em(x, y + 1)) {
+        saida[i * 4] = 8; saida[i * 4 + 1] = 9; saida[i * 4 + 2] = 18; saida[i * 4 + 3] = 255;
+      }
+    }
+  }
+  img.data.set(saida);
+  g.putImageData(img, 0, 0);
 }
 
-function brilho(g: Ctx, cor: string, x: number, y: number, raio: number) {
+// ---------------------------------------------------------------- primitivas
+
+function elipse(g: Ctx, c: RGB | string, cx: number, cy: number, rx: number, ry: number) {
+  g.fillStyle = typeof c === 'string' ? c : css(c);
+  g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); g.fill();
+}
+function ret(g: Ctx, c: RGB | string, x: number, y: number, w: number, h: number, r = 0) {
+  g.fillStyle = typeof c === 'string' ? c : css(c);
+  g.beginPath(); g.roundRect(x, y, w, h, r); g.fill();
+}
+function poli(g: Ctx, c: RGB | string, pts: Array<[number, number]>) {
+  g.fillStyle = typeof c === 'string' ? c : css(c);
+  g.beginPath(); g.moveTo(pts[0]![0], pts[0]![1]);
+  for (const [x, y] of pts.slice(1)) g.lineTo(x, y);
+  g.closePath(); g.fill();
+}
+function linha(g: Ctx, c: RGB | string, x1: number, y1: number, x2: number, y2: number, w = 2) {
+  g.strokeStyle = typeof c === 'string' ? c : css(c); g.lineWidth = w; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke();
+}
+function brilho(g: Ctx, c: RGB, x: number, y: number, raio: number, forca = 0.7) {
   const grad = g.createRadialGradient(x, y, 0, x, y, raio);
-  grad.addColorStop(0, cor);
-  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  grad.addColorStop(0, css(c, forca));
+  grad.addColorStop(1, css(c, 0));
   g.fillStyle = grad;
   g.fillRect(x - raio, y - raio, raio * 2, raio * 2);
+}
+function luz(g: Ctx, c: RGB, x: number, y: number, w: number, h: number) {
+  g.fillStyle = css(c); g.fillRect(x, y, w, h);
+}
+function sombraChao(g: Ctx, cx: number, base: number, larg: number) {
+  g.fillStyle = 'rgba(0,0,0,0.42)';
+  g.beginPath(); g.ellipse(cx, base, larg, 3, 0, 0, Math.PI * 2); g.fill();
+}
+
+// ---------------------------------------------------------------- personagens
+
+export interface JogadorGerado { vocationId: number; corCorpo?: RGB; corPernas?: RGB; corCabeca?: RGB }
+
+type Tipo = 'samurai' | 'gun' | 'net' | 'bio' | 'monk';
+const CLASSE: Record<number, { neon: RGB; tipo: Tipo }> = {
+  4: { neon: [255, 60, 210], tipo: 'samurai' }, 8: { neon: [255, 60, 210], tipo: 'samurai' },
+  3: { neon: [255, 210, 60], tipo: 'gun' }, 7: { neon: [255, 210, 60], tipo: 'gun' },
+  1: { neon: [0, 229, 255], tipo: 'net' }, 5: { neon: [0, 229, 255], tipo: 'net' },
+  2: { neon: [57, 255, 136], tipo: 'bio' }, 6: { neon: [57, 255, 136], tipo: 'bio' },
+  9: { neon: [255, 154, 60], tipo: 'monk' }, 10: { neon: [255, 154, 60], tipo: 'monk' },
+};
+
+const PELE: RGB = [214, 162, 124];
+const CROMO: RGB = [138, 150, 178];
+const BOTA: RGB = [26, 28, 40];
+
+export function quadrosJogador(j: JogadorGerado, direcao: number, andando: boolean): Texture[] {
+  const classe = CLASSE[j.vocationId] ?? CLASSE[4]!;
+  const jaqueta = j.corCorpo ?? [70, 56, 140];
+  const calca = j.corPernas ?? [34, 38, 66];
+  const cabelo = j.corCabeca ?? [26, 28, 44];
+  const lado = direcao !== DIR_SUL;
+  const t = classe.tipo;
+  const chave = `jog2:${j.vocationId}:${jaqueta}:${calca}:${cabelo}:${lado ? 'l' : 'f'}:${andando ? 1 : 0}`;
+  const cx = 24;
+  const base = 45;
+  const pose = (q: number) => ({
+    bob: andando ? (q % 2 ? -1 : 0) : (q ? -1 : 0),
+    passo: andando ? [2, 0, -2, 0][q % 4]! : 0,
+  });
+
+  return quadros(chave, TAM, andando ? 4 : 2, (g, q) => {
+    const { bob, passo } = pose(q);
+    const top = 8 + bob;
+    sombraChao(g, cx, base, 10);
+    // --- pernas e botas
+    const pernaE = lado ? cx - 3 + passo : cx - 5;
+    const pernaD = lado ? cx + 1 - passo : cx + 1;
+    ret(g, calca, pernaE, top + 22, 5, 13 + (passo > 0 && !lado ? -1 : 0), 1);
+    ret(g, calca, pernaD, top + 22, 5, 13 + (passo < 0 && !lado ? -1 : 0), 1);
+    ret(g, BOTA, pernaE - 1, base - 5 - (passo > 0 && !lado ? 1 : 0), 7, 5, 1);
+    ret(g, BOTA, pernaD - 1, base - 5 - (passo < 0 && !lado ? 1 : 0), 7, 5, 1);
+    // --- tronco (casaco longo para net/bio, quimono para monk)
+    if (t === 'net' || t === 'bio') poli(g, jaqueta, [[cx - 9, top + 12], [cx + 9, top + 12], [cx + 11, top + 33], [cx - 11, top + 33]]);
+    if (t === 'monk') poli(g, mistura(jaqueta, 1.1), [[cx - 8, top + 12], [cx + 8, top + 12], [cx + 9, top + 28], [cx - 9, top + 28]]);
+    ret(g, jaqueta, cx - 8, top + 11, 16, 14, 4);
+    if (t === 'samurai') { ret(g, CROMO, cx - 11, top + 10, 6, 5, 2); ret(g, CROMO, cx + 5, top + 10, 6, 5, 2); } // ombreiras
+    if (t === 'gun') { poli(g, mistura(jaqueta, 0.8), [[cx - 9, top + 11], [cx - 2, top + 11], [cx - 5, top + 20]]); } // gola
+    // cinto
+    ret(g, mistura(calca, 0.7), cx - 8, top + 22, 16, 2);
+    // --- braços (balançam ao andar)
+    const bE = lado ? passo : -passo;
+    ret(g, t === 'monk' ? PELE : jaqueta, cx - 12, top + 12 + Math.max(0, bE), 4, 10, 2);
+    ret(g, t === 'samurai' || t === 'gun' ? CROMO : jaqueta, cx + 8, top + 12 + Math.max(0, -bE), 4, 10, 2);
+    ret(g, PELE, cx - 12, top + 21 + Math.max(0, bE), 4, 3, 1);
+    ret(g, t === 'samurai' || t === 'gun' ? CROMO : PELE, cx + 8, top + 21 + Math.max(0, -bE), 4, 3, 1);
+    // --- cabeça
+    elipse(g, PELE, cx + (lado ? -1 : 0), top + 5, 6, 6);
+    if (t === 'net') {
+      poli(g, mistura(jaqueta, 0.65), [[cx - 9, top + 9], [cx - 7, top - 3], [cx, top - 5], [cx + 7, top - 3], [cx + 9, top + 9], [cx + 6, top + 4], [cx - 6, top + 4]]); // capuz
+    } else if (t === 'samurai') {
+      poli(g, cabelo, [[cx - 7, top + 3], [cx - 5, top - 3], [cx + 5, top - 3], [cx + 7, top + 3], [cx + 3, top + 1], [cx - 3, top + 1]]);
+      ret(g, cabelo, cx - 2, top - 6, 4, 4, 1); // coque
+    } else if (t === 'monk') {
+      elipse(g, mistura(PELE, 0.95), cx, top + 1, 6, 3); // careca
+    } else {
+      poli(g, cabelo, [[cx - 7, top + 4], [cx - 6, top - 2], [cx + 6, top - 2], [cx + 7, top + 4], [cx + 2, top + 1], [cx - 4, top + 2]]);
+    }
+    if (t === 'gun') { ret(g, [60, 46, 34], cx - 9, top - 1, 18, 3, 1); ret(g, [60, 46, 34], cx - 5, top - 5, 10, 5, 2); } // chapéu
+    // --- armas e acessórios (corpo)
+    if (t === 'samurai') linha(g, [210, 236, 255], cx + 13, top + 24, cx + 20, top - 2, 2); // katana
+    if (t === 'gun') ret(g, [44, 52, 86], lado ? cx - 18 : cx + 10, top + 19, 9, 4, 1); // pistola
+    if (t === 'bio') ret(g, [44, 52, 86], cx - 17, top + 18, 7, 3, 1); // pistola de seringa
+  }, (g, q) => {
+    const { bob, passo } = pose(q);
+    const top = 8 + bob;
+    const n = classe.neon;
+    // visor (monk tem marcas na testa)
+    if (t === 'monk') { luz(g, n, cx - 3, top + 1, 6, 1); }
+    else if (lado) luz(g, n, cx - 6, top + 5, 6, 2);
+    else luz(g, n, cx - 5, top + 5, 10, 2);
+    brilho(g, n, cx, top + 6, 7, 0.45);
+    // detalhes neon da roupa
+    luz(g, n, cx - 8, top + 17, 16, 1);
+    if (t === 'samurai') { luz(g, n, cx + 19, top - 1, 1, 6); brilho(g, n, cx + 17, top + 8, 8, 0.35); }
+    if (t === 'gun') { luz(g, n, lado ? cx - 18 : cx + 18, top + 20, 1, 2); }
+    if (t === 'net') { brilho(g, n, cx + 15, top + 18, 7, 0.7); luz(g, n, cx + 13, top + 17, 3, 3); luz(g, n, cx - 10, top + 30, 20, 1); }
+    if (t === 'bio') { luz(g, n, cx - 11, top + 18, 2, 3); brilho(g, n, cx - 14, top + 19, 6, 0.6); luz(g, n, cx - 10, top + 30, 20, 1); }
+    if (t === 'monk') { brilho(g, n, cx - 10, top + 23 + Math.max(0, passo), 6, 0.8); brilho(g, n, cx + 10, top + 23 + Math.max(0, -passo), 6, 0.8); }
+  });
 }
 
 // ---------------------------------------------------------------- monstros
@@ -80,189 +251,192 @@ export interface MonstroGerado { id: string; classe?: string; grande?: boolean }
 export function quadrosMonstro(m: MonstroGerado, direcao: number, andando: boolean): Texture[] {
   const forma = FORMA_DA_CLASSE[m.classe ?? ''] ?? 'mech';
   const h = hash(m.id);
-  const cor = hsl(h % 360, 85, 58);
-  const corEscura = hsl(h % 360, 45, 22);
-  const metal = hsl((h >> 9) % 360, 12, 30 + ((h >> 3) % 10));
+  const matiz = h % 360;
+  const neon = hslRgb(matiz, 95, 60);
+  const casco = hslRgb(matiz, 35, 30);
+  const metal = hslRgb((h >> 9) % 360, 14, 38 + ((h >> 3) % 12));
   const lado = direcao !== DIR_SUL;
-  const tam = m.grande || forma === 'tita' ? 48 : 32;
-  const n = andando ? 4 : 2;
-  return quadros(`mon:${m.id}:${lado ? 'l' : 'f'}:${andando ? 1 : 0}`, tam, n, (g, q) => {
-    const cx = tam / 2;
-    const base = tam - 2;
-    const bob = andando ? (q % 2 ? -1 : 0) : (q ? -1 : 0);
-    const passo = andando ? (q % 4 < 2 ? 1 : -1) : 0;
-    sombra(g, cx, base, tam / 4);
+  const tam = m.grande || forma === 'tita' ? TAM_GRANDE : TAM;
+  const e = tam / TAM; // escala dos grandes
+  const cx = tam / 2;
+  const base = tam - 3;
+  const pose = (q: number) => ({ bob: andando ? (q % 2 ? -1 : 0) : (q ? -1 : 0), passo: andando ? [2, 0, -2, 0][q % 4]! : 0 });
+  const olho = (g: Ctx, x: number, y: number) => { luz(g, [255, 255, 255], x, y, 2, 2); };
+
+  return quadros(`mon2:${m.id}:${lado ? 'l' : 'f'}:${andando ? 1 : 0}:${tam}`, tam, andando ? 4 : 2, (g, q) => {
+    const { bob, passo } = pose(q);
+    sombraChao(g, cx, base, 12 * e);
     switch (forma) {
       case 'inseto': {
         const y = base - 9 + bob;
-        for (let i = -1; i <= 1; i += 1) {
-          px(g, metal, cx - 10, y + 2 + i * 3 + (i === passo ? -1 : 0), 4, 1);
-          px(g, metal, cx + 6, y + 2 + i * 3 + (i === -passo ? -1 : 0), 4, 1);
+        for (let i = 0; i < 3; i += 1) {
+          const o = (i % 2 ? passo : -passo) / 2;
+          linha(g, metal, cx - 6, y - 2 + i * 3, cx - 14, y + 2 + i * 3 + o, 2);
+          linha(g, metal, cx + 6, y - 2 + i * 3, cx + 14, y + 2 + i * 3 - o, 2);
         }
-        px(g, corEscura, cx - 7, y - 3, 14, 9);
-        px(g, metal, cx - 6, y - 4, 12, 2);
-        px(g, cor, cx - 6, y + 1, 12, 1);
-        brilho(g, cor, lado ? cx - 6 : cx, y - 1, 4);
-        px(g, '#ffffff', lado ? cx - 7 : cx - 2, y - 1, 2, 1);
-        if (!lado) px(g, '#ffffff', cx + 1, y - 1, 2, 1);
+        elipse(g, casco, cx, y - 1, 11, 7);
+        elipse(g, mistura(casco, 1.25), cx, y - 3, 8, 4);
+        elipse(g, metal, lado ? cx - 10 : cx, lado ? y - 2 : y - 7, 5, 4);
+        linha(g, metal, lado ? cx - 13 : cx - 3, y - 9, lado ? cx - 16 : cx - 6, y - 14, 1);
+        if (!lado) linha(g, metal, cx + 3, y - 9, cx + 6, y - 14, 1);
         break;
       }
       case 'mech':
       case 'tita': {
-        const e = forma === 'tita' ? 1.5 : 1;
-        const top = base - Math.round(24 * e) + bob;
-        const w = Math.round(12 * e);
-        px(g, metal, cx - w / 2 - 1, base - Math.round(9 * e) + (passo > 0 ? -1 : 0), Math.round(3 * e), Math.round(9 * e));
-        px(g, metal, cx + w / 2 - Math.round(2 * e), base - Math.round(9 * e) + (passo < 0 ? -1 : 0), Math.round(3 * e), Math.round(9 * e));
-        px(g, corEscura, cx - w / 2, top + Math.round(6 * e), w, Math.round(10 * e));
-        px(g, metal, cx - w / 2 - 2, top + Math.round(7 * e), 2, Math.round(7 * e));
-        px(g, metal, cx + w / 2, top + Math.round(7 * e), 2, Math.round(7 * e));
-        px(g, cor, cx - w / 2, top + Math.round(10 * e), w, 1);
-        px(g, metal, cx - Math.round(4 * e), top, Math.round(8 * e), Math.round(6 * e));
-        brilho(g, cor, cx + (lado ? -2 : 0), top + 3, 5 * e);
-        px(g, cor, lado ? cx - Math.round(4 * e) : cx - Math.round(3 * e), top + 2, lado ? Math.round(4 * e) : Math.round(6 * e), 2);
+        const top = base - 34 * e + bob;
+        const s = (n: number) => n * e;
+        ret(g, metal, cx - s(9) + (lado ? passo : 0), base - s(12), s(6), s(12), 2);
+        ret(g, metal, cx + s(3) - (lado ? passo : 0), base - s(12), s(6), s(12), 2);
+        ret(g, casco, cx - s(11), top + s(12), s(22), s(14), 4);
+        ret(g, metal, cx - s(15), top + s(12), s(5), s(12), 2);
+        ret(g, metal, cx + s(10), top + s(12), s(5), s(12), 2);
+        ret(g, metal, cx - s(17), top + s(22), s(6), s(5), 2); // punho
+        ret(g, metal, cx + s(11), top + s(22), s(6), s(5), 2);
+        ret(g, mistura(casco, 0.8), cx - s(7), top + s(2), s(14), s(10), 3); // cabeça
         break;
       }
       case 'daemon': {
-        const top = base - 24 + bob;
-        brilho(g, 'rgba(255,40,60,0.6)', cx, top + 12, 12);
-        px(g, '#1a0b14', cx - 6, top + 6, 12, 14);
-        px(g, '#1a0b14', cx - 4, base - 6, 3, 6 + (passo > 0 ? -1 : 0));
-        px(g, '#1a0b14', cx + 1, base - 6, 3, 6 + (passo < 0 ? -1 : 0));
-        px(g, cor, cx - 6, top + 12, 12, 1);
-        px(g, '#24101c', cx - 4, top, 8, 7);
-        px(g, '#ff3b3b', cx - 6, top - 3, 2, 4); px(g, '#ff3b3b', cx + 4, top - 3, 2, 4);
-        px(g, '#ffd23c', lado ? cx - 4 : cx - 3, top + 3, 2, 1);
-        if (!lado) px(g, '#ffd23c', cx + 1, top + 3, 2, 1);
-        px(g, corEscura, cx - 11, top + 6, 5, 8); px(g, corEscura, cx + 6, top + 6, 5, 8);
+        const top = base - 34 + bob;
+        poli(g, [40, 14, 30], [[cx - 18, top + 10], [cx - 8, top + 14], [cx - 9, top + 26]]); // asas
+        poli(g, [40, 14, 30], [[cx + 18, top + 10], [cx + 8, top + 14], [cx + 9, top + 26]]);
+        ret(g, [30, 12, 24], cx - 5 + (lado ? passo : 0), base - 10, 4, 10, 1);
+        ret(g, [30, 12, 24], cx + 1 - (lado ? passo : 0), base - 10, 4, 10, 1);
+        ret(g, [48, 18, 36], cx - 8, top + 12, 16, 16, 5);
+        elipse(g, [48, 18, 36], cx, top + 7, 7, 6);
+        poli(g, [200, 50, 70], [[cx - 6, top + 3], [cx - 10, top - 6], [cx - 3, top + 1]]); // chifres
+        poli(g, [200, 50, 70], [[cx + 6, top + 3], [cx + 10, top - 6], [cx + 3, top + 1]]);
+        linha(g, [48, 18, 36], cx + 6, base - 6, cx + 14, base - 2, 2); // cauda
         break;
       }
       case 'esqueleto': {
-        const top = base - 24 + bob;
-        const osso = '#c9d3e8';
-        px(g, osso, cx - 4, top, 8, 7);
-        px(g, '#0b0d16', lado ? cx - 3 : cx - 3, top + 2, 2, 2);
-        if (!lado) px(g, '#0b0d16', cx + 1, top + 2, 2, 2);
-        brilho(g, cor, cx - 1, top + 3, 3);
-        px(g, osso, cx - 1, top + 7, 2, 10);
-        for (let i = 0; i < 3; i += 1) px(g, osso, cx - 5, top + 9 + i * 2, 10, 1);
-        px(g, cor, cx - 5, top + 15, 10, 1);
-        px(g, osso, cx - 3, base - 7, 1, 7 + (passo > 0 ? -1 : 0));
-        px(g, osso, cx + 2, base - 7, 1, 7 + (passo < 0 ? -1 : 0));
-        px(g, metal, cx - 8, top + 8, 2, 7); px(g, metal, cx + 6, top + 8, 2, 7);
+        const top = base - 34 + bob;
+        const osso: RGB = [205, 214, 232];
+        elipse(g, osso, cx, top + 6, 6, 6);
+        ret(g, osso, cx - 3, top + 10, 6, 3, 1); // mandíbula
+        ret(g, osso, cx - 1, top + 13, 2, 14);
+        for (let i = 0; i < 4; i += 1) ret(g, osso, cx - 6, top + 14 + i * 3, 12, 2, 1);
+        linha(g, metal, cx - 7, top + 14, cx - 11, top + 26, 2);
+        linha(g, metal, cx + 7, top + 14, cx + 11, top + 26, 2);
+        linha(g, osso, cx - 2, top + 27, cx - 4 + (lado ? passo : 0), base, 2);
+        linha(g, osso, cx + 2, top + 27, cx + 4 - (lado ? passo : 0), base, 2);
+        ret(g, metal, cx - 6, top + 25, 12, 3, 1); // bacia cromada
         break;
       }
       case 'ciborgue': {
-        const top = base - 25 + bob;
-        px(g, corEscura, cx - 3, base - 8, 2, 8 + (passo > 0 ? -1 : 0));
-        px(g, corEscura, cx + 1, base - 8, 2, 8 + (passo < 0 ? -1 : 0));
-        px(g, hsl((h >> 5) % 360, 50, 32), cx - 5, top + 7, 10, 11);
-        px(g, metal, cx - 7, top + 8, 2, 8); px(g, metal, cx + 5, top + 8, 2, 8);
-        px(g, cor, cx - 5, top + 12, 10, 1);
-        px(g, '#d6a27c', cx - 3, top + 1, 6, 6);
-        px(g, '#1a1d2b', cx - 4, top, 8, 2);
-        px(g, cor, lado ? cx - 4 : cx - 3, top + 3, lado ? 4 : 6, 1);
-        brilho(g, cor, cx, top + 3, 3);
-        px(g, '#2c3556', cx + (lado ? -9 : 6), top + 11, 4, 2);
+        const top = base - 36 + bob;
+        const roupa = hslRgb((h >> 5) % 360, 45, 34);
+        ret(g, [30, 32, 48], cx - 5 + (lado ? passo : 0), top + 23, 4, 13, 1);
+        ret(g, [30, 32, 48], cx + 1 - (lado ? passo : 0), top + 23, 4, 13, 1);
+        ret(g, roupa, cx - 8, top + 10, 16, 15, 4);
+        ret(g, metal, cx - 12, top + 11, 4, 11, 2);
+        ret(g, roupa, cx + 8, top + 11, 4, 11, 2);
+        elipse(g, PELE, cx, top + 5, 6, 6);
+        poli(g, [36, 30, 40], [[cx - 7, top + 4], [cx - 4, top - 3], [cx + 5, top - 3], [cx + 7, top + 3], [cx + 1, top + 1]]);
+        ret(g, [44, 52, 86], lado ? cx - 18 : cx + 11, top + 18, 8, 3, 1); // arma
         break;
       }
       case 'holograma': {
-        const top = base - 26 + bob * 2;
-        brilho(g, cor, cx, top + 12, 13);
-        g.globalAlpha = 0.85;
-        px(g, cor, cx - 6, top + 4, 12, 16);
-        px(g, cor, cx - 4, top, 8, 4);
-        px(g, cor, cx - 8, top + 20, 4, 3); px(g, cor, cx - 2, top + 21, 4, 3); px(g, cor, cx + 4, top + 20, 4, 3);
+        const top = base - 36 + bob * 2;
+        g.globalAlpha = 0.9;
+        poli(g, mistura(neon, 0.7), [[cx - 9, top + 8], [cx + 9, top + 8], [cx + 12, top + 30], [cx + 6, top + 27], [cx + 2, top + 31], [cx - 3, top + 27], [cx - 8, top + 31], [cx - 12, top + 30]]);
+        elipse(g, mistura(neon, 0.85), cx, top + 6, 7, 7);
         g.globalAlpha = 1;
-        for (let y = top; y < top + 24; y += 2) px(g, 'rgba(0,0,0,0.35)', cx - 9, y, 18, 1);
-        px(g, '#ffffff', lado ? cx - 4 : cx - 3, top + 6, 2, 2);
-        if (!lado) px(g, '#ffffff', cx + 1, top + 6, 2, 2);
-        if (q % 2) px(g, '#ffffff', cx - 8 + ((h >> q) % 14), top + 4 + ((h >> (q + 3)) % 16), 3, 1); // glitch
         break;
       }
       case 'fera': {
-        const y = base - 13 + bob;
-        px(g, metal, cx - 9, base - 5, 2, 5 + (passo > 0 ? -1 : 0)); px(g, metal, cx - 5, base - 5, 2, 5 + (passo < 0 ? -1 : 0));
-        px(g, metal, cx + 3, base - 5, 2, 5 + (passo < 0 ? -1 : 0)); px(g, metal, cx + 7, base - 5, 2, 5 + (passo > 0 ? -1 : 0));
-        px(g, corEscura, cx - 10, y, 20, 8);
-        px(g, metal, cx - 10, y, 20, 2);
-        px(g, cor, cx - 8, y + 4, 16, 1);
-        px(g, corEscura, lado ? cx - 15 : cx - 4, y - 5, lado ? 7 : 8, 7);
-        px(g, '#e8e8e8', lado ? cx - 15 : cx - 3, y + 1, lado ? 4 : 6, 1);
-        px(g, cor, lado ? cx - 14 : cx - 3, y - 3, 2, 1);
-        if (!lado) px(g, cor, cx + 1, y - 3, 2, 1);
-        brilho(g, cor, lado ? cx - 13 : cx, y - 3, 4);
-        px(g, metal, cx + 10, y + 1, 5, 2); px(g, cor, cx + 14, y, 2, 2);
+        const y = base - 15 + bob;
+        const pata = (x: number, o: number) => ret(g, metal, x, base - 8 + Math.min(0, o), 3, 8, 1);
+        if (lado) {
+          pata(cx - 11, passo); pata(cx - 6, -passo); pata(cx + 4, -passo); pata(cx + 9, passo);
+          elipse(g, casco, cx, y, 14, 7);
+          elipse(g, mistura(casco, 1.2), cx - 1, y - 3, 11, 3);
+          elipse(g, casco, cx - 15, y - 4, 7, 6); // cabeça
+          poli(g, mistura(casco, 0.8), [[cx - 22, y - 2], [cx - 16, y], [cx - 22, y + 2]]); // focinho
+          linha(g, metal, cx + 13, y - 1, cx + 21, y - 6, 2); // cauda
+        } else {
+          pata(cx - 11, passo); pata(cx + 8, -passo);
+          elipse(g, casco, cx, y, 12, 8);
+          elipse(g, casco, cx, y - 8, 8, 7);
+          poli(g, mistura(casco, 0.75), [[cx - 6, y - 14], [cx - 9, y - 21], [cx - 2, y - 15]]); // orelhas
+          poli(g, mistura(casco, 0.75), [[cx + 6, y - 14], [cx + 9, y - 21], [cx + 2, y - 15]]);
+          ret(g, metal, cx - 4, y - 5, 8, 4, 2); // mandíbula cromada
+        }
         break;
       }
-      default: { // bolha / planta / aquático
-        const y = base - 10 + bob;
-        g.fillStyle = corEscura; g.beginPath(); g.ellipse(cx, y, 10, 8 - bob, 0, 0, Math.PI * 2); g.fill();
-        g.fillStyle = cor; g.globalAlpha = 0.55; g.beginPath(); g.ellipse(cx - 2, y - 2, 6, 4, 0, 0, Math.PI * 2); g.fill();
-        g.globalAlpha = 1;
-        brilho(g, cor, cx, y, 9);
-        for (let i = 0; i < 4; i += 1) px(g, corEscura, cx - 8 + i * 5, y + 6 + ((q + i) % 2), 2, 3);
-        px(g, '#ffffff', lado ? cx - 6 : cx - 3, y - 3, 2, 2);
-        if (!lado) px(g, '#ffffff', cx + 2, y - 3, 2, 2);
+      case 'bolha': {
+        const y = base - 11 + bob;
+        elipse(g, casco, cx, y, 13, 10 + bob);
+        elipse(g, mistura(casco, 1.35), cx - 3, y - 4, 7, 4);
+        for (let i = 0; i < 4; i += 1) ret(g, casco, cx - 11 + i * 6, y + 7 + ((q + i) % 2), 3, 5, 1);
         break;
       }
     }
-  });
-}
-
-// ---------------------------------------------------------------- personagens
-
-export interface JogadorGerado { vocationId: number; corCorpo?: [number, number, number]; corPernas?: [number, number, number]; corCabeca?: [number, number, number] }
-
-const rgb = (c: [number, number, number] | undefined, padrao: string) => (c ? `rgb(${c[0]}, ${c[1]}, ${c[2]})` : padrao);
-
-/** Cor neon e acessório de cada classe. */
-const CLASSE: Record<number, { neon: string; tipo: 'samurai' | 'gun' | 'net' | 'bio' | 'monk' }> = {
-  4: { neon: '#ff3cd2', tipo: 'samurai' }, 8: { neon: '#ff3cd2', tipo: 'samurai' },
-  3: { neon: '#ffd23c', tipo: 'gun' }, 7: { neon: '#ffd23c', tipo: 'gun' },
-  1: { neon: '#00e5ff', tipo: 'net' }, 5: { neon: '#00e5ff', tipo: 'net' },
-  2: { neon: '#39ff88', tipo: 'bio' }, 6: { neon: '#39ff88', tipo: 'bio' },
-  9: { neon: '#ff9a3c', tipo: 'monk' }, 10: { neon: '#ff9a3c', tipo: 'monk' },
-};
-
-export function quadrosJogador(j: JogadorGerado, direcao: number, andando: boolean): Texture[] {
-  const classe = CLASSE[j.vocationId] ?? CLASSE[4]!;
-  const corpo = rgb(j.corCorpo, '#3a2f6e');
-  const pernas = rgb(j.corPernas, '#1f2440');
-  const cabelo = rgb(j.corCabeca, '#1a1d2b');
-  const lado = direcao !== DIR_SUL;
-  const chave = `jog:${j.vocationId}:${corpo}:${pernas}:${cabelo}:${lado ? 'l' : 'f'}:${andando ? 1 : 0}`;
-  return quadros(chave, 32, andando ? 4 : 2, (g, q) => {
-    const cx = 16;
-    const base = 30;
-    const bob = andando ? (q % 2 ? -1 : 0) : (q ? -1 : 0);
-    const passo = andando ? (q % 4 < 2 ? 1 : -1) : 0;
-    const top = base - 26 + bob;
-    sombra(g, cx, base, 7);
-    // pernas e botas
-    px(g, pernas, cx - 3, base - 9, 2, 9 + (passo > 0 ? -1 : 0));
-    px(g, pernas, cx + 1, base - 9, 2, 9 + (passo < 0 ? -1 : 0));
-    px(g, '#0d0f18', cx - 3, base - 2 + (passo > 0 ? -1 : 0), 3, 2);
-    px(g, '#0d0f18', cx + 1, base - 2 + (passo < 0 ? -1 : 0), 3, 2);
-    // tronco (jaqueta na cor do Outfit) e braços cromados
-    px(g, corpo, cx - 5, top + 8, 10, 10);
-    px(g, '#7d8aa8', cx - 7, top + 9, 2, 7);
-    px(g, '#7d8aa8', cx + 5, top + 9, 2, 7);
-    px(g, classe.neon, cx - 5, top + 13, 10, 1);
-    if (classe.tipo === 'net' || classe.tipo === 'bio') px(g, corpo, cx - 6, top + 17, 12, 4); // casaco longo
-    // cabeça
-    px(g, '#d6a27c', cx - 3, top + 2, 6, 6);
-    px(g, cabelo, cx - 4, top, 8, 3);
-    if (classe.tipo === 'net') px(g, '#1a1d2b', cx - 5, top, 10, 5); // capuz
-    // visor
-    px(g, classe.neon, lado ? cx - 4 : cx - 3, top + 4, lado ? 4 : 6, 1);
-    brilho(g, classe.neon, cx, top + 4, 4);
-    // acessório da classe
-    if (classe.tipo === 'samurai') { px(g, '#d0f6ff', cx + 6, top + 2, 1, 16); px(g, classe.neon, cx + 6, top + 2, 1, 3); }
-    if (classe.tipo === 'gun') { px(g, '#2c3556', cx + (lado ? -11 : 6), top + 12, 6, 2); px(g, classe.neon, cx + (lado ? -11 : 11), top + 12, 1, 1); }
-    if (classe.tipo === 'net') { brilho(g, classe.neon, cx + 8, top + 15, 4); px(g, classe.neon, cx + 7, top + 14, 2, 2); }
-    if (classe.tipo === 'bio') { px(g, '#39ff88', cx - 9, top + 13, 2, 3); brilho(g, '#39ff88', cx - 8, top + 14, 3); }
-    if (classe.tipo === 'monk') { px(g, classe.neon, cx - 7, top + 15, 2, 2); px(g, classe.neon, cx + 5, top + 15, 2, 2); }
+  }, (g, q) => {
+    const { bob } = pose(q);
+    switch (forma) {
+      case 'inseto': {
+        const y = base - 9 + bob;
+        if (lado) { olho(g, cx - 13, y - 4); brilho(g, neon, cx - 12, y - 3, 6); }
+        else { olho(g, cx - 3, y - 8); olho(g, cx + 1, y - 8); brilho(g, neon, cx, y - 7, 6); }
+        luz(g, neon, cx - 7, y + 1, 14, 1);
+        break;
+      }
+      case 'mech':
+      case 'tita': {
+        const top = base - 34 * e + bob;
+        luz(g, neon, cx - (lado ? 8 : 5) * e, top + 6 * e, (lado ? 6 : 10) * e, 2 * e);
+        brilho(g, neon, cx, top + 7 * e, 8 * e, 0.5);
+        luz(g, neon, cx - 9 * e, top + 18 * e, 18 * e, 1);
+        brilho(g, neon, cx, top + 19 * e, 6 * e, 0.4); // reator no peito
+        break;
+      }
+      case 'daemon': {
+        const top = base - 34 + bob;
+        brilho(g, [255, 40, 60], cx, top + 18, 16, 0.35);
+        if (lado) luz(g, [255, 210, 60], cx - 5, top + 6, 2, 1);
+        else { luz(g, [255, 210, 60], cx - 4, top + 6, 2, 1); luz(g, [255, 210, 60], cx + 2, top + 6, 2, 1); }
+        luz(g, neon, cx - 1, top + 16, 2, 6);
+        break;
+      }
+      case 'esqueleto': {
+        const top = base - 34 + bob;
+        if (lado) olho(g, cx - 4, top + 5);
+        else { olho(g, cx - 4, top + 5); olho(g, cx + 2, top + 5); }
+        brilho(g, neon, cx, top + 6, 7, 0.6);
+        brilho(g, neon, cx, top + 19, 5, 0.5);
+        break;
+      }
+      case 'ciborgue': {
+        const top = base - 36 + bob;
+        luz(g, neon, lado ? cx - 6 : cx - 5, top + 5, lado ? 6 : 10, 2);
+        brilho(g, neon, cx, top + 6, 6, 0.5);
+        luz(g, neon, cx - 8, top + 16, 16, 1);
+        break;
+      }
+      case 'holograma': {
+        const top = base - 36 + bob * 2;
+        brilho(g, neon, cx, top + 16, 18, 0.45);
+        for (let y = top; y < top + 32; y += 2) { g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(cx - 14, y, 28, 1); }
+        if (lado) olho(g, cx - 4, top + 5);
+        else { olho(g, cx - 4, top + 5); olho(g, cx + 2, top + 5); }
+        if (q % 2) luz(g, [255, 255, 255], cx - 10 + ((h >> q) % 18), top + 6 + ((h >> (q + 3)) % 20), 4, 1); // glitch
+        break;
+      }
+      case 'fera': {
+        const y = base - 15 + bob;
+        if (lado) { olho(g, cx - 17, y - 6); brilho(g, neon, cx - 16, y - 5, 6); luz(g, neon, cx - 8, y - 1, 14, 1); }
+        else { olho(g, cx - 4, y - 10); olho(g, cx + 2, y - 10); brilho(g, neon, cx, y - 9, 7); luz(g, neon, cx - 8, y + 2, 16, 1); }
+        break;
+      }
+      case 'bolha': {
+        const y = base - 11 + bob;
+        brilho(g, neon, cx, y, 13, 0.45);
+        if (lado) olho(g, cx - 8, y - 3);
+        else { olho(g, cx - 5, y - 3); olho(g, cx + 3, y - 3); }
+        luz(g, neon, cx - 9, y + 3, 18, 1);
+        break;
+      }
+    }
   });
 }
 
