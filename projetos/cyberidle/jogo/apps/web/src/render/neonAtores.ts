@@ -359,7 +359,9 @@ function quadrosMonstroIa(img: HTMLImageElement, m: MonstroGerado, tam: number, 
   const chave = `monia:${m.id}:${andando ? 1 : 0}:${tam}`;
   const pronto = cache.get(chave);
   if (pronto && pronto.every((t) => !t.destroyed)) return pronto;
-  const arte = imagemTingida(img, tam - 6, hash(m.id) % 360);
+  // Cabe no quadro: altura cheia, a não ser que a imagem seja larga (inseto, fera).
+  const altura = Math.min(tam - 6, Math.floor(((tam - 4) * img.naturalHeight) / img.naturalWidth));
+  const arte = imagemTingida(img, altura, hash(m.id) % 360);
   const n = andando ? 4 : 2;
   const lista: Texture[] = [];
   for (let q = 0; q < n; q += 1) {

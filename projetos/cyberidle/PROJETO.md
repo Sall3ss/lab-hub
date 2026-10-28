@@ -91,6 +91,9 @@ e tita 58). Forma sem imagem segue com o desenho por código. Conferido com imag
 Prompts entregues ao dono com o final `cyberpunk neon city enemy, pixel art, 64x64, single
 sprite, one pose only, full body, front 3/4 view, transparent background, no text, no frame`.
 Ordem: ciborgue, fera, holograma, esqueleto, bolha, mech, inseto, daemon, tita.
+No ar em 28/10 as 9 formas (9 créditos gastos, todas certas de primeira). As imagens entram
+recortadas no conteúdo (sem margem vazia) e as largas (inseto, fera) encolhem para caber no
+quadro. Originais em `../_arquivos/Cyberidle/arte-ia/`.
 
 **27/10/2026 - sprites v2, mais detalhados (pedido do dono: "não só blocos, dá pra
 identificar o personagem").** `neonAtores.ts` agora desenha em 48 px (chefes 64) com formas
