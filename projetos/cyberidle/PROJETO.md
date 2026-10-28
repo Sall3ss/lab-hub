@@ -95,6 +95,7 @@ holográfico, Tapete de LED, Fonte holográfica, Estátua cromada). Corrigido: a
 cortada embaixo (`.training-viewport` sem altura). Conferido no jogo (Salão de Treino).
 ⚠️ Achado: o jogo original não tem botão para comprar decoração - a rota `decorate` existe no
 servidor, mas nenhuma tela chama. A arte está pronta e aparece assim que houver compra.
+Decisão do dono (28/10): por enquanto fica SEM botão de comprar decoração.
 Tiros e efeito de acerto no treino continuam os originais (como os efeitos de magia).
 
 **28/10/2026 - ícones de itens com arte própria (passo A).** `render/neonIcones.ts` desenha
