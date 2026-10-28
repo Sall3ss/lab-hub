@@ -1,5 +1,6 @@
 import { itemsById } from '@tibia-idle/data';
 import { iconeNeon, type ItemDesenho } from './neonIcones.js';
+import { bonecoCanvas } from './neonCasa.js';
 
 interface SpriteGroup {
   sprites: number[];
@@ -128,8 +129,10 @@ export async function itemIconUrl(itemId: number): Promise<string | null> {
   if (cached) return cached;
 
   const item = itemsById.get(itemId);
-  // Cyberidle: ícone próprio desenhado por código no lugar do sprite do cliente original.
-  const neon = item ? iconeNeon(item as unknown as ItemDesenho) : null;
+  // Cyberidle: ícone próprio desenhado por código no lugar do sprite do cliente original
+  // (boneco de treino usa o mesmo desenho da sala).
+  const boneco = bonecoCanvas(itemId);
+  const neon = boneco ? boneco.toDataURL('image/png') : item ? iconeNeon(item as unknown as ItemDesenho) : null;
   if (neon) {
     cache.set(itemId, neon);
     return neon;

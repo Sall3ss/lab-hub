@@ -82,6 +82,21 @@ biohacker, monk). Classe sem imagem usa o desenho gerado por código. No ar: as 
 (gunslinger entrou em 28/10, refeito em imagem única 59x64; a primeira geração veio em 4
 direções miúdas e não serviu). Arte da IA ignora as cores do Outfit.
 
+**28/10/2026 - sala de treino e decorações da casa com arte própria (passo B).**
+`render/neonCasa.ts` (só canvas) desenha piso de dojo com grade neon, paredes com faixa de
+luz e telas, robôs de treino (um visual por boneco: ciano, encapuzado roxo, daemon com
+chifres, monge com faixa, verde, faraó dourado, hydromancer com aletas), alvos holográficos,
+saco de pancada, poste neon, rack de servidor, tapete de LED, letreiro holográfico com o logo
+◢◤, fonte holográfica e estátua cromada. `scenes.ts` (`paintTrainingScene`,
+`paintDecorations`) e `training.ts` usam esses desenhos; o personagem na sala é o mesmo da
+caçada (arte da IA), não o outfit original. O ícone do boneco na lista de salas também é o
+novo. Decorações renomeadas em `packages/sim/src/progression.ts` (Poste neon, Letreiro
+holográfico, Tapete de LED, Fonte holográfica, Estátua cromada). Corrigido: a sala era
+cortada embaixo (`.training-viewport` sem altura). Conferido no jogo (Salão de Treino).
+⚠️ Achado: o jogo original não tem botão para comprar decoração - a rota `decorate` existe no
+servidor, mas nenhuma tela chama. A arte está pronta e aparece assim que houver compra.
+Tiros e efeito de acerto no treino continuam os originais (como os efeitos de magia).
+
 **28/10/2026 - ícones de itens com arte própria (passo A).** `render/neonIcones.ts` desenha
 o ícone 32x32 de cada item por código, no lugar do sprite do cliente original, para toda a
 interface (Set, Loot Pouch, Depot, Loja, Mercado, drops da caçada): todos passam por

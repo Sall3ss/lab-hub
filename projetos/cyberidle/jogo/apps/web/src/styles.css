@@ -2478,6 +2478,9 @@ h2.window-head-title { font-size: 13px; }
 }
 .training-viewport {
   position: relative;
+  /* Cyberidle: ocupa a área do mapa inteira, senão a sala (704 px de altura) era cortada. */
+  width: 100%;
+  height: 100%;
 }
 .training-hud {
   position: absolute;

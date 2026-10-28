@@ -1,5 +1,6 @@
 import { pintarNeon } from './neonMapa.js';
-import { AnimatedSprite, Container, Graphics, Sprite } from 'pixi.js';
+import { DECORACAO_CASA, enfeiteCanvas, paredeCanvas, pisoCanvas, PROP_TREINO } from './neonCasa.js';
+import { AnimatedSprite, Container, Graphics, Sprite, Texture } from 'pixi.js';
 import { huntMaps, huntsById, type HuntMapRoom } from '@tibia-idle/data';
 import { trainingRoom, type TrainingRoom } from '../trainingRooms.js';
 import { GROUP_GROUND, type Atlas } from './atlas.js';
@@ -467,35 +468,41 @@ export function paradasDaHunt(huntId: string): Array<[number, number]> {
   return naRua.length >= 2 ? naRua : [[0, 0], [3, 0], [-3, 0]];
 }
 
-const HOUSE_DECO: Record<string, Array<{ id: number; x: number; y: number; ground?: boolean }>> = {
-  torch: [
-    { id: 2921, x: 1, y: 2 },
-    { id: 2921, x: 11, y: 2 },
-    { id: 2920, x: 1, y: 8 },
-    { id: 2920, x: 11, y: 8 },
-  ],
-  banner: [
-    { id: 34300, x: 5, y: 1 },
-    { id: 34300, x: 7, y: 1 },
-  ],
-  carpet: [
-    { id: 104, x: 5, y: 8, ground: true },
-    { id: 104, x: 6, y: 8, ground: true },
-    { id: 104, x: 7, y: 8, ground: true },
-  ],
-  fountain: [{ id: 3577, x: 2, y: 8 }],
-  statue: [{ id: 3116, x: 10, y: 8 }],
-};
+// Cyberidle: decorações da casa, sala de treino e bonecos com arte própria (neonCasa.ts), no
+// lugar dos sprites do cliente original. Lab Hub, Claude (Opus 5.5), 28/10/2026.
+const texturas = new WeakMap<HTMLCanvasElement, Texture>();
+
+export function texturaDeCanvas(c: HTMLCanvasElement): Texture {
+  let t = texturas.get(c);
+  if (!t || t.destroyed) {
+    t = Texture.from(c);
+    t.source.scaleMode = 'nearest';
+    texturas.set(c, t);
+  }
+  return t;
+}
+
+/** Enfeite em pé: base do desenho na base do SQM, centrado. */
+function colocarEnfeite(layer: Container, c: HTMLCanvasElement, tx: number, ty: number): void {
+  const sprite = new Sprite(texturaDeCanvas(c));
+  if (c.width <= SCENE_TILE) {
+    sprite.x = tx * SCENE_TILE;
+    sprite.y = ty * SCENE_TILE;
+  } else {
+    sprite.anchor.set(0.5, 1);
+    sprite.x = tx * SCENE_TILE + SCENE_TILE / 2;
+    sprite.y = ty * SCENE_TILE + SCENE_TILE;
+  }
+  sprite.roundPixels = true;
+  layer.addChild(sprite);
+}
 
 /** Player-bought house decorations, painted on top of the hunt room. */
-export function paintDecorations(parent: Container, tiles: Atlas, unlocked: string[]): void {
+export function paintDecorations(parent: Container, _tiles: Atlas, unlocked: string[]): void {
   const layer = new Container();
   parent.addChild(layer);
   for (const id of unlocked) {
-    for (const spot of HOUSE_DECO[id] ?? []) {
-      if (spot.ground) placeGround(layer, tiles, spot.id, spot.x, spot.y);
-      else placeProp(layer, tiles, spot.id, spot.x, spot.y);
-    }
+    (DECORACAO_CASA[id] ?? []).forEach((spot, i) => colocarEnfeite(layer, enfeiteCanvas(spot.tipo, i), spot.x, spot.y));
   }
 }
 
@@ -515,17 +522,13 @@ export function placeItem(layer: Container, items: Atlas, id: number, x: number,
  */
 export function paintTrainingScene(
   parent: Container,
-  tiles: Atlas,
-  items: Atlas,
+  _tiles: Atlas,
+  _items: Atlas,
   roomId: string,
 ): TrainingRoom | null {
   const room = trainingRoom(roomId);
   if (!room) return null;
 
-  paintSolidBase(parent, 'training-dojo');
-  const kit = KITS.city;
-  const stone = canPaint(tiles, 405) ? 405 : kit.floor;
-  const wood = canPaint(tiles, 479) ? 479 : (canPaint(tiles, 529) ? 529 : kit.accent[0] ?? kit.floor);
   const floor = new Container();
   const groundDeco = new Container();
   const props = new Container();
@@ -533,38 +536,25 @@ export function paintTrainingScene(
   parent.addChild(groundDeco);
   parent.addChild(props);
 
-  for (let y = 0; y < SCENE_ROWS; y += 1) {
-    for (let x = 0; x < SCENE_COLS; x += 1) {
-      const tile = (x + y) % 2 === 0 ? stone : wood;
-      placeGround(floor, tiles, tile, x, y);
-    }
-  }
-
   const lastX = SCENE_COLS - 1;
   const lastY = SCENE_ROWS - 1;
-  for (let x = 1; x < lastX; x += 1) {
-    placeProp(props, tiles, kit.wallN, x, 0);
-    placeProp(props, tiles, kit.wallS, x, lastY);
-  }
-  for (let y = 1; y < lastY; y += 1) {
-    placeProp(props, tiles, kit.wallW, 0, y);
-    placeProp(props, tiles, kit.wallE, lastX, y);
-  }
-  placeProp(props, tiles, kit.wallNW, 0, 0);
-  placeProp(props, tiles, kit.wallNE, lastX, 0);
-  placeProp(props, tiles, kit.wallSW, 0, lastY);
-  placeProp(props, tiles, kit.wallSE, lastX, lastY);
-
-  for (const spot of room.props) {
-    if (spot.ground) {
-      if (tiles.has(spot.itemId)) placeGround(groundDeco, tiles, spot.itemId, spot.x, spot.y);
-      else placeItem(groundDeco, items, spot.itemId, spot.x, spot.y);
-    } else if (tiles.has(spot.itemId)) {
-      placeProp(props, tiles, spot.itemId, spot.x, spot.y);
-    } else {
-      placeItem(props, items, spot.itemId, spot.x, spot.y);
+  for (let y = 0; y < SCENE_ROWS; y += 1) {
+    for (let x = 0; x < SCENE_COLS; x += 1) {
+      const borda = x === 0 || y === 0 || x === lastX || y === lastY;
+      const canto = (x === 0 || x === lastX) && (y === 0 || y === lastY);
+      const c = !borda
+        ? pisoCanvas(x, y)
+        : paredeCanvas(canto ? 'canto' : y === 0 ? 'n' : y === lastY ? 's' : x === 0 ? 'o' : 'l', x);
+      const sprite = new Sprite(texturaDeCanvas(c));
+      snapGroundSprite(sprite, x, y);
+      floor.addChild(sprite);
     }
   }
+
+  room.props.forEach((spot, i) => {
+    const tipo = PROP_TREINO[spot.itemId] ?? 'rack';
+    colocarEnfeite(spot.ground || tipo === 'tapete' ? groundDeco : props, enfeiteCanvas(tipo, i), spot.x, spot.y);
+  });
 
   return room;
 }

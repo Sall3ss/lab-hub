@@ -4,7 +4,9 @@ import { magicEffectId } from './effects.js';
 import { itemSceneTexture } from './itemTexture.js';
 import { missileAim, shootEffectId } from './missiles.js';
 import { recoloredFrames } from './outfit.js';
-import { paintTrainingScene, SCENE_COLS, SCENE_ROWS, SCENE_TILE } from './scenes.js';
+import { paintTrainingScene, SCENE_COLS, SCENE_ROWS, SCENE_TILE, texturaDeCanvas } from './scenes.js';
+import { bonecoCanvas } from './neonCasa.js';
+import { escalaJogador, quadrosJogador } from './neonAtores.js';
 import { trainingDummy, trainingRoom, type TrainingRoom } from '../trainingRooms.js';
 import type { PlayerView } from './combat.js';
 import { VOCATION_LOOK } from './combat.js';
@@ -210,7 +212,9 @@ export class TrainingRenderer {
       room.placements.map(async (placement) => {
         const def = trainingDummy(placement.dummyId);
         if (!def) return null;
-        const texture = await itemSceneTexture(def.itemId);
+        // Cyberidle: robô/alvo neon próprio; o sprite original só se o boneco não tiver desenho.
+        const neon = bonecoCanvas(def.itemId);
+        const texture = neon ? texturaDeCanvas(neon) : await itemSceneTexture(def.itemId);
         return { placement, def, texture };
       }),
     );
@@ -234,18 +238,13 @@ export class TrainingRenderer {
   }
 
   private spawnPlayer(player: PlayerView, tx: number, ty: number): void {
-    const atlas = this.outfits;
-    const look = player.appearance?.outfit ?? VOCATION_LOOK[player.vocationId] ?? 128;
-    const direction = DIRECTION_NORTH;
-    const appearance = player.appearance;
-    const frames = atlas && appearance
-      ? recoloredFrames(atlas, look, appearance, direction, GROUP_IDLE)
-      : [];
-    const moving = atlas?.frames(look, { group: GROUP_MOVING, direction }) ?? { textures: [] };
-    const textures = frames.length ? frames : moving.textures.length ? moving.textures : atlas?.icon(look) ? [atlas.icon(look)!] : [placeholder(0x3d8f4a)];
+    // Cyberidle: o mesmo personagem da caçada (arte da IA ou desenho gerado), não o outfit original.
+    const textures = quadrosJogador({ vocationId: player.vocationId }, DIRECTION_NORTH, false);
+    const escala = escalaJogador(player.vocationId) ?? 0.92;
 
-    const sprite = new AnimatedSprite(textures);
+    const sprite = new AnimatedSprite(textures.length ? textures : [placeholder(0x3d8f4a)]);
     sprite.anchor.set(0.5, 1);
+    sprite.scale.set(escala);
     sprite.animationSpeed = 0.12;
     sprite.play();
 
@@ -258,7 +257,7 @@ export class TrainingRenderer {
     placeActorRoot(root, tx, ty);
     sitLocalSprite(sprite);
     label.x = 0;
-    label.y = sprite.y - sprite.texture.height - 4;
+    label.y = sprite.y - sprite.texture.height * escala - 4;
     root.zIndex = Math.round(root.y * 10 + 6);
     this.actors!.sortableChildren = true;
     this.actors!.addChild(root);
@@ -284,7 +283,7 @@ export class TrainingRenderer {
     if (!this.player || !this.playerRoot || !this.targetRoot || !this.fx || !this.effects) return;
     const tx = this.targetRoot.x;
     const ty = this.targetRoot.y - SCENE_TILE / 2;
-    this.player.scale.x = tx >= this.playerRoot.x ? 1 : -1;
+    this.player.scale.x = (tx >= this.playerRoot.x ? 1 : -1) * Math.abs(this.player.scale.y);
 
     const onHit = () => this.playHitFx(tx, ty);
 

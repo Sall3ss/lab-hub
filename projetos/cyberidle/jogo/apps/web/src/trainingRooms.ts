@@ -47,7 +47,7 @@ export const TRAINING_ROOMS: TrainingRoom[] = [
   {
     id: 'grand-hall',
     name: 'Salão de Treino',
-    description: 'Sala premium — chão xadrez pedra/madeira, dummy central.',
+    description: 'Dojo neon com robô de treino no centro.',
     featuredDummyId: 'exercise-dummy',
     player: { x: 6, y: 9 },
     placements: [
@@ -65,7 +65,7 @@ export const TRAINING_ROOMS: TrainingRoom[] = [
   {
     id: 'ferumbras-sanctum',
     name: 'Santuário Ferumbras',
-    description: 'Sala sombria com Ferumbras Exercise Dummy central.',
+    description: 'Sala escura com o robô encapuzado no centro.',
     featuredDummyId: 'ferumbras-dummy',
     player: { x: 6, y: 9 },
     placements: [
@@ -81,7 +81,7 @@ export const TRAINING_ROOMS: TrainingRoom[] = [
   {
     id: 'demon-pit',
     name: 'Fosso Demoníaco',
-    description: 'Demon exercise dummies.',
+    description: 'Robôs de treino com chifres de daemon.',
     featuredDummyId: 'demon-dummy',
     player: { x: 6, y: 9 },
     placements: [
@@ -97,7 +97,7 @@ export const TRAINING_ROOMS: TrainingRoom[] = [
   {
     id: 'monk-dojo',
     name: 'Dojo do Monge',
-    description: 'Monk dummies em tapete.',
+    description: 'Robôs do monge sobre tapete de LED.',
     featuredDummyId: 'monk-dummy',
     player: { x: 6, y: 9 },
     placements: [
@@ -116,7 +116,7 @@ export const TRAINING_ROOMS: TrainingRoom[] = [
   {
     id: 'target-range',
     name: 'Campo de Alvos',
-    description: 'Alvos para distance.',
+    description: 'Alvos holográficos e saco de pancada para distance.',
     featuredDummyId: 'target-dummy',
     player: { x: 6, y: 9 },
     placements: [

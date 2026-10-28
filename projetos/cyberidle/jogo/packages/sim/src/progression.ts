@@ -134,11 +134,12 @@ export function partyExperienceShare(memberLevels: number[], selfLevel: number, 
 }
 
 export const DECORATIONS = [
-  { id: 'torch', name: 'Tocha', cost: 500 },
-  { id: 'banner', name: 'Estandarte', cost: 2_000 },
-  { id: 'carpet', name: 'Tapete', cost: 1_500 },
-  { id: 'fountain', name: 'Fonte', cost: 8_000 },
-  { id: 'statue', name: 'Estátua', cost: 25_000 },
+  // Nomes do tema Cyberidle (arte em apps/web/src/render/neonCasa.ts), 28/10/2026.
+  { id: 'torch', name: 'Poste neon', cost: 500 },
+  { id: 'banner', name: 'Letreiro holográfico', cost: 2_000 },
+  { id: 'carpet', name: 'Tapete de LED', cost: 1_500 },
+  { id: 'fountain', name: 'Fonte holográfica', cost: 8_000 },
+  { id: 'statue', name: 'Estátua cromada', cost: 25_000 },
 ] as const;
 
 export type ShopCategory = 'vip' | 'outfits' | 'mounts' | 'boosts' | 'services' | 'exercise';
