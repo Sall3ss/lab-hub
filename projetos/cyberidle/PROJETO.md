@@ -82,6 +82,22 @@ biohacker, monk). Classe sem imagem usa o desenho gerado por código. No ar: as 
 (gunslinger entrou em 28/10, refeito em imagem única 59x64; a primeira geração veio em 4
 direções miúdas e não serviu). Arte da IA ignora as cores do Outfit.
 
+**28/10/2026 - ícones de itens com arte própria (passo A).** `render/neonIcones.ts` desenha
+o ícone 32x32 de cada item por código, no lugar do sprite do cliente original, para toda a
+interface (Set, Loot Pouch, Depot, Loja, Mercado, drops da caçada): todos passam por
+`itemIconUrl` (`render/itemIcon.ts`). Como são 14 mil itens, o desenho sai da categoria
+(slot/tipo de arma/tipo do item e palavras do nome original: espada, machado, martelo, maça,
+arco, besta, lança, estrela, dardo, bala, varinha, cajado, datapad, escudo, armadura,
+capacete, calça, bota, anel, colar, mochila, poção, chip de runa, comida, gema, pérola,
+moeda/ficha, núcleo, pergaminho, luz, ferramenta; loot de criatura vira cápsula, engrenagem ou
+placa; o resto, fragmento de dados). Cor pelo elemento no nome (fogo laranja, gelo ciano,
+energia amarela, veneno verde, sagrado dourado, morte vermelho, sombra roxo, mana azul) ou
+pelo id; brilho mais forte em item mais forte. Poções: vida rosa, mana azul, spirit roxa.
+Moedas do jogo são o chip "E" do Edinho; fichas e medalhas levam estrela. Primitivas de pixel
+art foram para `render/pixelArte.ts` (compartilhadas com `neonAtores.ts`). Os bonecos da sala
+de treino e móveis da casa continuam com a arte original (`itemSceneTexture`) - é o passo B.
+Efeitos de magia também seguem os originais.
+
 **28/10/2026 - monstros prontos para receber arte em IA (dono tem 14 créditos no spritelab,
 1 por imagem).** Uma imagem por forma, não por monstro (são 700+): `site/assets/monstros/<forma>.png`
 com forma = inseto, mech, daemon, esqueleto, ciborgue, holograma, fera, bolha, tita (mapa
