@@ -72,6 +72,16 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
 
 ## Estado
 
+**28/10/2026 - personagens com arte feita em IA pelo dono (spritelab.dev, plano grátis).**
+Padrão combinado: **uma imagem por classe, de frente/3/4, corpo inteiro, fundo transparente,
+PNG** - não precisa de 4 direções nem de quadros de caminhada: o jogo espelha para os lados e
+anima respirar/andar por código (`quadrosDaImagem` em `neonAtores.ts`), e mostra cada um com
+46 px de altura (`ALTURA_PERSONAGEM`). Originais ficam em `../_arquivos/Cyberidle/arte-ia/`;
+as usadas vão para `site/assets/personagens/<classe>.png` (samurai, gunslinger, netrunner,
+biohacker, monk). Classe sem imagem usa o desenho gerado por código. No ar: samurai,
+netrunner, biohacker e monk. **Falta: gunslinger** (a geração veio em 4 direções miúdas, 25x32
+cada; refazer em imagem única). Arte da IA ignora as cores do Outfit.
+
 **27/10/2026 - sprites v2, mais detalhados (pedido do dono: "não só blocos, dá pra
 identificar o personagem").** `neonAtores.ts` agora desenha em 48 px (chefes 64) com formas
 arredondadas e acabamento automático de pixel art: pixels cheios (sem borrão), luz em cima e

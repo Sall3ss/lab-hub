@@ -7,7 +7,7 @@ import { attackAnimationSpeed, loadAttackFrames, preloadAttackFrames } from './a
 import { burstsFor, damageTint, isCustomMeleeSwing, magicEffectId, outgoingDamageTint } from './effects.js';
 import { missileAim, shootEffectId } from './missiles.js';
 import { recoloredFrames, appearancePoseKey, creatureRecolorAppearance, tibiaColor } from './outfit.js';
-import { quadrosJogador, quadrosMonstro, type JogadorGerado, type MonstroGerado } from './neonAtores.js';
+import { escalaJogador, temArteIa, quadrosJogador, quadrosMonstro, type JogadorGerado, type MonstroGerado } from './neonAtores.js';
 import { paintDecorations, paintHuntRegion, paintHuntScene, paradasDaHunt } from './scenes.js';
 import {
   chebyshev, faceOf, MONSTER_STEP_MS, PLAYER_STEP_MS, spawnTile, stepToward, surroundGoal,
@@ -84,6 +84,8 @@ interface SpriteEntry {
   stationary?: boolean;
   /** Cyberidle: desenho gerado por código (neonAtores.ts) no lugar do sprite original. */
   gerado?: { monstro?: MonstroGerado; jogador?: JogadorGerado };
+  /** Se o desenho atual já é a arte da IA (para trocar quando a imagem terminar de carregar). */
+  iaVista?: boolean;
 }
 
 export interface PlayerView {
@@ -1465,13 +1467,18 @@ export class CombatScene {
   }
 
   private face(entry: SpriteEntry, dx: number, dy: number, moving: boolean, force = false): void {
+    if (entry.gerado?.jogador) {
+      const ia = temArteIa(entry.gerado.jogador.vocationId);
+      if (entry.iaVista !== ia) { entry.iaVista = ia; force = true; }
+    }
     const facing = faceOf(dx, dy);
     const same = facing.direction === entry.direction && facing.scaleX === entry.scaleX && entry.moving === moving;
     entry.direction = facing.direction;
     entry.scaleX = facing.scaleX;
     entry.moving = moving;
     // Desenho gerado (Cyberidle) é feito em 48 px; ESCALA_GERADO o deixa no porte dos originais.
-    const escala = entry.gerado ? ESCALA_GERADO : 1;
+    const escala = entry.gerado ? (entry.gerado.jogador ? escalaJogador(entry.gerado.jogador.vocationId) : undefined) ?? ESCALA_GERADO : 1;
+    entry.sprite.label = entry.gerado ? 'gerado' : '';
     entry.sprite.scale.x = facing.scaleX * escala;
     entry.sprite.scale.y = escala;
     if (!force && same && entry.sprite.playing) {
@@ -1536,7 +1543,7 @@ export class CombatScene {
   private layoutHud(entry: SpriteEntry, hpRatio: number, _manaRatio?: number, targeted = false): void {
     // Desenho gerado: canvas 32 (48 nos grandes) sem cache de cabeça por quadro do atlas.
     const headY = entry.gerado
-      ? -Math.round((entry.sprite.texture.height - 4) * ESCALA_GERADO)
+      ? -Math.round((entry.sprite.texture.height - 4) * Math.abs(entry.sprite.scale.y || ESCALA_GERADO))
       : visualHeadY(entry.sprite);
     const barTop = headY - BAR_TO_HEAD - BAR_HEIGHT;
     entry.label.y = barTop - NAME_TO_BAR;
@@ -1764,11 +1771,11 @@ function opaqueSpriteBounds(texture: Texture): SpriteOpaqueBounds | null {
  * Same rules as `sitOnTile` in scenes.ts, adapted for anchor-at-feet containers.
  */
 function sitSpriteOnTile(sprite: AnimatedSprite, scaleX = 1): void {
-  if (Math.abs(sprite.scale.y - ESCALA_GERADO) < 0.001) {
-    // Desenho gerado (Cyberidle): já centrado no canvas, pés 2 px acima da borda de baixo.
+  if (sprite.label === 'gerado') {
+    // Desenho gerado ou arte da IA (Cyberidle): já centrado no canvas, pés ~3 px acima da borda.
     sprite.anchor.set(0.5, 1);
     sprite.x = 0;
-    sprite.y = Math.round(3 * ESCALA_GERADO);
+    sprite.y = Math.round(3 * Math.abs(sprite.scale.y));
     return;
   }
   const frame = sprite.texture.frame;

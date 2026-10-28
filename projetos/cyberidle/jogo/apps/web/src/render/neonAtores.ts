@@ -159,8 +159,65 @@ const PELE: RGB = [214, 162, 124];
 const CROMO: RGB = [138, 150, 178];
 const BOTA: RGB = [26, 28, 40];
 
+// ---------------------------------------------------------------- arte feita em IA pelo dono
+// Uma imagem de frente por classe (site/assets/personagens/<classe>.png). O jogo espelha para
+// os lados e anima respirar/andar por código. Enquanto a imagem não carrega (ou se a classe
+// ainda não tem imagem), usa o desenho gerado acima. Lab Hub, Claude (Opus 5.5), 28/10/2026.
+
+const ARQUIVO_CLASSE: Record<Tipo, string> = { samurai: 'samurai', gun: 'gunslinger', net: 'netrunner', bio: 'biohacker', monk: 'monk' };
+const imagens = new Map<Tipo, HTMLImageElement>();
+/** Altura na tela (px de mundo) que a arte da IA ocupa. */
+export const ALTURA_PERSONAGEM = 46;
+
+function carregarImagens(): void {
+  if (typeof document === 'undefined') return;
+  for (const tipo of Object.keys(ARQUIVO_CLASSE) as Tipo[]) {
+    const img = new Image();
+    img.onload = () => { imagens.set(tipo, img); };
+    img.src = `${import.meta.env.BASE_URL}assets/personagens/${ARQUIVO_CLASSE[tipo]}.png`;
+  }
+}
+carregarImagens();
+
+/** A classe já tem a arte da IA carregada? (a cena troca o desenho quando passa a ter) */
+export function temArteIa(vocationId: number): boolean {
+  return imagens.has((CLASSE[vocationId] ?? CLASSE[4]!).tipo);
+}
+
+/** Escala de exibição para o personagem (a arte da IA tem altura própria). */
+export function escalaJogador(vocationId: number): number | undefined {
+  const img = imagens.get((CLASSE[vocationId] ?? CLASSE[4]!).tipo);
+  return img ? ALTURA_PERSONAGEM / img.naturalHeight : undefined;
+}
+
+function quadrosDaImagem(img: HTMLImageElement, chave: string, andando: boolean): Texture[] {
+  const pronto = cache.get(chave);
+  if (pronto && pronto.every((t) => !t.destroyed)) return pronto;
+  const tam = Math.max(img.naturalWidth + 4, img.naturalHeight + 6);
+  const n = andando ? 4 : 2;
+  const lista: Texture[] = [];
+  for (let q = 0; q < n; q += 1) {
+    const c = document.createElement('canvas');
+    c.width = tam; c.height = tam;
+    const g = c.getContext('2d')!;
+    g.imageSmoothingEnabled = false;
+    const bob = andando ? (q % 2 ? -2 : 0) : (q ? -1 : 0);
+    const inclina = andando ? [1, 0, -1, 0][q]! : 0;
+    g.fillStyle = 'rgba(0,0,0,0.42)';
+    g.beginPath(); g.ellipse(tam / 2, tam - 4, img.naturalWidth * 0.32, 3.5, 0, 0, Math.PI * 2); g.fill();
+    g.drawImage(img, Math.round((tam - img.naturalWidth) / 2) + inclina, tam - 4 - img.naturalHeight + bob);
+    const t = Texture.from(c);
+    t.source.scaleMode = 'nearest';
+    lista.push(t);
+  }
+  cache.set(chave, lista);
+  return lista;
+}
+
 export function quadrosJogador(j: JogadorGerado, direcao: number, andando: boolean): Texture[] {
   const classe = CLASSE[j.vocationId] ?? CLASSE[4]!;
+  const img = imagens.get(classe.tipo);
+  if (img) return quadrosDaImagem(img, `ia:${classe.tipo}:${andando ? 1 : 0}`, andando);
   const jaqueta = j.corCorpo ?? [70, 56, 140];
   const calca = j.corPernas ?? [34, 38, 66];
   const cabelo = j.corCabeca ?? [26, 28, 44];
