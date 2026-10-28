@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 27/10/2026 (Cyberidle: mapas de rua com arte própria).**
+**Atualizado em 28/10/2026 (Cyberidle: arte própria em personagens, monstros, itens e treino).**
 
 ## Pronto
 
@@ -41,8 +41,9 @@
    mesmo personagem no PC e no celular). 27/10: ranking e mercado gerais com travas, chat
    tirado, telas de entrada responsivas; tema cyberpunk (Edinho), visual neon, boas-vindas,
    party v2 e mapas de rua com arte própria. Arte própria etapa 2 (monstros e personagens)
-   gerada por código (27/10). O dono quer mexer no mapa depois. Próximos: ícones de itens,
-   treino/decorações neon, monstros andando até o tank.
+   gerada por código (27/10). 28/10: personagens e monstros com arte feita em IA pelo dono
+   (spritelab), ícones de itens, sala de treino e decorações com arte própria. O dono quer
+   mexer no mapa depois. Próximo: monstros andando até o tank.
    Estado e próximos passos na ficha dele.
 8. Regra do dono (26/10): nenhum projeto do hub pode rodar na VPS ou pesar nela - tudo no
    navegador ou na Cloudflare.
