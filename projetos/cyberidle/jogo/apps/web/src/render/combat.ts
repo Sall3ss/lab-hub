@@ -22,6 +22,10 @@ import {
 } from '@tibia-idle/sim';
 
 const TILE = 32;
+/** Cyberidle: tank da party = Street Samurai (Knight/Elite Knight), como em server/src/game.ts. */
+const ehTanque = (vocationId: number | undefined) => vocationId === 4 || vocationId === 8;
+/** SQM do tank: colado no líder (PLAYER_TILE 6,5), na diagonal da frente. */
+const LUGAR_TANQUE: [number, number] = [5, 6];
 const ESCALA_GERADO = 0.92; // desenho gerado é feito em 48 px (neonAtores.ts v2)
 const COLS = 13;
 const ROWS = 11;
@@ -365,10 +369,9 @@ export class CombatScene {
         this.sprites.delete(uid);
       }
     }
-    const px = this.player?.tileX ?? PLAYER_TILE.x;
-    const py = this.player?.tileY ?? PLAYER_TILE.y;
+    const { x: px, y: py } = this.alvoDosMonstros();
     const occupied = this.occupiedTiles();
-    const ring = meleeSurroundSpots(px, py);
+    const ring = this.anelDeLuta();
     pack.forEach((monster, index) => {
       try {
         const existing = this.sprites.get(monster.uid);
@@ -565,9 +568,15 @@ export class CombatScene {
       this.allies.delete(name);
     }
     const spots: Array<[number, number]> = [[4, 6], [8, 6], [5, 7], [7, 7]];
-    allies.slice(0, spots.length).forEach((ally, index) => {
+    // Cyberidle: o tank (Street Samurai) fica colado no líder, na frente da luta; é ele que
+    // os monstros cercam (alvoDosMonstros). Os outros ocupam os lugares de sempre.
+    const livres = [...spots];
+    let temTanque = false;
+    allies.slice(0, spots.length).forEach((ally) => {
       const existing = this.allies.get(ally.name);
-      const [x, y] = spots[index]!;
+      const tanque = !temTanque && ehTanque(ally.vocationId);
+      if (tanque) temTanque = true;
+      const [x, y] = tanque ? LUGAR_TANQUE : livres.shift()!;
       if (!existing) {
         const look = ally.appearance?.outfit || VOCATION_LOOK[ally.vocationId] || 128;
         const created = this.spawnLook(
@@ -836,8 +845,7 @@ export class CombatScene {
       this.floatFree(this.player.root.x, this.player.root.y - 48, `COMBO x${event.combo}`, 0xf0e6c8, 10);
     } else if (event.type === 'monster_spawn' && event.uid !== undefined && event.monsterId) {
       if (!this.sprites.has(event.uid)) {
-        const px = this.player?.tileX ?? PLAYER_TILE.x;
-        const py = this.player?.tileY ?? PLAYER_TILE.y;
+        const { x: px, y: py } = this.alvoDosMonstros();
         const occupied = this.occupiedTiles();
         const spot = spawnTile(this.sprites.size, occupied, px, py);
         occupied.add(`${spot.x},${spot.y}`);
@@ -849,7 +857,7 @@ export class CombatScene {
         if (created) {
           created.root.visible = true;
           created.sprite.visible = true;
-          const ring = meleeSurroundSpots(px, py);
+          const ring = this.anelDeLuta();
           const stand = ring[this.sprites.size % ring.length] ?? ring[0]!;
           created.standX = stand.x;
           created.standY = stand.y;
@@ -1300,6 +1308,27 @@ export class CombatScene {
     entry.root.zIndex = Math.round(entry.root.y * 10 + bias);
   }
 
+  /**
+   * Cyberidle: quem os monstros cercam. Com um tank na party (Street Samurai), é ele - no
+   * combate é o tank que segura o dano (TANQUE_PARTE no sim); senão, o personagem.
+   */
+  private alvoDosMonstros(): { x: number; y: number } {
+    for (const ally of this.allies.values()) {
+      if (ehTanque(ally.gerado?.jogador?.vocationId)) return { x: ally.tileX, y: ally.tileY };
+    }
+    return { x: this.player?.tileX ?? PLAYER_TILE.x, y: this.player?.tileY ?? PLAYER_TILE.y };
+  }
+
+  /** Lugares em volta do alvo, sem os SQMs do personagem e dos aliados. */
+  private anelDeLuta(): Array<{ x: number; y: number }> {
+    const alvo = this.alvoDosMonstros();
+    const gente = new Set<string>();
+    if (this.player) gente.add(`${this.player.destX},${this.player.destY}`);
+    for (const ally of this.allies.values()) gente.add(`${ally.destX},${ally.destY}`);
+    const anel = meleeSurroundSpots(alvo.x, alvo.y).filter((spot) => !gente.has(`${spot.x},${spot.y}`));
+    return anel.length ? anel : meleeSurroundSpots(alvo.x, alvo.y);
+  }
+
   private occupiedTiles(ignore?: SpriteEntry): Set<string> {
     const blocked = new Set<string>();
     if (this.player && this.player !== ignore) {
@@ -1331,8 +1360,7 @@ export class CombatScene {
       if (target) this.chase(player, target.destX, target.destY);
     }
     if (player) {
-      const px = player.tileX;
-      const py = player.tileY;
+      const { x: px, y: py } = this.alvoDosMonstros();
       const reserved = this.occupiedTiles();
       for (const [uid, entry] of this.sprites) {
         if (entry.walkLeft > 0 || entry.root.alpha < 1) continue;

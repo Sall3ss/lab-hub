@@ -82,6 +82,15 @@ biohacker, monk). Classe sem imagem usa o desenho gerado por código. No ar: as 
 (gunslinger entrou em 28/10, refeito em imagem única 59x64; a primeira geração veio em 4
 direções miúdas e não serviu). Arte da IA ignora as cores do Outfit.
 
+**28/10/2026 - monstros cercam o tank (passo C).** Na tela, os monstros agora andam até o
+tank da party (Street Samurai, a mesma regra do `tanque` em `server/src/game.ts`) e ficam em
+volta dele, olhando para ele - combina com o combate, em que o tank segura o dano
+(TANQUE_PARTE). O tank fica colado no líder, na diagonal da frente (`LUGAR_TANQUE` 5,6), para
+as magias em área do líder continuarem pegando a turma. Sem tank na party (ou com o próprio
+líder Samurai), tudo como antes: cercam o personagem. Só visual (`render/combat.ts`:
+`alvoDosMonstros`, `anelDeLuta`); o combate no sim não mudou. A decisão de o tank segurar
+100% do dano continua para revisão futura com o dono.
+
 **28/10/2026 - sala de treino e decorações da casa com arte própria (passo B).**
 `render/neonCasa.ts` (só canvas) desenha piso de dojo com grade neon, paredes com faixa de
 luz e telas, robôs de treino (um visual por boneco: ciano, encapuzado roxo, daemon com
