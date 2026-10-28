@@ -78,9 +78,9 @@ PNG** - não precisa de 4 direções nem de quadros de caminhada: o jogo espelha
 anima respirar/andar por código (`quadrosDaImagem` em `neonAtores.ts`), e mostra cada um com
 46 px de altura (`ALTURA_PERSONAGEM`). Originais ficam em `../_arquivos/Cyberidle/arte-ia/`;
 as usadas vão para `site/assets/personagens/<classe>.png` (samurai, gunslinger, netrunner,
-biohacker, monk). Classe sem imagem usa o desenho gerado por código. No ar: samurai,
-netrunner, biohacker e monk. **Falta: gunslinger** (a geração veio em 4 direções miúdas, 25x32
-cada; refazer em imagem única). Arte da IA ignora as cores do Outfit.
+biohacker, monk). Classe sem imagem usa o desenho gerado por código. No ar: as 5 classes
+(gunslinger entrou em 28/10, refeito em imagem única 59x64; a primeira geração veio em 4
+direções miúdas e não serviu). Arte da IA ignora as cores do Outfit.
 
 **27/10/2026 - sprites v2, mais detalhados (pedido do dono: "não só blocos, dá pra
 identificar o personagem").** `neonAtores.ts` agora desenha em 48 px (chefes 64) com formas
