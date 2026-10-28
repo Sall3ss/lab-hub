@@ -82,6 +82,16 @@ biohacker, monk). Classe sem imagem usa o desenho gerado por código. No ar: as 
 (gunslinger entrou em 28/10, refeito em imagem única 59x64; a primeira geração veio em 4
 direções miúdas e não serviu). Arte da IA ignora as cores do Outfit.
 
+**28/10/2026 - monstros prontos para receber arte em IA (dono tem 14 créditos no spritelab,
+1 por imagem).** Uma imagem por forma, não por monstro (são 700+): `site/assets/monstros/<forma>.png`
+com forma = inseto, mech, daemon, esqueleto, ciborgue, holograma, fera, bolha, tita (mapa
+classe do bestiário -> forma em `FORMA_DA_CLASSE`; monstro sem classe usa mech). Cada monstro
+gira o matiz da imagem pelo próprio id (cinza/preto/cromado não mudam), altura 42 px (chefes
+e tita 58). Forma sem imagem segue com o desenho por código. Conferido com imagem provisória.
+Prompts entregues ao dono com o final `cyberpunk neon city enemy, pixel art, 64x64, single
+sprite, one pose only, full body, front 3/4 view, transparent background, no text, no frame`.
+Ordem: ciborgue, fera, holograma, esqueleto, bolha, mech, inseto, daemon, tita.
+
 **27/10/2026 - sprites v2, mais detalhados (pedido do dono: "não só blocos, dá pra
 identificar o personagem").** `neonAtores.ts` agora desenha em 48 px (chefes 64) com formas
 arredondadas e acabamento automático de pixel art: pixels cheios (sem borrão), luz em cima e

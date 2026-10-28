@@ -7,7 +7,7 @@ import { attackAnimationSpeed, loadAttackFrames, preloadAttackFrames } from './a
 import { burstsFor, damageTint, isCustomMeleeSwing, magicEffectId, outgoingDamageTint } from './effects.js';
 import { missileAim, shootEffectId } from './missiles.js';
 import { recoloredFrames, appearancePoseKey, creatureRecolorAppearance, tibiaColor } from './outfit.js';
-import { escalaJogador, temArteIa, quadrosJogador, quadrosMonstro, type JogadorGerado, type MonstroGerado } from './neonAtores.js';
+import { escalaJogador, temArteIa, temArteIaMonstro, quadrosJogador, quadrosMonstro, type JogadorGerado, type MonstroGerado } from './neonAtores.js';
 import { paintDecorations, paintHuntRegion, paintHuntScene, paradasDaHunt } from './scenes.js';
 import {
   chebyshev, faceOf, MONSTER_STEP_MS, PLAYER_STEP_MS, spawnTile, stepToward, surroundGoal,
@@ -1469,6 +1469,9 @@ export class CombatScene {
   private face(entry: SpriteEntry, dx: number, dy: number, moving: boolean, force = false): void {
     if (entry.gerado?.jogador) {
       const ia = temArteIa(entry.gerado.jogador.vocationId);
+      if (entry.iaVista !== ia) { entry.iaVista = ia; force = true; }
+    } else if (entry.gerado?.monstro) {
+      const ia = temArteIaMonstro(entry.gerado.monstro);
       if (entry.iaVista !== ia) { entry.iaVista = ia; force = true; }
     }
     const facing = faceOf(dx, dy);

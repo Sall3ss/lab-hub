@@ -305,8 +305,85 @@ const FORMA_DA_CLASSE: Record<string, Forma> = {
 
 export interface MonstroGerado { id: string; classe?: string; grande?: boolean }
 
+// Arte feita em IA pelo dono: uma imagem por forma (site/assets/monstros/<forma>.png). Cada
+// monstro gira o matiz da imagem pelo próprio id, para dois monstros da mesma forma não ficarem
+// iguais. Forma sem imagem usa o desenho abaixo. Lab Hub, Claude (Opus 5.5), 28/10/2026.
+
+const FORMAS: Forma[] = ['inseto', 'mech', 'daemon', 'esqueleto', 'ciborgue', 'holograma', 'fera', 'bolha', 'tita'];
+const imagensMonstro = new Map<Forma, HTMLImageElement>();
+
+function carregarImagensMonstro(): void {
+  if (typeof document === 'undefined') return;
+  for (const forma of FORMAS) {
+    const img = new Image();
+    img.onload = () => { imagensMonstro.set(forma, img); };
+    img.src = `${import.meta.env.BASE_URL}assets/monstros/${forma}.png`;
+  }
+}
+carregarImagensMonstro();
+
+const formaDe = (m: MonstroGerado): Forma => FORMA_DA_CLASSE[m.classe ?? ''] ?? 'mech';
+
+/** A forma do monstro já tem a arte da IA carregada? (a cena troca o desenho quando passa a ter) */
+export function temArteIaMonstro(m: MonstroGerado): boolean {
+  return imagensMonstro.has(formaDe(m));
+}
+
+/** Imagem na altura do monstro, com o matiz girado em `giro` graus (pixels cheios, sem borrão). */
+function imagemTingida(img: HTMLImageElement, altura: number, giro: number): HTMLCanvasElement {
+  const largura = Math.max(1, Math.round((img.naturalWidth * altura) / img.naturalHeight));
+  const c = document.createElement('canvas');
+  c.width = largura; c.height = altura;
+  const g = c.getContext('2d', { willReadFrequently: true })!;
+  g.imageSmoothingEnabled = false;
+  g.drawImage(img, 0, 0, largura, altura);
+  if (giro % 360 === 0) return c;
+  const dados = g.getImageData(0, 0, largura, altura);
+  const d = dados.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (!d[i + 3]) continue;
+    const r = d[i]! / 255, gr = d[i + 1]! / 255, b = d[i + 2]! / 255;
+    const max = Math.max(r, gr, b), min = Math.min(r, gr, b), l = (max + min) / 2;
+    if (max - min < 0.08) continue; // cinza, preto e cromado ficam como estão
+    const dd = max - min;
+    const sat = l > 0.5 ? dd / (2 - max - min) : dd / (max + min);
+    let hue = max === r ? (gr - b) / dd + (gr < b ? 6 : 0) : max === gr ? (b - r) / dd + 2 : (r - gr) / dd + 4;
+    const [nr, ng, nb] = hslRgb((hue * 60 + giro) % 360, sat * 100, l * 100);
+    d[i] = nr; d[i + 1] = ng; d[i + 2] = nb;
+  }
+  g.putImageData(dados, 0, 0);
+  return c;
+}
+
+function quadrosMonstroIa(img: HTMLImageElement, m: MonstroGerado, tam: number, andando: boolean): Texture[] {
+  const chave = `monia:${m.id}:${andando ? 1 : 0}:${tam}`;
+  const pronto = cache.get(chave);
+  if (pronto && pronto.every((t) => !t.destroyed)) return pronto;
+  const arte = imagemTingida(img, tam - 6, hash(m.id) % 360);
+  const n = andando ? 4 : 2;
+  const lista: Texture[] = [];
+  for (let q = 0; q < n; q += 1) {
+    const c = document.createElement('canvas');
+    c.width = tam; c.height = tam;
+    const g = c.getContext('2d')!;
+    g.imageSmoothingEnabled = false;
+    const bob = andando ? (q % 2 ? -1 : 0) : (q ? -1 : 0);
+    const inclina = andando ? [1, 0, -1, 0][q]! : 0;
+    g.fillStyle = 'rgba(0,0,0,0.42)';
+    g.beginPath(); g.ellipse(tam / 2, tam - 4, arte.width * 0.34, 3.5, 0, 0, Math.PI * 2); g.fill();
+    g.drawImage(arte, Math.round((tam - arte.width) / 2) + inclina, tam - 4 - arte.height + bob);
+    const t = Texture.from(c);
+    t.source.scaleMode = 'nearest';
+    lista.push(t);
+  }
+  cache.set(chave, lista);
+  return lista;
+}
+
 export function quadrosMonstro(m: MonstroGerado, direcao: number, andando: boolean): Texture[] {
-  const forma = FORMA_DA_CLASSE[m.classe ?? ''] ?? 'mech';
+  const forma = formaDe(m);
+  const img = imagensMonstro.get(forma);
+  if (img) return quadrosMonstroIa(img, m, m.grande || forma === 'tita' ? TAM_GRANDE : TAM, andando);
   const h = hash(m.id);
   const matiz = h % 360;
   const neon = hslRgb(matiz, 95, 60);
