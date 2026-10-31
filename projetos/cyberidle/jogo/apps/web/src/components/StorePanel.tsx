@@ -23,6 +23,10 @@ const CATEGORY_LABELS: Record<StoreCategory, string> = {
 
 const ADDON_LABELS = ['Base', 'Addon 1', 'Addon 2', 'Ambos'] as const;
 
+/** Cyberidle: sem Outfits e Montarias do Tibia - o visual é a arte da classe, com a cor
+ *  escolhida na janela Visual. Lab Hub, Claude (Opus 5.5), 31/10/2026. */
+const CATEGORIAS_DA_LOJA = (Object.keys(CATEGORY_LABELS) as StoreCategory[]).filter((key) => key !== 'outfits' && key !== 'mounts');
+
 function oppositeGenderLooks(gender: 'm' | 'f'): Set<number> {
   const opposite = new Set<number>();
   for (const entry of outfitsCatalog) {
@@ -170,7 +174,7 @@ export function StorePanel({
   onAct: (body: Record<string, unknown>) => Promise<void>;
 }) {
   const [walletTab, setWalletTab] = useState<WalletTab>('store');
-  const [category, setCategory] = useState<StoreCategory>('mounts');
+  const [category, setCategory] = useState<StoreCategory>('vip');
   const [catalogQuery, setCatalogQuery] = useState('');
   const [ownFilter, setOwnFilter] = useState<OwnFilter>('all');
   const [sortMode, setSortMode] = useState<SortMode>('name');
@@ -273,7 +277,7 @@ export function StorePanel({
       {walletTab === 'store' && (
         <>
           <div className="store-category-tabs">
-            {(Object.keys(CATEGORY_LABELS) as StoreCategory[]).map((key) => (
+            {CATEGORIAS_DA_LOJA.map((key) => (
               <button
                 key={key}
                 type="button"

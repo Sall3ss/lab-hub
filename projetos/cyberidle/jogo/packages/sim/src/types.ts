@@ -336,6 +336,8 @@ export interface Appearance {
   mount: number;
   /** Outfit addon pattern index: 0 base, 1 first, 2 second, 3 both. */
   addons: number;
+  /** Cyberidle: cor do Visual (PALETA_NEON em apps/web/src/render/neonAtores.ts); 0 = original. */
+  corNeon?: number;
 }
 
 /** Stats derived from level, vocation, skills and gear. Recomputed, never stored. */

@@ -93,6 +93,7 @@ function inventorySyncKey(server: CharacterView): string {
       server.appearance?.addons ?? 0,
       server.appearance?.mount ?? 0,
       server.appearance?.aura ?? 0,
+      server.appearance?.corNeon ?? 0,
     ].join(':'),
 
   ].join(';');
@@ -338,6 +339,8 @@ function applyServerSnapshot(session: HuntSession, server: CharacterView): void 
     addons: server.appearance.addons ?? 0,
     mount: server.appearance.mount ?? 0,
     aura: server.appearance.aura ?? 0,
+    // Cyberidle: cor do Visual (sem isto a cor some do líder enquanto caça).
+    corNeon: server.appearance.corNeon ?? 0,
   };
 
   session.character.unlockedMounts = [...(server.unlockedMounts ?? [])];

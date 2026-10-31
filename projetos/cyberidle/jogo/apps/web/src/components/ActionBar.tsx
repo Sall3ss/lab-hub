@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Spell } from '@tibia-idle/sim';
 import type { CharacterView } from '../api/types.js';
-import { outfitIconUrl } from '../render/outfitIcon.js';
+import { retratoJogador } from '../render/neonAtores.js';
 import { SpellIcon } from './SpellIcon.js';
 
 const VOC_SHORT: Record<number, string> = {
@@ -29,28 +29,12 @@ function Portrait({ character }: { character: CharacterView }) {
 
   useEffect(() => {
     let alive = true;
-    void outfitIconUrl(
-      character.appearance.outfit,
-      44,
-      {
-        head: character.appearance.head,
-        body: character.appearance.body,
-        legs: character.appearance.legs,
-        feet: character.appearance.feet,
-      },
-      character.appearance.addons ?? 0,
-    ).then((next) => {
+    // Cyberidle: retrato da arte da classe na cor do Visual (não o outfit original).
+    void retratoJogador(character.vocation.id, character.appearance.corNeon ?? 0, 44).then((next) => {
       if (alive) setUrl(next);
     });
     return () => { alive = false; };
-  }, [
-    character.appearance.outfit,
-    character.appearance.head,
-    character.appearance.body,
-    character.appearance.legs,
-    character.appearance.feet,
-    character.appearance.addons,
-  ]);
+  }, [character.vocation.id, character.appearance.corNeon]);
 
   return (
     <div className="action-bar__portrait" title={character.name}>

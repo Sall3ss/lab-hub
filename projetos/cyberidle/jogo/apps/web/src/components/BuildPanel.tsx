@@ -4,7 +4,7 @@ import { magicProgressPercent, skillProgressPercent } from '@tibia-idle/sim';
 import type { CharacterView, EquippedItem } from '../api/types.js';
 import { formatNumber, itemRarity } from '../format.js';
 import { useLocale } from '../i18n/Locale.js';
-import { outfitIconUrl } from '../render/outfitIcon.js';
+import { retratoJogador } from '../render/neonAtores.js';
 import { PAPERDOLL_SLOTS } from '../ui/paperdollSlots.js';
 import { ItemInspectModal } from './ItemInspectModal.js';
 import { ItemSlot } from './ItemSlot.js';
@@ -75,31 +75,12 @@ function BuildPortrait({ character }: { character: CharacterView }) {
 
   useEffect(() => {
     let alive = true;
-    void outfitIconUrl(
-      character.appearance.outfit,
-      112,
-      {
-        head: character.appearance.head,
-        body: character.appearance.body,
-        legs: character.appearance.legs,
-        feet: character.appearance.feet,
-      },
-      character.appearance.addons ?? 0,
-      undefined,
-      Boolean(character.appearance.mount),
-    ).then((next) => {
+    // Cyberidle: retrato da arte da classe na cor do Visual (não o outfit original).
+    void retratoJogador(character.vocation.id, character.appearance.corNeon ?? 0, 112).then((next) => {
       if (alive) setUrl(next);
     });
     return () => { alive = false; };
-  }, [
-    character.appearance.outfit,
-    character.appearance.head,
-    character.appearance.body,
-    character.appearance.legs,
-    character.appearance.feet,
-    character.appearance.addons,
-    character.appearance.mount,
-  ]);
+  }, [character.vocation.id, character.appearance.corNeon]);
 
   return (
     <div className="build-portrait" title={character.name}>

@@ -60,6 +60,7 @@ function playerVisualKey(player: PlayerView): string {
     a?.feet,
     a?.addons,
     a?.mount,
+    a?.corNeon,
   ].join(':');
 }
 
@@ -239,7 +240,7 @@ export class TrainingRenderer {
 
   private spawnPlayer(player: PlayerView, tx: number, ty: number): void {
     // Cyberidle: o mesmo personagem da caçada (arte da IA ou desenho gerado), não o outfit original.
-    const textures = quadrosJogador({ vocationId: player.vocationId }, DIRECTION_NORTH, false);
+    const textures = quadrosJogador({ vocationId: player.vocationId, corNeon: player.appearance?.corNeon ?? 0 }, DIRECTION_NORTH, false);
     const escala = escalaJogador(player.vocationId) ?? 0.92;
 
     const sprite = new AnimatedSprite(textures.length ? textures : [placeholder(0x3d8f4a)]);

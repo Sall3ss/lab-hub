@@ -251,7 +251,7 @@ export function RightDock({
                       <div className="party-card-sub">{vocacao} · lvl {mate.level}</div>
                       <div className="party-card-btns">
                         <button type="button" className="party-icon-btn" title="Helper (magias, poções, táticas)" disabled={busy} onClick={() => onHelperFor(mate.id)}>⚙</button>
-                        <button type="button" className="party-icon-btn" title="Outfit" disabled={busy} onClick={() => (eu ? onOutfit() : onOutfitFor(mate.id))}>👕</button>
+                        <button type="button" className="party-icon-btn" title="Visual" disabled={busy} onClick={() => (eu ? onOutfit() : onOutfitFor(mate.id))}>👕</button>
                         {!eu && (
                           <button type="button" className="party-icon-btn" title="Equipamento" disabled={busy} onClick={() => onEquipFor(mate.id)}>🛡</button>
                         )}

@@ -82,6 +82,17 @@ biohacker, monk). Classe sem imagem usa o desenho gerado por código. No ar: as 
 (gunslinger entrou em 28/10, refeito em imagem única 59x64; a primeira geração veio em 4
 direções miúdas e não serviu). Arte da IA ignora as cores do Outfit.
 
+**31/10/2026 - janela Visual no lugar do Outfit, Loja sem roupas e montarias (pedido do
+dono, opção 2).** `components/OutfitModal.tsx` virou "Visual": prévia grande da arte da
+classe e a escolha de uma cor neon (`PALETA_NEON` em `render/neonAtores.ts`: Original + 12
+cores), mais os 3 presets. A cor pinta só as partes coloridas da arte (preto, cinza e cromado
+ficam) e vale na caçada, na party, na sala de treino, no Build e na barra de ações
+(`retratoJogador`). Gravada em `appearance.corNeon` (0 = original; servidor aceita 0..12 na ação
+`appearance`); sai junto no save da nuvem. Roupas, addons, montarias e a paleta de cores do
+Tibia saíram da janela; a Loja não mostra mais as abas Outfits e Montarias (abre em Premium).
+Corrigido no caminho: `live/predict.ts` copiava a aparência campo a campo e perdia a cor do
+líder durante a caçada. Conferido no jogo: líder Magenta e tank Verde na cena.
+
 **28/10/2026 - monstros cercam o tank (passo C).** Na tela, os monstros agora andam até o
 tank da party (Street Samurai, a mesma regra do `tanque` em `server/src/game.ts`) e ficam em
 volta dele, olhando para ele - combina com o combate, em que o tank segura o dano

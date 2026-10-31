@@ -820,7 +820,7 @@ export function GameScreen({
             const result = await api.act(janelaComp.id, { type: 'preset-load', slot });
             atualizarCompanheiro(result.character);
             const a = result.character.appearance;
-            return { outfit: a.outfit, head: a.head, body: a.body, legs: a.legs, feet: a.feet, addons: a.addons ?? 0, mount: a.mount ?? 0, aura: a.aura ?? 0 } as OutfitDraft;
+            return { outfit: a.outfit, head: a.head, body: a.body, legs: a.legs, feet: a.feet, addons: a.addons ?? 0, mount: a.mount ?? 0, aura: a.aura ?? 0, corNeon: a.corNeon ?? 0 } as OutfitDraft;
           }}
         />
       )}
@@ -868,6 +868,7 @@ export function GameScreen({
                 feet: a.feet,
                 addons: a.addons ?? 0,
                 mount: a.mount ?? 0,
+                corNeon: a.corNeon ?? 0,
                 aura: a.aura ?? 0,
               };
             });

@@ -39,6 +39,7 @@ function jogadorGerado(vocationId: number, appearance?: PlayerView['appearance']
       corCabeca: appearance ? tibiaColor(appearance.head) : undefined,
       corCorpo: appearance ? tibiaColor(appearance.body) : undefined,
       corPernas: appearance ? tibiaColor(appearance.legs) : undefined,
+      corNeon: appearance?.corNeon ?? 0,
     },
   };
 }
@@ -99,7 +100,7 @@ export interface PlayerView {
   maxHealth: number;
   mana: number;
   maxMana: number;
-  appearance?: { outfit: number; head: number; body: number; legs: number; feet: number; aura?: number; mount?: number; addons?: number };
+  appearance?: { outfit: number; head: number; body: number; legs: number; feet: number; aura?: number; mount?: number; addons?: number; corNeon?: number };
 }
 
 /** BaiakIdle game-window name: lime fill, heavy black outline. */
@@ -597,6 +598,12 @@ export class CombatScene {
       }
       this.placeAt(existing, x, y);
       existing.appearance = ally.appearance;
+      // Cyberidle: cor do Visual trocada -> redesenha o companheiro.
+      const gerado = jogadorGerado(ally.vocationId, ally.appearance);
+      if (existing.gerado?.jogador?.corNeon !== gerado?.jogador?.corNeon) {
+        existing.gerado = gerado;
+        this.face(existing, 0, 1, false, true);
+      }
       this.layoutHud(existing, ally.health / Math.max(1, ally.maxHealth));
       void this.drawMount(existing, ally.appearance);
     });

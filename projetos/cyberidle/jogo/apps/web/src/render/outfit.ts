@@ -291,7 +291,7 @@ export function outfitToAppearance(outfit: Record<string, number>): {
 
 /** Stable key so combat can detect outfit/color/addon changes. */
 export function appearancePoseKey(
-  appearance?: { outfit?: number; head?: number; body?: number; legs?: number; feet?: number; addons?: number; mount?: number } | null,
+  appearance?: { outfit?: number; head?: number; body?: number; legs?: number; feet?: number; addons?: number; mount?: number; corNeon?: number } | null,
 ): string {
   if (!appearance) return '';
   return [
@@ -302,5 +302,6 @@ export function appearancePoseKey(
     appearance.feet ?? 0,
     appearance.addons ?? 0,
     appearance.mount ?? 0,
+    appearance.corNeon ?? 0,
   ].join(':');
 }

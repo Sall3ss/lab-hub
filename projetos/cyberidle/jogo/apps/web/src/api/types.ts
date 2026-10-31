@@ -204,7 +204,7 @@ export interface CharacterView {
   };
   unlockedOutfits: number[];
   unlockedMounts: number[];
-  appearance: { outfit: number; head: number; body: number; legs: number; feet: number; aura: number; mount: number; addons?: number };
+  appearance: { outfit: number; head: number; body: number; legs: number; feet: number; aura: number; mount: number; addons?: number; corNeon?: number };
   partySlots: number;
   partyBonus: number;
   /** Personagens da conta em cada slot extra de party (0 = vazio). Cyberidle. */
@@ -219,7 +219,7 @@ export interface CharacterView {
     level: number;
     vocationId: number;
     self?: boolean;
-    appearance?: { outfit: number; head: number; body: number; legs: number; feet: number; aura?: number; mount?: number; addons?: number };
+    appearance?: { outfit: number; head: number; body: number; legs: number; feet: number; aura?: number; mount?: number; addons?: number; corNeon?: number };
     /** Ficha para o painel da party (Cyberidle). */
     vocationName?: string;
     papel?: 'TANK' | 'SUP' | 'DPS';
@@ -244,7 +244,7 @@ export interface CharacterView {
   supplySlots: number;
   supplySlotCost: number;
   supplySlotCoinCost: number;
-  appearancePresets: Array<{ outfit: number; head: number; body: number; legs: number; feet: number; aura: number; mount: number; addons?: number }>;
+  appearancePresets: Array<{ outfit: number; head: number; body: number; legs: number; feet: number; aura: number; mount: number; addons?: number; corNeon?: number }>;
   boosts: { xp: number; damage: number; loot: number; defense: number };
   charmPoints: number;
   charmPointsLeft: number;

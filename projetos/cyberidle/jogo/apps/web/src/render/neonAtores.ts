@@ -58,7 +58,7 @@ function quadros(
 
 // ---------------------------------------------------------------- personagens
 
-export interface JogadorGerado { vocationId: number; corCorpo?: RGB; corPernas?: RGB; corCabeca?: RGB }
+export interface JogadorGerado { vocationId: number; corCorpo?: RGB; corPernas?: RGB; corCabeca?: RGB; /** Cor do Visual (PALETA_NEON); 0 = original. */ corNeon?: number }
 
 type Tipo = 'samurai' | 'gun' | 'net' | 'bio' | 'monk';
 const CLASSE: Record<number, { neon: RGB; tipo: Tipo }> = {
@@ -80,15 +80,19 @@ const BOTA: RGB = [26, 28, 40];
 
 const ARQUIVO_CLASSE: Record<Tipo, string> = { samurai: 'samurai', gun: 'gunslinger', net: 'netrunner', bio: 'biohacker', monk: 'monk' };
 const imagens = new Map<Tipo, HTMLImageElement>();
+const carregando = new Map<Tipo, Promise<HTMLImageElement | null>>();
 /** Altura na tela (px de mundo) que a arte da IA ocupa. */
 export const ALTURA_PERSONAGEM = 46;
 
 function carregarImagens(): void {
   if (typeof document === 'undefined') return;
   for (const tipo of Object.keys(ARQUIVO_CLASSE) as Tipo[]) {
-    const img = new Image();
-    img.onload = () => { imagens.set(tipo, img); };
-    img.src = `${import.meta.env.BASE_URL}assets/personagens/${ARQUIVO_CLASSE[tipo]}.png`;
+    carregando.set(tipo, new Promise((pronto) => {
+      const img = new Image();
+      img.onload = () => { imagens.set(tipo, img); pronto(img); };
+      img.onerror = () => pronto(null);
+      img.src = `${import.meta.env.BASE_URL}assets/personagens/${ARQUIVO_CLASSE[tipo]}.png`;
+    }));
   }
 }
 carregarImagens();
@@ -104,10 +108,86 @@ export function escalaJogador(vocationId: number): number | undefined {
   return img ? ALTURA_PERSONAGEM / img.naturalHeight : undefined;
 }
 
-function quadrosDaImagem(img: HTMLImageElement, chave: string, andando: boolean): Texture[] {
+/**
+ * Cores do Visual (antiga janela de Outfit): a arte da IA ganha a cor escolhida nas partes
+ * coloridas (preto, cinza e cromado ficam). 0 = cores originais da arte.
+ * Lab Hub, Claude (Opus 5.5), 31/10/2026.
+ */
+export const PALETA_NEON: ReadonlyArray<{ nome: string; matiz: number | null }> = [
+  { nome: 'Original', matiz: null },
+  { nome: 'Ciano', matiz: 188 }, { nome: 'Magenta', matiz: 312 }, { nome: 'Verde', matiz: 140 },
+  { nome: 'Amarelo', matiz: 54 }, { nome: 'Laranja', matiz: 26 }, { nome: 'Vermelho', matiz: 354 },
+  { nome: 'Roxo', matiz: 272 }, { nome: 'Azul', matiz: 222 }, { nome: 'Rosa', matiz: 330 },
+  { nome: 'Lima', matiz: 90 }, { nome: 'Turquesa', matiz: 166 }, { nome: 'Dourado', matiz: 44 },
+];
+
+/** Cor (css) de uma entrada da paleta, para os botões da tela. */
+export function corDaPaleta(corNeon: number): string | null {
+  const m = PALETA_NEON[corNeon]?.matiz;
+  return m == null ? null : css(hslRgb(m, 95, 58));
+}
+
+const tingidas = new Map<string, HTMLCanvasElement>();
+
+/** A arte da classe pintada na cor do Visual (cache por classe e cor). */
+function imagemNaCor(img: HTMLImageElement, tipo: Tipo, corNeon: number): HTMLImageElement | HTMLCanvasElement {
+  const matiz = PALETA_NEON[corNeon]?.matiz;
+  if (matiz == null) return img;
+  const chave = `${tipo}:${corNeon}`;
+  const pronta = tingidas.get(chave);
+  if (pronta) return pronta;
+  const c = document.createElement('canvas');
+  c.width = img.naturalWidth; c.height = img.naturalHeight;
+  const g = c.getContext('2d', { willReadFrequently: true })!;
+  g.drawImage(img, 0, 0);
+  const dados = g.getImageData(0, 0, c.width, c.height);
+  const d = dados.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (!d[i + 3]) continue;
+    const r = d[i]! / 255, gr = d[i + 1]! / 255, b = d[i + 2]! / 255;
+    const max = Math.max(r, gr, b), min = Math.min(r, gr, b), dd = max - min;
+    if (dd < 0.12) continue; // preto, cinza e cromado ficam como estão
+    const l = (max + min) / 2;
+    const sat = l > 0.5 ? dd / (2 - max - min) : dd / (max + min);
+    const [nr, ng, nb] = hslRgb(matiz, Math.max(sat * 100, 55), l * 100);
+    d[i] = nr; d[i + 1] = ng; d[i + 2] = nb;
+  }
+  g.putImageData(dados, 0, 0);
+  tingidas.set(chave, c);
+  return c;
+}
+
+const largura = (img: HTMLImageElement | HTMLCanvasElement) => (img instanceof HTMLImageElement ? img.naturalWidth : img.width);
+const altura = (img: HTMLImageElement | HTMLCanvasElement) => (img instanceof HTMLImageElement ? img.naturalHeight : img.height);
+
+/**
+ * Retrato do personagem (data URL), para o Visual, o Build e a barra de ações: a arte da IA na
+ * cor escolhida; sem a arte, o desenho gerado.
+ */
+export async function retratoJogador(vocationId: number, corNeon: number, tamanho: number): Promise<string | null> {
+  if (typeof document === 'undefined') return null;
+  const classe = CLASSE[vocationId] ?? CLASSE[4]!;
+  const img = imagens.get(classe.tipo) ?? (await carregando.get(classe.tipo)) ?? null;
+  const fonte: HTMLImageElement | HTMLCanvasElement | null = img
+    ? imagemNaCor(img, classe.tipo, corNeon)
+    : ((quadrosJogador({ vocationId }, DIR_SUL, false)[0]?.source.resource as HTMLCanvasElement | undefined) ?? null);
+  if (!fonte) return null;
+  const w = largura(fonte as HTMLImageElement | HTMLCanvasElement);
+  const h = altura(fonte as HTMLImageElement | HTMLCanvasElement);
+  const fator = (tamanho * 0.92) / Math.max(w, h);
+  const c = document.createElement('canvas');
+  c.width = tamanho; c.height = tamanho;
+  const g = c.getContext('2d')!;
+  g.imageSmoothingEnabled = false;
+  const dw = Math.round(w * fator), dh = Math.round(h * fator);
+  g.drawImage(fonte, Math.round((tamanho - dw) / 2), Math.round((tamanho - dh) / 2), dw, dh);
+  return c.toDataURL('image/png');
+}
+
+function quadrosDaImagem(img: HTMLImageElement | HTMLCanvasElement, chave: string, andando: boolean): Texture[] {
   const pronto = cache.get(chave);
   if (pronto && pronto.every((t) => !t.destroyed)) return pronto;
-  const tam = Math.max(img.naturalWidth + 4, img.naturalHeight + 6);
+  const tam = Math.max(largura(img) + 4, altura(img) + 6);
   const n = andando ? 4 : 2;
   const lista: Texture[] = [];
   for (let q = 0; q < n; q += 1) {
@@ -118,8 +198,8 @@ function quadrosDaImagem(img: HTMLImageElement, chave: string, andando: boolean)
     const bob = andando ? (q % 2 ? -2 : 0) : (q ? -1 : 0);
     const inclina = andando ? [1, 0, -1, 0][q]! : 0;
     g.fillStyle = 'rgba(0,0,0,0.42)';
-    g.beginPath(); g.ellipse(tam / 2, tam - 4, img.naturalWidth * 0.32, 3.5, 0, 0, Math.PI * 2); g.fill();
-    g.drawImage(img, Math.round((tam - img.naturalWidth) / 2) + inclina, tam - 4 - img.naturalHeight + bob);
+    g.beginPath(); g.ellipse(tam / 2, tam - 4, largura(img) * 0.32, 3.5, 0, 0, Math.PI * 2); g.fill();
+    g.drawImage(img, Math.round((tam - largura(img)) / 2) + inclina, tam - 4 - altura(img) + bob);
     const t = Texture.from(c);
     t.source.scaleMode = 'nearest';
     lista.push(t);
@@ -131,7 +211,7 @@ function quadrosDaImagem(img: HTMLImageElement, chave: string, andando: boolean)
 export function quadrosJogador(j: JogadorGerado, direcao: number, andando: boolean): Texture[] {
   const classe = CLASSE[j.vocationId] ?? CLASSE[4]!;
   const img = imagens.get(classe.tipo);
-  if (img) return quadrosDaImagem(img, `ia:${classe.tipo}:${andando ? 1 : 0}`, andando);
+  if (img) return quadrosDaImagem(imagemNaCor(img, classe.tipo, j.corNeon ?? 0), `ia:${classe.tipo}:${j.corNeon ?? 0}:${andando ? 1 : 0}`, andando);
   const jaqueta = j.corCorpo ?? [70, 56, 140];
   const calca = j.corPernas ?? [34, 38, 66];
   const cabelo = j.corCabeca ?? [26, 28, 44];

@@ -198,6 +198,8 @@ export type ActBody = {
   protector?: unknown;
   sharpshooter?: unknown;
   spiritPotionId?: unknown;
+  /** Cyberidle: cor do Visual (ação appearance). */
+  corNeon?: unknown;
 };
 
 export function act(
@@ -830,6 +832,8 @@ export function act(
       const addons = Math.floor(Number(body.addons ?? character.appearance.addons ?? 0));
       const mount = Math.floor(Number(body.mount ?? character.appearance.mount ?? 0));
       const aura = Math.floor(Number(body.aura ?? character.appearance.aura ?? 0));
+      // Cyberidle: cor do Visual (0 = original, 1..12 = paleta neon).
+      const corNeon = Math.max(0, Math.min(12, Math.floor(Number(body.corNeon ?? character.appearance.corNeon ?? 0)) || 0));
       const clampColor = (value: number) => Math.max(0, Math.min(132, value));
       if (!Number.isInteger(outfit) || outfit < 1) throw new GameError('Invalid outfit.');
       character.unlockedOutfits ??= [character.appearance.outfit];
@@ -857,6 +861,7 @@ export function act(
         addons,
         mount,
         aura,
+        corNeon,
       };
       // Keep hunt session appearance in sync if it was a separate snapshot.
       if (loaded.session && loaded.session.character !== character) {

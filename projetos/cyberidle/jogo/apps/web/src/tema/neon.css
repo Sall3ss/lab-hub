@@ -106,3 +106,30 @@ body::after {
 @media (prefers-reduced-motion: reduce) {
   body::after { display: none; }
 }
+
+/* Visual (antiga janela de Outfit): prévia da arte + paleta neon. Lab Hub, Claude (Opus 5.5), 31/10/2026. */
+.visual-modal { max-width: 720px; }
+.visual-layout { display: grid; grid-template-columns: 200px 1fr; gap: 18px; align-items: start; }
+.visual-preview { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+.visual-preview .outfit-preview-stage {
+  width: 180px; height: 180px; display: grid; place-items: center; border-radius: 10px;
+  background: radial-gradient(circle at 50% 60%, rgba(0, 229, 255, 0.12), transparent 70%), #070a18;
+  border: 1px solid rgba(0, 229, 255, 0.25);
+}
+.visual-preview img { image-rendering: pixelated; }
+.visual-controls h3 { margin: 0 0 8px; font-size: 13px; color: var(--neon-ciano); }
+.visual-controls h3 + .outfit-presets { margin-bottom: 4px; }
+.visual-paleta { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; margin-bottom: 16px; }
+.visual-cor {
+  display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px; cursor: pointer;
+  background: #0b0f20; border: 1px solid #232b52; color: #cfe9ff; font-size: 12px; text-align: left;
+}
+.visual-cor:hover { border-color: var(--neon-ciano); }
+.visual-cor.on { border-color: var(--neon-magenta); box-shadow: var(--brilho-magenta); color: #fff; }
+.visual-cor i { width: 16px; height: 16px; border-radius: 50%; flex: none; }
+.visual-cor i.original { background: conic-gradient(#00e5ff, #ff3cd2, #39ff88, #ffd23c, #00e5ff); }
+.visual-dica { margin: 6px 0 0; font-size: 11px; }
+@media (max-width: 640px) {
+  .visual-layout { grid-template-columns: 1fr; }
+  .visual-preview .outfit-preview-stage { width: 150px; height: 150px; }
+}
