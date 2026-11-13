@@ -1,12 +1,17 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 28/10/2026 (Cyberidle: arte própria em personagens, monstros, itens e treino).**
+**Atualizado em 13/11/2026 (Hub: cartões novos na vitrine, com "Sobre o projeto" no menu de três pontos).**
 
 ## Pronto
 
 - Página do hub (vitrine de projetos) com estado vazio, cards com título, ideia, objetivo
   e fase, filtro por fase e erro de carregamento com "tentar de novo". Conferida em print no
   PC (1280) e no celular (390).
+- 13/11, pedido do dono: cartões mais modernos (cantos de 1.5rem, sombra suave, cor e
+  inicial do projeto calculadas pelo slug, título maior). Ideia e objetivo saíram do cartão
+  e foram para o menu de três pontos (canto superior direito) → "Sobre o projeto", que abre
+  uma janela com os dois e o botão "Abrir projeto". O cartão inteiro continua sendo o link.
+  Conferido em print no PC (1280, claro e escuro) e no celular (390).
 - Estrutura de isolamento por projeto e o comando `scripts/novo-projeto.mjs`, testado numa
   cópia descartável com dois projetos: pastas separadas, registro da API gerado, slug
   repetido e slug inválido recusados, rota `/ping` respondendo.

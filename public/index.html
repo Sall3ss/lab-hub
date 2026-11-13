@@ -31,6 +31,26 @@
     <section class="grade" id="grade" aria-live="polite"></section>
   </main>
 
+  <dialog class="sobre" id="sobre" aria-labelledby="sobre-titulo">
+    <div class="sobre-caixa">
+      <div class="sobre-topo">
+        <div>
+          <p class="sobre-rotulo">Sobre o projeto</p>
+          <h2 id="sobre-titulo"></h2>
+        </div>
+        <button type="button" class="fechar" data-fechar aria-label="Fechar">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <span id="sobre-fase" class="fase"></span>
+      <dl>
+        <div><dt>Ideia</dt><dd id="sobre-ideia"></dd></div>
+        <div><dt>Objetivo</dt><dd id="sobre-objetivo"></dd></div>
+      </dl>
+      <a class="botao" id="sobre-abrir" href="#">Abrir projeto <span aria-hidden="true">→</span></a>
+    </div>
+  </dialog>
+
   <script src="/navegador.js"></script>
   <script src="/hub.js"></script>
 </body>
