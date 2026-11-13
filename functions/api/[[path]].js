@@ -18,6 +18,7 @@ import { usuarioAtual, precisaDefinirAcesso, administra } from '../../lib/auth.j
 import { auditar } from '../../lib/audit.js';
 import { db } from '../../lib/db.js';
 import { PROJETOS } from '../../projetos/registro.js';
+import { rotasSessao } from '../../app/rotas/sessao.js';
 
 export async function onRequest(context) {
   const { request, env, params, data } = context;
@@ -29,9 +30,9 @@ export async function onRequest(context) {
     // Diagnóstico: protegido por sessão de administrador (ver lib/diag.js).
     if (rota === 'diag') return await diag(request, env);
 
-    // A casca de cada cliente monta as rotas de sessão dela. Ver o painel do
-    // Espaço NeuroFlorescer para um exemplo completo (app/rotas/sessao.js).
-    if (rota === 'sessao') return json({ erro: 'implemente as rotas de sessão nesta casca' }, 501);
+    // Entrar, sair e definir o acesso: antes das travas, porque é por aqui que se entra.
+    // Lab Hub, 13/11/2026 (nasceu com a Jean). Claude (Opus 5.5).
+    if (rota === 'sessao') return await rotasSessao({ request, env, data, partes, metodo, json });
 
     const u = await usuarioAtual(request, env);
     if (!u) return json({ erro: 'sessão expirada', reautenticar: true }, 401);
@@ -71,6 +72,6 @@ export async function onRequest(context) {
   }
 }
 
-function json(obj, status = 200) {
-  return new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json' } });
+function json(obj, status = 200, extras = {}) {
+  return new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json', ...extras } });
 }

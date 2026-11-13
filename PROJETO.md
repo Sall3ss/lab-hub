@@ -53,5 +53,13 @@ o script é o que garante o isolamento.
 - `CLIENTE-SLUG` já trocado por `lab-hub` em `wrangler.toml` e no deploy (15/10): o wrangler
   recusa rodar até no PC com o nome provisório. Se o Pages for criado com outro nome, troque
   nos dois.
-- Login: as rotas de sessão (`/api/sessao`) ainda não existem. Só serão necessárias quando
-  o primeiro projeto precisar gravar dado no servidor; até lá tudo `/api/p/...` responde 401.
+- Login: feito em 13/11/2026 (nasceu com a Jean). Tela `/entrar/?volta=<caminho>`, rotas
+  `/api/sessao` em `app/rotas/sessao.js`. O administrador nasce com senha provisória
+  (`scripts/admin-inicial.mjs`, migration `0004_acesso_inicial.sql`) e define nome, e-mail
+  e senha no primeiro login. A vitrine continua aberta; só o que é de projeto exige login.
+
+## Exceção: a Jean
+
+A Jean (`projetos/jean/`) é a assistente do hub e a **única** exceção à regra acima: ela lê
+a ficha e o cartão de cada projeto para saber onde cada um está. Nunca lê tabela de outro
+projeto. Detalhes na ficha dela.

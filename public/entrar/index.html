@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Entrar - Lab Hub</title>
+  <!-- Tela de entrada do Lab Hub (nasceu com a Jean, 13/11/2026). E do hub, nao de um
+       projeto: qualquer projeto que precise de login manda para /entrar/?volta=<onde estava>.
+       Claude (Opus 5.5). -->
+  <link rel="stylesheet" href="./estilo.css" />
+</head>
+<body>
+  <main class="caixa">
+    <a class="marca" href="/">Lab Hub</a>
+
+    <p class="aviso" id="carregando">Conferindo acesso...</p>
+
+    <form id="form-entrar" hidden novalidate>
+      <h1>Entrar</h1>
+      <label>Usuário ou e-mail
+        <input name="email" data-mask="email" autocomplete="username" inputmode="email" autocapitalize="off" required />
+      </label>
+      <label>Senha
+        <input name="senha" type="password" autocomplete="current-password" required />
+      </label>
+      <p class="erro" data-erro hidden></p>
+      <button type="submit" class="botao">Entrar</button>
+      <a class="voltar" href="/">Voltar para o hub</a>
+    </form>
+
+    <form id="form-acesso" hidden novalidate>
+      <h1>Defina o seu acesso</h1>
+      <p class="sub">É o primeiro acesso. A senha provisória deixa de valer agora, e daqui em diante você entra com o e-mail e a senha que escolher aqui.</p>
+      <label>Seu nome
+        <input name="nome" data-mask="upper" autocomplete="name" required />
+      </label>
+      <label>E-mail
+        <input name="email" type="email" data-mask="email" autocomplete="email" required />
+      </label>
+      <label>Senha nova
+        <input name="senha" type="password" autocomplete="new-password" required />
+        <small>Pelo menos 8 caracteres, misturando letras e números.</small>
+      </label>
+      <label>Repita a senha nova
+        <input name="senha2" type="password" autocomplete="new-password" required />
+      </label>
+      <p class="erro" data-erro hidden></p>
+      <button type="submit" class="botao">Salvar e continuar</button>
+      <button type="button" class="voltar" data-sair>Sair sem salvar</button>
+    </form>
+  </main>
+
+  <script src="/navegador.js"></script>
+  <script src="/campos.js"></script>
+  <script src="./entrar.js"></script>
+</body>
+</html>

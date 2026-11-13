@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 13/11/2026 (Hub: cartões novos na vitrine, com "Sobre o projeto" no menu de três pontos).**
+**Atualizado em 13/11/2026 (Hub: login do hub; projeto Jean criado, etapa 1).**
 
 ## Pronto
 
@@ -54,7 +54,14 @@
    navegador ou na Cloudflare.
 7. Combinado em 26/10: uma conversa por projeto, com etiqueta `[Hub]` / `[Cyberidle]` no
    começo; o andamento de cada projeto fica na ficha dele (ver CLAUDE.md da pasta).
-3. Rotas de sessão/login - só quando um projeto precisar gravar no servidor.
+3. 🟢 **Login do hub (13/11):** `/entrar/`, rotas `/api/sessao` (`app/rotas/sessao.js`),
+   administrador com senha provisória (migration `0004_acesso_inicial.sql`; a senha está em
+   `_arquivos/PRIMEIRO-ACESSO.txt`, fora do repo, para o dono ler e APAGAR). Vitrine aberta;
+   projeto que precisa de login manda para `/entrar/?volta=...`.
+9. 🟡 **Jean (13/11): assistente do hub, em `/jean`.** Etapa 1 no ar (login, tabelas
+   `jean_*`, casca da tela). Tudo grátis na BETA: Gemini grátis como cérebro, voz do
+   navegador. Próximo passo precisa do dono: chave grátis do Gemini como secret
+   `GEMINI_API_KEY`. Estado e decisões em `projetos/jean/PROJETO.md`.
 
 ## ClipStudio: arquivado em 15/10/2026
 

@@ -2,7 +2,9 @@
 // Liga o slug de cada projeto do hub ao modulo de rotas dele (projetos/<slug>/api.js).
 
 import * as p_cyberidle from './cyberidle/api.js';
+import * as p_jean from './jean/api.js';
 
 export const PROJETOS = {
   'cyberidle': p_cyberidle,
+  'jean': p_jean,
 };

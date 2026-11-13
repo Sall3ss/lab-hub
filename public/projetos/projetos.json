@@ -7,5 +7,13 @@
     "fase": "beta",
     "criado_em": "2026-10-15",
     "endereco": "https://cyberidle-game.pages.dev"
+  },
+  {
+    "slug": "jean",
+    "titulo": "Jean",
+    "ideia": "Assistente pessoal e orquestradora do Lab Hub: conversa por texto e voz, no PC e no celular, e enxerga o estado de todos os projetos do hub.",
+    "objetivo": "Validar a ideia de graça (Gemini no plano gratuito, voz do navegador) e só depois decidir se vale pagar por Claude e voz melhor.",
+    "fase": "beta",
+    "criado_em": "2026-11-13"
   }
 ]

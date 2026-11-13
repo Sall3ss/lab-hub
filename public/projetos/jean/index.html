@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
+  <title>Jean</title>
+  <!-- Projeto "jean" do Lab Hub. Tudo que e deste projeto fica nesta pasta: para
+       migrar, ela sai inteira, sem depender de nada do hub. -->
+  <link rel="stylesheet" href="./estilo.css" />
+</head>
+<body>
+  <div class="app" id="app" hidden>
+    <aside class="lateral" id="lateral" aria-label="Conversas">
+      <div class="lateral-topo">
+        <a class="voltar" href="/">← Hub</a>
+        <button type="button" class="icone so-celular" data-fechar-lateral aria-label="Fechar lista de conversas">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <button type="button" class="nova" id="nova">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        Nova conversa
+      </button>
+      <input class="busca" id="busca" type="search" placeholder="Buscar conversas" aria-label="Buscar conversas" />
+      <nav class="conversas" id="conversas">
+        <p class="vazio-lateral">Nenhuma conversa ainda. A primeira aparece aqui assim que você mandar uma mensagem.</p>
+      </nav>
+      <div class="lateral-pe">
+        <span class="quem" id="quem"></span>
+        <button type="button" class="link" id="sair">Sair</button>
+      </div>
+    </aside>
+    <div class="veu so-celular" data-fechar-lateral hidden></div>
+
+    <main class="principal">
+      <header class="barra">
+        <button type="button" class="icone so-celular" id="abrir-lateral" aria-label="Abrir lista de conversas">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <h1>Jean</h1>
+        <span class="fase">Beta</span>
+      </header>
+
+      <section class="conversa" id="mensagens" aria-live="polite">
+        <div class="boas-vindas">
+          <div class="emblema" aria-hidden="true">J</div>
+          <h2 id="saudacao">Olá.</h2>
+          <p>Sou a Jean, a sua assistente aqui no Lab Hub. Em breve converso com você por texto e por voz, e acompanho o andamento de todos os projetos do hub.</p>
+          <p class="obra">Em construção: a conversa entra na próxima etapa.</p>
+        </div>
+      </section>
+
+      <form class="entrada" id="entrada">
+        <textarea id="texto" rows="1" placeholder="Pergunte à Jean" aria-label="Mensagem para a Jean" disabled></textarea>
+        <button type="submit" class="enviar" aria-label="Enviar" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+        </button>
+      </form>
+    </main>
+  </div>
+
+  <p class="carregando" id="carregando">Abrindo a Jean...</p>
+
+  <script src="/navegador.js"></script>
+  <script src="/campos.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
