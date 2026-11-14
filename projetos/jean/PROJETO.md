@@ -103,6 +103,15 @@ projeto a precisar dele.
     recusado, painel, recarregar) e com um Google de mentira (ferramenta, depois texto). A
     primeira conversa real com ferramentas é no ar.
 
+- 🟡 **14/11 - Erro 524 no primeiro teste real da etapa 3** (pedido "próximo passo do
+  Cyberidle + crie uma tarefa"): o Gemini passou de 100 s calado antes da primeira palavra
+  (pensando sobre a ficha grande) e a Cloudflare cortou. Corrigido: pensamento curto
+  (`thinkingLevel` LOW, trocável pela variável `JEAN_PENSAMENTO`), `includeThoughts` para o
+  resumo do pensamento ir chegando (não aparece na tela), 524/504 caem para o modelo
+  reserva, `ler_ficha` limitada a 12 mil caracteres e sinal de vida a cada 15 s na conexão
+  com a tela. Se o Google recusar o nível de pensamento, o motor tenta sem ele. Testado
+  com Google de mentira (5 cenários); falta o dono repetir o pedido no ar.
+
 ## Próximo passo
 
 4. Áudio: gravar, enviar arquivo de áudio, transcrição pelo Gemini, voz da resposta.

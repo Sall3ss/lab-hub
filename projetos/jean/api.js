@@ -190,6 +190,10 @@ function responderEmStreaming({ env, u, conversa, waitUntil, de }) {
     escritor.write(enc.encode('data: ' + JSON.stringify(obj) + '\n\n')).catch(() => { clienteFoi = true; });
   };
 
+  // Sinal de vida a cada 15 s enquanto o modelo pensa: conexao parada e cortada no caminho.
+  const pulso = setInterval(() => {
+    if (!clienteFoi) escritor.write(enc.encode(': pulso\n\n')).catch(() => { clienteFoi = true; });
+  }, 15000);
   const trabalho = (async () => {
     let resposta = '', fim = null, erro = null;
     const acoes = [];
@@ -230,6 +234,7 @@ function responderEmStreaming({ env, u, conversa, waitUntil, de }) {
     else await enviar({ tipo: 'fim', mensagem_id: mensagemId, motor: fim?.motor || null });
     escritor.close().catch(() => { /* cliente ja saiu */ });
   })();
+  trabalho.finally(() => clearInterval(pulso)).catch(() => {});
   if (waitUntil) waitUntil(trabalho);
 
   return new Response(readable, {

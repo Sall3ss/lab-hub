@@ -78,7 +78,8 @@ async function consultar(env, u, nome, args) {
   if (nome === 'ler_ficha') {
     const p = projetoPorSlug(args.projeto);
     if (!p) return { erro: 'projeto desconhecido' };
-    return { projeto: p.slug, ficha: corta(p.ficha, 24000) };
+    // 12 mil caracteres: a ficha inteira do Cyberidle (~30 mil) deixava o modelo lento demais.
+    return { projeto: p.slug, ficha: corta(p.ficha, 12000), cortada: p.ficha.length > 12000 };
   }
   if (nome === 'listar_pendencias') {
     const { projetos } = await dadosDoPainel(env, u.id);

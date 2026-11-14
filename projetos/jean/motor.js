@@ -14,6 +14,11 @@
 // modelo continua, em ate MAX_RODADAS. As partes que o modelo mandou voltam EXATAMENTE como
 // vieram: o Gemini 3 assina as chamadas (thoughtSignature) e recusa historico alterado.
 //
+// Tempo (14/11/2026, erro 524 no ar): o modelo pensava em silencio antes da 1a palavra e
+// a chamada passava de 100 s sem resposta, quando a Cloudflare corta. Por isso: pensamento
+// curto (JEAN_PENSAMENTO, padrao "low") e includeThoughts, para o resumo do pensamento ir
+// chegando e a conexao nao ficar parada. 524/504 tambem caem para o modelo reserva.
+//
 // ⚠️ Plano gratis: o Google pode usar o conteudo para melhorar os produtos dele, e ha
 // limite de pedidos por minuto e por dia. Ver projetos/jean/PROJETO.md.
 //
@@ -40,7 +45,14 @@ export async function* responder(env, { sistema, historico, ferramentas, executa
   if (!env.GEMINI_API_KEY) throw new ErroMotor('A chave do Gemini (GEMINI_API_KEY) não está configurada no Pages.', 503);
 
   const contents = historico.map((m) => ({ role: m.papel === 'jean' ? 'model' : 'user', parts: [{ text: m.conteudo }] }));
-  const base = { systemInstruction: { parts: [{ text: sistema }] } };
+  // Configuracoes de pensamento, da preferida para a mais simples: se o Google recusar uma
+  // (nome de nivel diferente num modelo), cai para a seguinte em vez de falhar.
+  const pensamentos = [
+    { thinkingConfig: { thinkingLevel: env.JEAN_PENSAMENTO || 'LOW', includeThoughts: true } },
+    { thinkingConfig: { includeThoughts: true } },
+    null,
+  ];
+  const base = { systemInstruction: { parts: [{ text: sistema }] }, generationConfig: pensamentos.shift() };
   if (ferramentas && ferramentas.length) base.tools = [{ functionDeclarations: ferramentas }];
 
   let modelos = [env.JEAN_MODELO || 'gemini-3.8-flash', env.JEAN_MODELO_RESERVA || 'gemini-3.5-flash-lite'];
@@ -48,7 +60,18 @@ export async function* responder(env, { sistema, historico, ferramentas, executa
   const usadas = [];
 
   for (let rodada = 0; rodada < MAX_RODADAS; rodada++) {
-    const r = await chamar(env, modelos, JSON.stringify({ ...base, contents }));
+    let r;
+    for (;;) {
+      try {
+        const corpo = { ...base, contents };
+        if (!corpo.generationConfig) delete corpo.generationConfig;
+        r = await chamar(env, modelos, JSON.stringify(corpo));
+        break;
+      } catch (e) {
+        if (!e.recusouPensamento || !base.generationConfig) throw e;
+        base.generationConfig = pensamentos.shift();
+      }
+    }
     // Depois da primeira resposta, fica no mesmo modelo: as assinaturas sao dele.
     modelos = [r.modelo];
     let fimLeitura = null;
@@ -91,8 +114,9 @@ async function chamar(env, modelos, corpo) {
     });
     if (r.ok) return { modelo, resposta: r };
     ultimoErro = await erroDoGoogle(r, modelo);
-    // Limite, modelo inexistente ou fora do ar: tenta a reserva. Chave errada: nao adianta.
-    if (![404, 429, 500, 503].includes(r.status)) break;
+    // Limite, modelo inexistente, fora do ar ou demorado demais: tenta a reserva.
+    // Chave errada ou pedido recusado: nao adianta.
+    if (![404, 429, 500, 502, 503, 504, 524].includes(r.status)) break;
   }
   throw ultimoErro;
 }
@@ -103,7 +127,9 @@ async function erroDoGoogle(r, modelo) {
   if (r.status === 429) return new ErroMotor('O limite gratuito do Gemini foi atingido. Espere um minuto e tente de novo (se persistir, o limite do dia acabou e volta amanhã).', 429);
   if (r.status === 400 && /API key/i.test(corpo)) return new ErroMotor('A chave do Gemini foi recusada pelo Google. Confira o secret GEMINI_API_KEY no Pages.', 502);
   if (r.status === 403) return new ErroMotor('O Google recusou o acesso com esta chave (403). Confira se a chave é do Google AI Studio e está ativa.', 502);
-  return new ErroMotor(`O Gemini não respondeu (erro ${r.status}). Tente de novo em instantes.`, 502);
+  if (r.status === 400 && /thinking/i.test(corpo)) { const e = new ErroMotor('O modelo recusou a configuração de pensamento.', 502); e.recusouPensamento = true; return e; }
+  if (r.status === 524 || r.status === 504) return new ErroMotor(`O Gemini demorou demais para responder (erro ${r.status}, ${modelo}). Tente de novo; se repetir, peça algo mais curto.`, 504);
+  return new ErroMotor(`O Gemini não respondeu (erro ${r.status}, ${modelo}). Tente de novo em instantes.`, 502);
 }
 
 // Le o streaming do Google. Gera { texto } e termina com { partes, entrada, saida, bloqueio },
