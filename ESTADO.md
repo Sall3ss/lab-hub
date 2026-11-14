@@ -86,7 +86,9 @@
    Botão no Cyberidle pendente (dono não quer mexer nele agora). Etapa 4 (voz) no ar e confirmada pelo dono
    em 14/11 (conversa por voz no celular, voz do Gemini): ditado e conversa por voz (navegador), áudio gravado (o Gemini ouve), Jean
    falando (TTS oficial do Gemini, reserva voz do navegador). edge-tts recusado (não
-   oficial, AGPL, exige Node); motivo na ficha da Jean. Estado e decisões em `projetos/jean/PROJETO.md`.
+   oficial, AGPL, exige Node); motivo na ficha da Jean.
+   14/11: voz também confirmada no PC (conversa por voz ouvindo pelo Gemini, menos de
+   5 s por etapa). Estado e decisões em `projetos/jean/PROJETO.md`.
 
 ## ClipStudio: arquivado em 15/10/2026
 

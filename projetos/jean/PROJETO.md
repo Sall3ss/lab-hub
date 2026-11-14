@@ -238,7 +238,7 @@ projeto a precisar dele.
   Gemini. Preferências lembradas no aparelho. Testado com microfone falso e com
   reconhecimento que falha como no Brave. **Dono confirmou que funciona no PC** (14/11).
 
-- 🟡 **14/11 - Conversa por voz pelo Gemini lenta no PC** ("tanto para entender que
+- 🟢 **14/11 - Conversa por voz pelo Gemini lenta no PC** ("tanto para entender que
   terminei de falar quanto para ela responder"). Feito: (1) fim da fala detectado com
   0,75 s de silêncio (era 1,3 s), com histerese, e "Pensando..." aparece na hora; (2) o
   ruído do ambiente agora é o menor volume do último 1,5 s, com teto (antes era medido só
@@ -252,7 +252,7 @@ projeto a precisar dele.
   se os tempos mostrarem que vale: começar a falar a primeira frase antes da resposta
   terminar.
 
-- 🟡 **14/11 - Voz no PC, 3 problemas no teste do dono:** (a) modo **Navegador** parado
+- 🟢 **14/11 - Voz no PC, 3 problemas no teste do dono:** (a) modo **Navegador** parado
   em "Ouvindo..." sem transcrever nada nem dar erro; (b) modo **Gemini** cortou "Jean,
   [pausa] que horas são?" no "Jean" (a Jean respondeu "Oi Matheus, tô por aqui...") -
   causado pelo ajuste de 0,75 s de silêncio feito minutos antes; (c) mais de 80 s até
@@ -266,6 +266,8 @@ projeto a precisar dele.
   registros do Pages aqui): suspeita principal é a voz do Gemini demorando (antes
   esperava até 45 s por modelo, 2 modelos). Testado com microfone sintético: pausa após o
   nome não corta; navegador mudo troca; voz travada cai na reserva.
+  - **Confirmado pelo dono no PC:** entendeu a pergunta inteira; menos de 5 s em cada
+    etapa (ouvir, pensar, falar).
   - Lição: encurtar a espera de silêncio quebra a pausa natural depois do nome. Medir
     com a frase real ("Jean, ... pergunta") antes de mexer nesse número.
 
