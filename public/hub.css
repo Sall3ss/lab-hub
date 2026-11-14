@@ -1,111 +1,200 @@
 /* hub.css - visual SO da pagina do hub. Os projetos NAO carregam este arquivo: cada um tem
    o proprio estilo.css, para nao se misturarem e para migrarem sem levar nada do hub.
+   Visual "painel de engenharia" (13/11/2026, pedido do dono): fundo escuro com grade
+   tecnica, ciano neon nos elementos ativos, cartoes como modulos chanfrados com marcacoes
+   de HUD, fonte mono (JetBrains Mono) para codigos, status e contadores.
+   Tema unico escuro, de proposito: a identidade e de painel noturno.
    Autoria: Claude (Opus 5.5). */
 :root {
-  color-scheme: light dark;
-  --fundo: #f6f7f9; --cartao: #ffffff; --texto: #1c2430; --suave: #5d6878;
-  --borda: #e2e6ec; --destaque: #2f6fed;
-  --beta: #b26a00; --beta-fundo: #fff3df;
-  --pronto: #1f7a45; --pronto-fundo: #e2f5ea;
-  --migrado: #5d6878; --migrado-fundo: #eceff3;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --fundo: #12161c; --cartao: #1b2129; --texto: #e6eaf0; --suave: #9aa5b4;
-    --borda: #2a323d; --destaque: #6f9dff;
-    --beta: #ffbf5e; --beta-fundo: #3a2a10;
-    --pronto: #6fd99b; --pronto-fundo: #133222;
-    --migrado: #9aa5b4; --migrado-fundo: #252c36;
-  }
+  color-scheme: dark;
+  --fundo: #07090e; --painel: #0b1018; --painel-2: #0f1621;
+  --texto: #ffffff; --metal: #b9c4d2; --suave: #7d8a9c; --fio: #1b2633;
+  --ciano: #00f0ff; --ciano-forte: rgb(0 240 255 / .55); --ciano-fraco: rgb(0 240 255 / .12);
+  --beta: #ffc04d; --pronto: #4dffa6; --migrado: #9aa5b4;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --titulo: "Chakra Petch", system-ui, sans-serif;
+  --chanfro: 16px;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-body { margin: 0; font-family: system-ui, sans-serif; background: var(--fundo); color: var(--texto); min-height: 100dvh; }
+body {
+  margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--texto); min-height: 100dvh;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgb(0 240 255 / .07), transparent 70%),
+    radial-gradient(ellipse at center, transparent 55%, rgb(0 0 0 / .65) 100%),
+    linear-gradient(rgb(0 240 255 / .035) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(90deg, rgb(0 240 255 / .035) 1px, transparent 1px) 0 0 / 32px 32px,
+    var(--fundo);
+  background-attachment: fixed;
+}
+::selection { background: var(--ciano); color: #001014; }
 
-.topo { background: var(--cartao); border-bottom: 1px solid var(--borda); }
-.topo-dentro { max-width: 70rem; margin: 0 auto; padding: 1.5rem 1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-.topo h1 { margin: 0; font-size: 1.75rem; letter-spacing: -.02em; }
-.sub { margin: .25rem 0 0; color: var(--suave); font-size: .95rem; }
-.contador { flex-shrink: 0; font-size: .85rem; color: var(--suave); border: 1px solid var(--borda); border-radius: 999px; padding: .3rem .8rem; }
+.rotulo-tec { margin: 0; font-family: var(--mono); font-size: .72rem; letter-spacing: .12em; color: var(--ciano); opacity: .8; }
 
-.conteudo { max-width: 70rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
-.aviso { color: var(--suave); }
+/* ---- topo ---- */
+.topo { position: relative; border-bottom: 1px solid var(--fio); background: linear-gradient(180deg, rgb(11 16 24 / .9), rgb(7 9 14 / .6)); overflow: hidden; }
+.topo::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--ciano) 20%, transparent 45%); background-size: 220% 100%; animation: varredura 6s linear infinite; }
+.topo-dentro { max-width: 72rem; margin: 0 auto; padding: 1.75rem 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1.25rem; flex-wrap: wrap; }
+.topo h1 { margin: .3rem 0 0; font-family: var(--titulo); font-weight: 700; font-size: 2.4rem; line-height: 1; letter-spacing: .06em; text-transform: uppercase;
+  text-shadow: 0 0 18px rgb(0 240 255 / .35); }
+.sub { margin: .5rem 0 0; color: var(--metal); font-size: .95rem; }
 
-.filtros { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1.25rem; }
-.filtros button { font: inherit; font-size: .9rem; padding: .45rem .95rem; border-radius: 999px; border: 1px solid var(--borda); background: var(--cartao); color: var(--texto); cursor: pointer; }
-.filtros button.ativo { background: var(--destaque); border-color: var(--destaque); color: #fff; }
+/* Contador como visor de telemetria. */
+.telemetria { position: relative; display: grid; gap: .3rem; min-width: 14rem; padding: .75rem 1rem .8rem; font-family: var(--mono);
+  background: rgb(0 240 255 / .04); border: 1px solid rgb(0 240 255 / .25);
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); }
+.telemetria::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgb(255 255 255 / .025) 0 1px, transparent 1px 3px); }
+.tl-rotulo { font-size: .64rem; letter-spacing: .16em; color: var(--suave); }
+.tl-valor { font-size: .8rem; letter-spacing: .12em; color: var(--metal); }
+.tl-valor b { font-size: 1.9rem; font-weight: 700; color: var(--ciano); letter-spacing: .04em; text-shadow: 0 0 12px rgb(0 240 255 / .6); vertical-align: -.15em; margin-right: .2rem; }
+.tl-linha { font-size: .66rem; letter-spacing: .12em; color: var(--suave); display: flex; align-items: center; gap: .45rem; }
+.tl-ponto { width: .45rem; height: .45rem; border-radius: 50%; background: var(--pronto); box-shadow: 0 0 8px var(--pronto); animation: piscar 2.4s ease-in-out infinite; }
 
-.grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 1.25rem; }
+/* ---- conteúdo ---- */
+/* Espaço embaixo para o botão flutuante da Jean não cobrir o último cartão. */
+.conteudo { max-width: 72rem; margin: 0 auto; padding: 1.75rem 1rem 6rem; }
+.aviso { font-family: var(--mono); font-size: .85rem; color: var(--ciano); letter-spacing: .06em; }
+.cursor { animation: piscar 1s steps(1) infinite; }
 
-/* Cartão: cantos bem arredondados, sombra suave e uma faixa de cor própria de cada projeto
-   (--h vem do hub.js, calculado pelo slug). */
-.cartao { position: relative; display: flex; flex-direction: column; gap: .75rem; background: var(--cartao); border: 1px solid var(--borda); border-radius: 1.5rem; padding: 1.25rem 1.25rem 1.4rem; overflow: hidden;
-  box-shadow: 0 1px 2px rgb(16 24 40 / .04), 0 8px 24px -12px rgb(16 24 40 / .12); transition: transform .2s, box-shadow .2s, border-color .2s; }
-.cartao::before { content: ""; position: absolute; inset: 0 0 auto; height: 6.5rem; pointer-events: none; border-radius: inherit;
-  background: radial-gradient(120% 100% at 0% 0%, hsl(var(--h) 85% 60% / .22), transparent 70%); }
-.cartao:hover, .cartao:focus-within { transform: translateY(-3px); border-color: hsl(var(--h) 70% 60% / .55);
-  box-shadow: 0 2px 4px rgb(16 24 40 / .05), 0 18px 40px -16px hsl(var(--h) 60% 40% / .35); }
-.cartao.menu-aberto { z-index: 2; overflow: visible; }
+/* Filtros como seletores de comando. */
+.filtros { display: flex; flex-wrap: wrap; gap: .6rem; margin-bottom: 1.5rem; }
+.filtros button { position: relative; display: inline-flex; align-items: center; gap: .55rem; font: 500 .78rem/1 var(--mono); letter-spacing: .1em; text-transform: uppercase;
+  padding: .7rem 1rem; color: var(--metal); cursor: pointer; border: 1px solid var(--fio); background: var(--painel);
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  transition: all .3s ease; }
+.filtros .cod { font-size: .62rem; color: var(--suave); padding: .15rem .3rem; border: 1px solid var(--fio); transition: all .3s ease; }
+.filtros button:hover { color: var(--texto); border-color: rgb(0 240 255 / .45); background: rgb(0 240 255 / .06); }
+.filtros button:active { transform: scale(.96); }
+.filtros button:focus-visible { outline: 2px solid var(--ciano); outline-offset: 2px; }
+.filtros button.ativo { color: #001014; background: var(--ciano); border-color: var(--ciano); box-shadow: inset 0 0 12px rgb(255 255 255 / .35); font-weight: 700; }
+.filtros button.ativo .cod { color: #001014; border-color: rgb(0 16 20 / .45); }
+.filtros button.disparo::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgb(255 255 255 / .8), transparent); animation: disparo .45s ease-out forwards; }
 
-.cartao-arte { position: relative; width: 3.25rem; height: 3.25rem; border-radius: 1rem; display: grid; place-items: center; font-size: 1.5rem; font-weight: 700; color: #fff;
-  background: linear-gradient(135deg, hsl(var(--h) 85% 58%), hsl(calc(var(--h) + 40) 80% 48%)); box-shadow: 0 6px 16px -6px hsl(var(--h) 70% 45% / .6); }
-.cartao h2 { position: relative; margin: .25rem 0 0; font-size: 1.6rem; line-height: 1.15; letter-spacing: -.02em; }
+.grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr)); gap: 1.5rem; }
+
+/* ---- cartão = módulo ----
+   .cartao (sombra/brilho via filter, que não é cortado) > .casco (chanfrado, a cor dele é
+   a borda) > .miolo (chanfrado, 1px para dentro). --prox (0 a 1) vem do hub.js conforme o
+   cursor se aproxima; --mx/--my é a posição do cursor dentro do cartão. */
+.cartao { --prox: 0; position: relative; z-index: 0; transition: all .3s ease;
+  filter: drop-shadow(0 0 calc(var(--prox) * 14px) rgb(0 240 255 / calc(var(--prox) * .4))); }
+.cartao:hover, .cartao:focus-within { --prox: 1 !important; transform: translateY(-3px); }
+.cartao.menu-aberto { z-index: 3; }
+.casco { height: 100%; padding: 1px; transition: all .3s ease;
+  background: linear-gradient(135deg, rgb(0 240 255 / calc(.28 + var(--prox) * .72)), rgb(0 240 255 / calc(.08 + var(--prox) * .35)) 50%, rgb(0 240 255 / calc(.22 + var(--prox) * .6)));
+  clip-path: polygon(var(--chanfro) 0, 100% 0, 100% calc(100% - var(--chanfro)), calc(100% - var(--chanfro)) 100%, 0 100%, 0 var(--chanfro)); }
+.miolo { position: relative; height: 100%; min-height: 15.5rem; display: flex; flex-direction: column; gap: .55rem; padding: 1.1rem 1.25rem 1.1rem; overflow: hidden;
+  background:
+    radial-gradient(260px circle at var(--mx, 80%) var(--my, 0%), rgb(0 240 255 / calc(var(--prox) * .1)), transparent 70%),
+    linear-gradient(rgb(0 240 255 / .03) 1px, transparent 1px) 0 0 / 16px 16px,
+    linear-gradient(90deg, rgb(0 240 255 / .03) 1px, transparent 1px) 0 0 / 16px 16px,
+    linear-gradient(160deg, var(--painel-2), var(--painel));
+  clip-path: polygon(calc(var(--chanfro) - .5px) 0, 100% 0, 100% calc(100% - var(--chanfro) + .5px), calc(100% - var(--chanfro) + .5px) 100%, 0 100%, 0 calc(var(--chanfro) - .5px)); }
+
+/* Cantoneiras de HUD nos cantos não chanfrados. */
+.canto { position: absolute; width: 14px; height: 14px; pointer-events: none; border-color: var(--ciano); border-style: solid; border-width: 0; opacity: calc(.45 + var(--prox) * .55); transition: all .3s ease; }
+.canto-a { top: -5px; right: -5px; border-top-width: 2px; border-right-width: 2px; }
+.canto-b { bottom: -5px; left: -5px; border-bottom-width: 2px; border-left-width: 2px; }
+
+.hud-topo { position: relative; z-index: 0; display: flex; align-items: center; gap: .6rem; padding-right: 2.5rem; font-family: var(--mono); }
+.sec { font-size: .7rem; letter-spacing: .14em; color: var(--ciano); padding: .2rem .45rem; border: 1px solid rgb(0 240 255 / .35); background: rgb(0 240 255 / .06); }
+.sep { flex: 1; height: 1px; min-width: 1rem; background: linear-gradient(90deg, rgb(0 240 255 / .35), transparent); }
+
+.cartao h2 { margin: .9rem 0 0; max-width: 70%; font-family: var(--titulo); font-weight: 700; font-size: 2rem; line-height: 1.05; letter-spacing: .02em; text-transform: uppercase;
+  transition: all .3s ease; text-shadow: 0 0 calc(var(--prox) * 16px) rgb(0 240 255 / .55); }
 .cartao-link { color: inherit; text-decoration: none; outline: none; }
-.cartao-link::after { content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: 1; }
-.cartao:has(.cartao-link:focus-visible) { outline: 2px solid var(--destaque); outline-offset: 2px; }
-.cartao .fase { position: absolute; top: 1.4rem; right: 3.6rem; }
-.cartao .abrir { position: relative; margin-top: auto; color: var(--destaque); font-weight: 600; font-size: .9rem; }
-.cartao .abrir span { display: inline-block; transition: transform .2s; }
-.cartao:hover .abrir span { transform: translateX(3px); }
+.cartao-link::after { content: ""; position: absolute; inset: 0; z-index: 1; }
+.miolo:has(.cartao-link:focus-visible) { box-shadow: inset 0 0 0 2px var(--ciano); }
+.meta { position: relative; margin: 0; max-width: 62%; line-height: 1.5; font-family: var(--mono); font-size: .68rem; letter-spacing: .1em; color: var(--suave); }
+.meta span { white-space: nowrap; }
+.abrir { position: relative; margin-top: auto; font-family: var(--mono); font-size: .76rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--ciano); }
+.abrir span { display: inline-block; transition: all .3s ease; }
+.cartao:hover .abrir span { transform: translateX(4px); }
+.coord { position: relative; margin: 0; font-family: var(--mono); font-size: .6rem; letter-spacing: .12em; color: var(--suave); opacity: .7; }
+
+/* Desenho de esquema no canto inferior direito. */
+.esquema { position: absolute; right: .4rem; bottom: .35rem; width: 8.5rem; height: auto; pointer-events: none; overflow: visible;
+  opacity: calc(.5 + var(--prox) * .5); transition: all .3s ease;
+  filter: drop-shadow(0 0 calc(2px + var(--prox) * 5px) rgb(0 240 255 / .55)); }
+.esquema .el { fill: none; stroke: var(--ciano); stroke-width: 1.1; stroke-linejoin: round; stroke-linecap: round; }
+.esquema .eg { fill: none; stroke: var(--ciano); stroke-width: .6; stroke-dasharray: 2 2.5; opacity: .5; }
+.esquema .ez { fill: var(--ciano); }
+.esquema .ez-l { fill: none; stroke: var(--ciano); stroke-width: 2; stroke-linecap: round; opacity: .85; }
+.esquema .et { fill: var(--ciano); font-family: var(--mono); font-size: 5.2px; letter-spacing: .06em; opacity: .85; }
+
+/* Status de fase como luz de painel. */
+.fase { display: inline-flex; align-items: center; gap: .4rem; flex-shrink: 0; font-family: var(--mono); font-size: .66rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--beta); }
+.fase i { width: .45rem; height: .45rem; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; }
+.fase-beta { color: var(--beta); }
+.fase-pronto { color: var(--pronto); }
+.fase-migrado { color: var(--migrado); }
 
 /* Três pontos: acima do link que cobre o cartão. */
-.menu { position: absolute; top: .9rem; right: .75rem; z-index: 2; }
-.tres-pontos { width: 2.5rem; height: 2.5rem; border-radius: 999px; border: 0; background: transparent; color: var(--suave); display: grid; place-items: center; cursor: pointer; transition: background .15s, color .15s; }
+.menu { position: absolute; top: .65rem; right: .6rem; z-index: 2; }
+.tres-pontos { width: 2.4rem; height: 2.4rem; border: 1px solid transparent; background: transparent; color: var(--metal); display: grid; place-items: center; cursor: pointer; transition: all .3s ease; }
 .tres-pontos svg { fill: currentColor; }
-.tres-pontos:hover, .tres-pontos[aria-expanded="true"] { background: var(--fundo); color: var(--texto); }
-.tres-pontos:focus-visible { outline: 2px solid var(--destaque); outline-offset: 1px; }
-.menu-lista { position: absolute; top: calc(100% + .35rem); right: 0; min-width: 11rem; padding: .35rem; background: var(--cartao); border: 1px solid var(--borda); border-radius: 1rem;
-  box-shadow: 0 12px 32px -8px rgb(16 24 40 / .25); animation: surgir .14s ease-out; }
-.menu-lista button { display: block; width: 100%; text-align: left; font: inherit; font-size: .92rem; padding: .6rem .8rem; border: 0; border-radius: .7rem; background: none; color: var(--texto); cursor: pointer; }
-.menu-lista button:hover, .menu-lista button:focus-visible { background: var(--fundo); outline: none; }
+.tres-pontos:hover, .tres-pontos[aria-expanded="true"] { color: var(--ciano); border-color: rgb(0 240 255 / .4); background: rgb(0 240 255 / .08); }
+.tres-pontos:focus-visible { outline: 2px solid var(--ciano); outline-offset: 1px; }
+.menu-lista { position: absolute; top: calc(100% + .4rem); right: 0; min-width: 12rem; padding: .35rem; background: rgb(9 13 20 / .97); border: 1px solid rgb(0 240 255 / .4);
+  box-shadow: 0 0 24px rgb(0 240 255 / .15), 0 16px 32px rgb(0 0 0 / .6); animation: surgir .16s ease-out; }
+.menu-lista button { display: block; width: 100%; text-align: left; font: 500 .78rem var(--mono); letter-spacing: .08em; text-transform: uppercase; padding: .7rem .8rem; border: 0; background: none; color: var(--metal); cursor: pointer; transition: all .2s ease; }
+.menu-lista button::before { content: "> "; color: var(--ciano); }
+.menu-lista button:hover, .menu-lista button:focus-visible { background: rgb(0 240 255 / .1); color: var(--texto); outline: none; }
 
-/* Janela "Sobre o projeto". */
-.sobre { border: 0; padding: 0; background: transparent; color: var(--texto); width: min(32rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); }
-.sobre::backdrop { background: rgb(10 14 20 / .5); backdrop-filter: blur(3px); }
-.sobre[open] .sobre-caixa { animation: surgir .18s ease-out; }
-.sobre-caixa { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 1rem; background: var(--cartao); border: 1px solid var(--borda); border-radius: 1.5rem; padding: 1.5rem; }
-.sobre-caixa::before { content: ""; position: absolute; inset: 0 0 auto; height: 7rem; pointer-events: none;
-  background: radial-gradient(120% 100% at 0% 0%, hsl(var(--h, 220) 85% 60% / .22), transparent 70%); }
-.sobre-topo { position: relative; display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
-.sobre-rotulo { margin: 0; font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--suave); }
-.sobre h2 { margin: .2rem 0 0; font-size: 1.6rem; letter-spacing: -.02em; }
-.sobre .fase { position: relative; align-self: flex-start; }
-.fechar { flex-shrink: 0; width: 2.5rem; height: 2.5rem; border-radius: 999px; border: 0; background: var(--fundo); color: var(--texto); display: grid; place-items: center; cursor: pointer; }
+/* ---- janela "Sobre o projeto" ---- */
+.sobre { border: 0; padding: 0; background: transparent; color: var(--texto); width: min(34rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: visible;
+  filter: drop-shadow(0 0 18px rgb(0 240 255 / .25)); }
+.sobre::backdrop { background: rgb(2 4 8 / .75); backdrop-filter: blur(4px); }
+.sobre[open] .sobre-caixa { animation: surgir .2s ease-out; }
+.sobre-caixa { position: relative; display: flex; flex-direction: column; gap: 1rem; padding: 1.5rem; max-height: calc(100dvh - 2rem); overflow: auto;
+  background:
+    linear-gradient(rgb(0 240 255 / .03) 1px, transparent 1px) 0 0 / 16px 16px,
+    linear-gradient(90deg, rgb(0 240 255 / .03) 1px, transparent 1px) 0 0 / 16px 16px,
+    linear-gradient(160deg, var(--painel-2), var(--painel));
+  border: 1px solid rgb(0 240 255 / .45); }
+/* Cantoneiras de HUD na janela (o dialog não corta, a caixa por dentro rola). */
+.sobre::before, .sobre::after { content: ""; position: absolute; z-index: 1; width: 18px; height: 18px; pointer-events: none; border: 0 solid var(--ciano); }
+.sobre::before { top: -4px; left: -4px; border-top-width: 2px; border-left-width: 2px; }
+.sobre::after { bottom: -4px; right: -4px; border-bottom-width: 2px; border-right-width: 2px; }
+.sobre-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+.sobre-rotulo { margin: 0; font-family: var(--mono); font-size: .7rem; text-transform: uppercase; letter-spacing: .14em; color: var(--ciano); }
+.sobre h2 { margin: .35rem 0 0; font-family: var(--titulo); font-size: 2rem; line-height: 1.05; letter-spacing: .03em; text-transform: uppercase; text-shadow: 0 0 14px rgb(0 240 255 / .4); }
+.sobre .fase { align-self: flex-start; }
+.fechar { flex-shrink: 0; width: 2.5rem; height: 2.5rem; border: 1px solid rgb(0 240 255 / .4); background: rgb(0 240 255 / .06); color: var(--ciano); display: grid; place-items: center; cursor: pointer; transition: all .3s ease; }
+.fechar:hover { background: var(--ciano); color: #001014; }
 .fechar svg { stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; fill: none; }
-.sobre dl { position: relative; margin: 0; display: grid; gap: .9rem; }
-.sobre dl div { background: var(--fundo); border-radius: 1rem; padding: .85rem 1rem; }
-.sobre dt { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--suave); font-weight: 600; }
-.sobre dd { margin: .3rem 0 0; line-height: 1.5; }
-.botao { align-self: flex-start; text-decoration: none; font-weight: 600; color: #fff; background: var(--destaque); padding: .7rem 1.2rem; border-radius: 999px; }
-.botao:hover { filter: brightness(1.08); }
+.sobre dl { margin: 0; display: grid; gap: .8rem; }
+.sobre dl div { position: relative; padding: .85rem 1rem .9rem 1.1rem; background: rgb(0 240 255 / .035); border: 1px solid var(--fio); border-left: 2px solid var(--ciano); }
+.sobre dt { font-family: var(--mono); font-size: .68rem; text-transform: uppercase; letter-spacing: .16em; color: var(--ciano); font-weight: 700; }
+.sobre dd { margin: .35rem 0 0; line-height: 1.55; color: var(--metal); }
+.botao { align-self: flex-start; text-decoration: none; font: 700 .8rem var(--mono); letter-spacing: .12em; text-transform: uppercase; color: #001014; background: var(--ciano); padding: .85rem 1.2rem;
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px); transition: all .3s ease; box-shadow: inset 0 0 12px rgb(255 255 255 / .35); }
+.botao:hover { filter: brightness(1.15); }
+.botao:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
-.fase { flex-shrink: 0; font-size: .75rem; font-weight: 600; padding: .25rem .65rem; border-radius: 999px; }
-.fase-beta { color: var(--beta); background: var(--beta-fundo); }
-.fase-pronto { color: var(--pronto); background: var(--pronto-fundo); }
-.fase-migrado { color: var(--migrado); background: var(--migrado-fundo); }
+/* ---- vazio e erro ---- */
+.vazio { grid-column: 1 / -1; text-align: center; padding: 3rem 1rem; border: 1px dashed rgb(0 240 255 / .3); background: rgb(0 240 255 / .02); color: var(--metal); }
+.vazio h2 { color: var(--texto); margin: .6rem 0 .5rem; font-family: var(--titulo); font-size: 1.4rem; text-transform: uppercase; letter-spacing: .05em; }
+.vazio p { margin: .25rem auto; max-width: 32rem; line-height: 1.5; }
+.erro { border-color: rgb(255 77 94 / .6); color: #ff8a96; }
+.erro .rotulo-tec { color: #ff4d5e; }
+.erro button { margin-top: .9rem; font: 700 .78rem var(--mono); letter-spacing: .1em; text-transform: uppercase; padding: .65rem 1rem; border: 1px solid currentColor; background: none; color: inherit; cursor: pointer; }
 
 @keyframes surgir { from { opacity: 0; transform: translateY(-4px) scale(.98); } }
+@keyframes piscar { 50% { opacity: .25; } }
+@keyframes varredura { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+@keyframes disparo { from { transform: translateX(-100%); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 
-.vazio { grid-column: 1 / -1; text-align: center; padding: 3rem 1rem; border: 2px dashed var(--borda); border-radius: 1.5rem; color: var(--suave); }
-.vazio h2 { color: var(--texto); margin: 0 0 .5rem; font-size: 1.2rem; }
-.vazio p { margin: .25rem auto; max-width: 32rem; line-height: 1.5; }
-.erro { border-color: #d14343; color: #d14343; }
-.erro button { margin-top: .75rem; font: inherit; padding: .45rem .9rem; border-radius: .5rem; border: 1px solid currentColor; background: none; color: inherit; cursor: pointer; }
-
 @media (max-width: 30rem) {
-  .topo-dentro { align-items: flex-start; }
-  .topo h1 { font-size: 1.4rem; }
-  .sobre-caixa { padding: 1.25rem; }
+  .topo h1 { font-size: 1.9rem; }
+  .telemetria { width: 100%; }
   .grade { grid-template-columns: 1fr; }
+  .cartao h2 { font-size: 1.75rem; }
+  .esquema { width: 7.5rem; }
+  .filtros button { padding: .6rem .8rem; }
+  .sobre-caixa { padding: 1.25rem; }
+  .sobre h2 { font-size: 1.6rem; }
 }

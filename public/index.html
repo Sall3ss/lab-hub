@@ -6,28 +6,37 @@
   <title>Lab Hub</title>
   <meta name="application-name" content="Lab Hub" />
   <meta name="apple-mobile-web-app-title" content="Lab Hub" />
+  <meta name="theme-color" content="#07090e" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" />
   <link rel="stylesheet" href="/hub.css" />
 </head>
 <body>
   <header class="topo">
     <div class="topo-dentro">
-      <div>
+      <div class="marca">
+        <p class="rotulo-tec">// SISTEMA DE LABORATÓRIO · NÚCLEO v2</p>
         <h1>Lab Hub</h1>
         <p class="sub">Projetos em fase beta. Cada um com título, ideia e objetivo próprios.</p>
       </div>
-      <span class="contador" id="contador" hidden></span>
+      <div class="telemetria" id="contador" role="status" hidden>
+        <span class="tl-rotulo">REGISTRO DO SISTEMA</span>
+        <span class="tl-valor"><b id="contador-num">00</b> <span id="contador-txt">MÓDULOS</span></span>
+        <span class="tl-linha"><i class="tl-ponto" aria-hidden="true"></i>ONLINE · <span id="contador-fases"></span></span>
+      </div>
     </div>
   </header>
 
   <main class="conteudo">
-    <div class="filtros" id="filtros" hidden>
-      <button type="button" data-fase="" class="ativo">Todos</button>
-      <button type="button" data-fase="beta">Beta</button>
-      <button type="button" data-fase="pronto">Pronto para migrar</button>
-      <button type="button" data-fase="migrado">Migrado</button>
+    <div class="filtros" id="filtros" role="group" aria-label="Filtrar por fase" hidden>
+      <button type="button" data-fase="" class="ativo"><span class="cod">00</span>Todos</button>
+      <button type="button" data-fase="beta"><span class="cod">01</span>Beta</button>
+      <button type="button" data-fase="pronto"><span class="cod">02</span>Pronto para migrar</button>
+      <button type="button" data-fase="migrado"><span class="cod">03</span>Migrado</button>
     </div>
 
-    <p class="aviso" id="carregando">Carregando projetos...</p>
+    <p class="aviso" id="carregando">&gt; carregando módulos<span class="cursor" aria-hidden="true">_</span></p>
     <section class="grade" id="grade" aria-live="polite"></section>
   </main>
 
@@ -35,7 +44,7 @@
     <div class="sobre-caixa">
       <div class="sobre-topo">
         <div>
-          <p class="sobre-rotulo">Sobre o projeto</p>
+          <p class="sobre-rotulo"><span id="sobre-id"></span> // Sobre o projeto</p>
           <h2 id="sobre-titulo"></h2>
         </div>
         <button type="button" class="fechar" data-fechar aria-label="Fechar">

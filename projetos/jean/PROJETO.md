@@ -171,7 +171,7 @@ projeto a precisar dele.
     lá o painel não serve, seria um botão abrindo `/jean?de=cyberidle`). O dono pediu para
     **não mexer no Cyberidle agora** (14/11).
 
-- 🟡 **14/11 - Etapa 4: voz (pedido do dono, "100% gratuito").** Três modos:
+- 🟢 **14/11 - Etapa 4: voz (pedido do dono, "100% gratuito").** Três modos:
   - **A - Ditado e conversa por voz:** reconhecimento de fala do próprio navegador
     (Chrome, Edge, Safari; o Firefox não tem, e os botões somem lá). Microfone ao lado da
     caixa de texto preenche enquanto fala. Botão de ondas no topo = **conversa por voz
@@ -200,7 +200,11 @@ projeto a precisar dele.
     streaming de voz do Google (a tela procura o áudio em qualquer lugar do evento) e o
     limite diário do TTS grátis (não publicado na página de preços).
 
+- 🟢 **14/11 - Voz confirmada no ar pelo dono:** conversa por voz no celular, a Jean
+  respondeu falando com "Voz: Gemini (gemini-3.8-flash-tts)". O streaming de voz do
+  Google foi lido certo (não precisou da reserva do navegador).
+
 ## Próximo passo
 
-- Dono testar a voz no ar (PC e celular).
+- MVP completo (etapas 1 a 5). Próximo passo é decisão do dono.
 - Pendente: botão da Jean no Cyberidle (dono pediu para não mexer agora).

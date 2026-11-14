@@ -2,6 +2,8 @@
 // O hub so LISTA e leva ate o projeto. Nada de projeto mora aqui: cada um tem a propria
 // pasta (public/projetos/<slug>/ e projetos/<slug>/), e o json e mantido pelo
 // scripts/novo-projeto.mjs.
+// Visual "painel de engenharia" (13/11/2026): cada cartao e um "modulo" com codigo SEC-NN,
+// coordenadas, status e um desenho de esquema do projeto no canto (ESQUEMAS, abaixo).
 // Autoria: Claude (Opus 5.5).
 (function () {
   var FASES = {
@@ -22,12 +24,78 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
+  function dois(n) { return (n < 10 ? '0' : '') + n; }
 
-  // Cor do cartão derivada do slug: cada projeto fica com a sua, sem precisar cadastrar.
-  function matiz(slug) {
-    var h = 0;
-    for (var i = 0; i < slug.length; i++) h = (h * 31 + slug.charCodeAt(i)) % 360;
+  // Numero estavel por slug: vira as "coordenadas" do modulo.
+  function hash(s) {
+    var h = 7;
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
     return h;
+  }
+
+  // ---- desenhos de esquema (canto inferior direito do cartao) ----
+  // Linha-guia: .eg (tracejada, fraca); traco: .el; luz: .ez (preenchida); texto: .et.
+  // Projeto sem desenho proprio usa o 'padrao'. Para dar desenho a um projeto novo, basta
+  // acrescentar a chave com o slug dele.
+  var ESQUEMAS = {
+    // Personagem cyberpunk de capuz, viseira e braço mecânico.
+    cyberidle:
+      '<line class="eg" x1="60" y1="4" x2="60" y2="146"/>' +
+      '<line class="eg" x1="14" y1="140" x2="106" y2="140"/>' +
+      '<path class="el" d="M49 36 Q47 13 60 13 Q73 13 71 36 L68 41 L52 41 Z"/>' +
+      '<rect class="ez" x="51" y="26" width="18" height="4.5" rx="1"/>' +
+      '<path class="el" d="M68 17 L77 7"/><circle class="ez" cx="77.5" cy="6.5" r="1.6"/>' +
+      '<path class="el" d="M53 41 L53 46 M67 41 L67 46"/>' +
+      '<path class="el" d="M44 46 L76 46 L80 60 L76 88 L44 88 L40 60 Z"/>' +
+      '<path class="el" d="M52 46 L60 62 L68 46"/>' +
+      '<rect class="ez" x="63" y="67" width="7" height="2"/><rect class="ez" x="63" y="71" width="4" height="2"/>' +
+      '<path class="el" d="M44 49 L36 59 L32 80 L33 91"/><circle class="el" cx="33.5" cy="94" r="3"/>' +
+      '<circle class="el" cx="79" cy="52" r="5"/><circle class="ez" cx="79" cy="52" r="1.6"/>' +
+      '<path class="el" d="M81 57 L88 59 L86 76 L80 75 Z"/>' +
+      '<circle class="el" cx="84" cy="79.5" r="3"/>' +
+      '<path class="el" d="M84 83 L91 84 L92 98 L86 99 Z"/>' +
+      '<path class="el" d="M87 99 L86 105 M89.5 99 L90 106 M91.5 98 L94 104"/>' +
+      '<path class="el" d="M44 88 L76 88"/><rect class="ez" x="57" y="86.5" width="6" height="3.5"/>' +
+      '<path class="el" d="M46 89 L58 89 L56 114 L55 136 L45 136 L46 114 Z"/>' +
+      '<path class="el" d="M62 89 L74 89 L74 114 L75 136 L65 136 L64 114 Z"/>' +
+      '<circle class="el" cx="51" cy="114" r="2.4"/><circle class="el" cx="69.5" cy="114" r="2.4"/>' +
+      '<path class="el" d="M43 136 L56 136 L57 140 L41 140 Z M64 136 L77 136 L79 140 L63 140 Z"/>' +
+      '<path class="eg" d="M70 28 L84 18 L114 18"/><text class="et" x="84" y="15">OPT-VISOR</text>' +
+      '<path class="eg" d="M88 66 L96 58 L116 58"/><text class="et" x="94" y="55">AUG-ARM</text>' +
+      '<path class="eg" d="M40 70 L16 70"/><text class="et" x="6" y="67">KEVLAR</text>' +
+      '<path class="eg" d="M110 80 L110 140 M107 140 L113 140"/><text class="et" x="100" y="112" transform="rotate(-90 106 112)">1.82 m</text>',
+    // Núcleo de voz holográfico sobre um pedestal, com onda sonora.
+    jean:
+      '<line class="eg" x1="60" y1="4" x2="60" y2="146"/>' +
+      '<path class="el" d="M30 132 L35 141 L85 141 L90 132"/>' +
+      '<ellipse class="el" cx="60" cy="132" rx="30" ry="6"/><ellipse class="el" cx="60" cy="128" rx="20" ry="3.5"/>' +
+      '<path class="eg" d="M42 127 L32 64 M78 127 L88 64"/>' +
+      '<circle class="el" cx="60" cy="58" r="19"/><circle class="eg" cx="60" cy="58" r="13"/>' +
+      '<circle class="ez" cx="60" cy="58" r="6"/>' +
+      '<ellipse class="el" cx="60" cy="58" rx="32" ry="8.5" transform="rotate(-18 60 58)"/>' +
+      '<ellipse class="eg" cx="60" cy="58" rx="32" ry="8.5" transform="rotate(38 60 58)"/>' +
+      '<circle class="ez" cx="89.5" cy="48" r="1.8"/><circle class="ez" cx="33" cy="74" r="1.4"/>' +
+      '<path class="el" d="M38 104 L82 104" stroke-dasharray="1 3"/>' +
+      '<path class="ez-l" d="M40 104 V101 M44 104 V96 M48 104 V99 M52 104 V91 M56 104 V95 M60 104 V88 M64 104 V94 M68 104 V90 M72 104 V98 M76 104 V95 M80 104 V101"/>' +
+      '<path class="ez-l" d="M44 104 V112 M52 104 V117 M60 104 V120 M68 104 V118 M76 104 V109 M48 104 V107 M56 104 V110 M64 104 V111 M72 104 V107"/>' +
+      '<path class="eg" d="M74 44 L96 26 L116 26"/><text class="et" x="96" y="23">CORE-IA</text>' +
+      '<path class="eg" d="M82 96 L100 86 L116 86"/><text class="et" x="102" y="83">VOX</text>' +
+      '<path class="eg" d="M30 132 L10 118"/><text class="et" x="2" y="114">BASE</text>' +
+      '<path class="eg" d="M20 39 L20 77 M17 39 L23 39 M17 77 L23 77"/><text class="et" x="6" y="60" transform="rotate(-90 14 58)">Ø 38</text>',
+    // Módulo genérico (cubo em perspectiva) para projeto sem desenho próprio.
+    padrao:
+      '<line class="eg" x1="14" y1="140" x2="106" y2="140"/>' +
+      '<path class="el" d="M60 40 L96 60 L96 104 L60 124 L24 104 L24 60 Z"/>' +
+      '<path class="el" d="M24 60 L60 80 L96 60 M60 80 L60 124"/>' +
+      '<path class="eg" d="M60 40 L60 80 M24 104 L60 84 L96 104"/>' +
+      '<rect class="ez" x="66" y="92" width="16" height="3" transform="skewY(-29)" />' +
+      '<circle class="ez" cx="60" cy="80" r="2"/>' +
+      '<path class="eg" d="M96 60 L112 52"/><text class="et" x="96" y="48">MOD-X</text>',
+  };
+
+  function esquema(slug) {
+    return '<svg class="esquema" viewBox="0 0 120 150" aria-hidden="true" focusable="false">' +
+      (ESQUEMAS[slug] || ESQUEMAS.padrao) + '</svg>';
   }
 
   function destinoDe(p) {
@@ -36,16 +104,27 @@
     return p.endereco ? p.endereco : '/projetos/' + encodeURIComponent(p.slug) + '/';
   }
 
+  function codigo(p) { return 'SEC-' + dois(projetos.indexOf(p) + 1); }
+
   function cartao(p, i) {
     var fase = FASES[p.fase] ? p.fase : 'beta';
     var titulo = String(p.titulo || p.slug || '?');
+    var h = hash(String(p.slug || titulo));
+    var x = (h % 9000) / 10, y = (Math.floor(h / 9000) % 9000) / 10;
     // O link cobre o cartão inteiro (::after); o botão de três pontos fica por cima dele,
     // porque botão dentro de link não é HTML válido.
-    return '<article class="cartao" style="--h:' + matiz(String(p.slug || titulo)) + '">' +
-      '<div class="cartao-arte" aria-hidden="true">' + esc(titulo.charAt(0).toUpperCase()) + '</div>' +
-      '<span class="fase fase-' + fase + '">' + FASES[fase] + '</span>' +
+    return '<article class="cartao">' +
+      '<div class="casco"><div class="miolo">' +
+      esquema(p.slug) +
+      '<div class="hud-topo"><span class="sec">' + codigo(p) + '</span><span class="sep"></span>' +
+      '<span class="fase fase-' + fase + '"><i></i>' + FASES[fase] + '</span></div>' +
       '<h2><a class="cartao-link" href="' + esc(destinoDe(p)) + '">' + esc(titulo) + '</a></h2>' +
-      '<span class="abrir">' + (p.endereco ? 'Abrir no endereço próprio' : 'Abrir projeto') + ' <span aria-hidden="true">→</span></span>' +
+      '<p class="meta"><span>ID ' + esc(String(p.slug || '').toUpperCase()) + '</span>' +
+      (p.criado_em ? ' · <span>INIT ' + esc(p.criado_em) + '</span>' : '') + '</p>' +
+      '<span class="abrir">' + (p.endereco ? 'Abrir no endereço próprio' : 'Abrir módulo') + ' <span aria-hidden="true">▸</span></span>' +
+      '<p class="coord" aria-hidden="true">X ' + x.toFixed(1) + ' · Y ' + y.toFixed(1) + '</p>' +
+      '</div></div>' +
+      '<i class="canto canto-a" aria-hidden="true"></i><i class="canto canto-b" aria-hidden="true"></i>' +
       '<div class="menu">' +
       '<button type="button" class="tres-pontos" data-menu="' + i + '" aria-label="Opções de ' + esc(titulo) + '" aria-haspopup="menu" aria-expanded="false">' +
       '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>' +
@@ -69,11 +148,11 @@
   var sobre = document.getElementById('sobre');
   function abrirSobre(p) {
     var fase = FASES[p.fase] ? p.fase : 'beta';
-    sobre.style.setProperty('--h', matiz(String(p.slug || p.titulo || '?')));
+    document.getElementById('sobre-id').textContent = codigo(p);
     document.getElementById('sobre-titulo').textContent = p.titulo || p.slug;
     var f = document.getElementById('sobre-fase');
     f.className = 'fase fase-' + fase;
-    f.textContent = FASES[fase];
+    f.innerHTML = '<i></i>' + FASES[fase];
     document.getElementById('sobre-ideia').innerHTML = esc(p.ideia) || '<em>a definir</em>';
     document.getElementById('sobre-objetivo').innerHTML = esc(p.objetivo) || '<em>a definir</em>';
     document.getElementById('sobre-abrir').href = destinoDe(p);
@@ -105,20 +184,58 @@
   document.addEventListener('click', function (e) { if (!e.target.closest('.menu')) fecharMenus(); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') fecharMenus(); });
 
+  // ---- cartões "acendem" quando o cursor se aproxima ----
+  // --prox vai de 0 (longe, a mais de 180 px) a 1 (cursor em cima). Só com mouse; no
+  // celular o toque já abre o cartão.
+  var alvoX = 0, alvoY = 0, pendente = false;
+  function proximidade() {
+    pendente = false;
+    grade.querySelectorAll('.cartao').forEach(function (c) {
+      var r = c.getBoundingClientRect();
+      var dx = Math.max(r.left - alvoX, 0, alvoX - r.right);
+      var dy = Math.max(r.top - alvoY, 0, alvoY - r.bottom);
+      var d = Math.sqrt(dx * dx + dy * dy);
+      c.style.setProperty('--prox', Math.max(0, 1 - d / 180).toFixed(3));
+      c.style.setProperty('--mx', (alvoX - r.left) + 'px');
+      c.style.setProperty('--my', (alvoY - r.top) + 'px');
+    });
+  }
+  document.addEventListener('pointermove', function (e) {
+    if (e.pointerType !== 'mouse') return;
+    alvoX = e.clientX; alvoY = e.clientY;
+    if (!pendente) { pendente = true; requestAnimationFrame(proximidade); }
+  });
+  document.documentElement.addEventListener('pointerleave', function () {
+    grade.querySelectorAll('.cartao').forEach(function (c) { c.style.setProperty('--prox', '0'); });
+  });
+
   function desenhar() {
     var lista = projetos.filter(function (p) { return !faseAtual || (p.fase || 'beta') === faseAtual; });
     if (!projetos.length) {
-      grade.innerHTML = '<div class="vazio"><h2>Nenhum projeto ainda</h2>' +
+      grade.innerHTML = '<div class="vazio"><p class="rotulo-tec">// NENHUM MÓDULO REGISTRADO</p><h2>Nenhum projeto ainda</h2>' +
         '<p>Este é o seu laboratório. Cada projeto entra aqui com título, ideia e objetivo próprios, numa pasta só dele.</p>' +
         '<p>Para começar, diga ao Claude o título, a ideia e o objetivo do primeiro projeto.</p></div>';
       return;
     }
     if (!lista.length) {
-      grade.innerHTML = '<div class="vazio"><p>Nenhum projeto nesta fase.</p></div>';
+      grade.innerHTML = '<div class="vazio"><p class="rotulo-tec">// SEM SINAL</p><p>Nenhum projeto nesta fase.</p></div>';
       return;
     }
     visiveis = lista;
     grade.innerHTML = lista.map(cartao).join('');
+  }
+
+  function telemetria() {
+    var n = projetos.length;
+    var conta = {};
+    projetos.forEach(function (p) { var f = FASES[p.fase] ? p.fase : 'beta'; conta[f] = (conta[f] || 0) + 1; });
+    document.getElementById('contador-num').textContent = dois(n);
+    document.getElementById('contador-txt').textContent = n === 1 ? 'MÓDULO' : 'MÓDULOS';
+    document.getElementById('contador-fases').textContent = Object.keys(FASES)
+      .filter(function (f) { return conta[f]; })
+      .map(function (f) { return FASES[f].split(' ')[0].toUpperCase() + ' ' + dois(conta[f]); })
+      .join(' · ');
+    contador.setAttribute('aria-label', n + (n === 1 ? ' projeto' : ' projetos'));
   }
 
   function carregar() {
@@ -131,12 +248,12 @@
         carregando.hidden = true;
         filtros.hidden = projetos.length < 2;
         contador.hidden = !projetos.length;
-        contador.textContent = projetos.length + (projetos.length === 1 ? ' projeto' : ' projetos');
+        telemetria();
         desenhar();
       })
       .catch(function () {
         carregando.hidden = true;
-        grade.innerHTML = '<div class="vazio erro"><p>Não foi possível carregar a lista de projetos. Confira a conexão.</p>' +
+        grade.innerHTML = '<div class="vazio erro"><p class="rotulo-tec">// FALHA DE LINK</p><p>Não foi possível carregar a lista de projetos. Confira a conexão.</p>' +
           '<button type="button" id="tentar">Tentar de novo</button></div>';
         document.getElementById('tentar').onclick = carregar;
       });
@@ -147,6 +264,8 @@
     if (!b) return;
     faseAtual = b.dataset.fase;
     filtros.querySelectorAll('button').forEach(function (x) { x.classList.toggle('ativo', x === b); });
+    // Pulso de "comando recebido" no seletor clicado.
+    b.classList.remove('disparo'); void b.offsetWidth; b.classList.add('disparo');
     desenhar();
   });
 

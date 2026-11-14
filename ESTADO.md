@@ -12,6 +12,15 @@
   e foram para o menu de três pontos (canto superior direito) → "Sobre o projeto", que abre
   uma janela com os dois e o botão "Abrir projeto". O cartão inteiro continua sendo o link.
   Conferido em print no PC (1280, claro e escuro) e no celular (390).
+- Visual "painel de engenharia" (pedido do dono, depois do item acima): tema único escuro
+  (#07090e com grade técnica), ciano #00f0ff nos elementos ativos, fontes Chakra Petch
+  (títulos) e JetBrains Mono (códigos, status, contador), via Google Fonts. Cartão = módulo
+  chanfrado com código SEC-NN, ID/INIT, coordenadas, cantoneiras e um desenho de esquema
+  original no canto inferior direito (`ESQUEMAS` no hub.js: boneco cyberpunk no Cyberidle,
+  núcleo de voz na Jean, cubo genérico para os demais; projeto novo ganha desenho
+  acrescentando a chave com o slug). Cartões acendem quando o mouse se aproxima. Contador
+  virou visor de telemetria; filtros viraram seletores de comando. Menu de três pontos e
+  "Sobre o projeto" mantidos. Conferido em print no PC (1280) e no celular (390).
 - Estrutura de isolamento por projeto e o comando `scripts/novo-projeto.mjs`, testado numa
   cópia descartável com dois projetos: pastas separadas, registro da API gerado, slug
   repetido e slug inválido recusados, rota `/ping` respondendo.
@@ -69,8 +78,8 @@
    guardada na ficha da Jean como alternativa futura, a pedido do dono.
    14/11: etapa 5 no ar antes da 4 - `public/jean-painel.js` (base) põe a Jean em qualquer
    tela do domínio (botão "J" e Ctrl+K); carregado no hub e no modelo de projeto novo.
-   Botão no Cyberidle pendente (dono não quer mexer nele agora). Etapa 4 (voz) no ar em
-   14/11: ditado e conversa por voz (navegador), áudio gravado (o Gemini ouve), Jean
+   Botão no Cyberidle pendente (dono não quer mexer nele agora). Etapa 4 (voz) no ar e confirmada pelo dono
+   em 14/11 (conversa por voz no celular, voz do Gemini): ditado e conversa por voz (navegador), áudio gravado (o Gemini ouve), Jean
    falando (TTS oficial do Gemini, reserva voz do navegador). edge-tts recusado (não
    oficial, AGPL, exige Node); motivo na ficha da Jean. Estado e decisões em `projetos/jean/PROJETO.md`.
 
