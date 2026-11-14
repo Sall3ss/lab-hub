@@ -42,7 +42,7 @@ export class ErroMotor extends Error {
  * historico: [{ papel: 'usuario'|'jean', conteudo }] terminando na fala do usuario.
  * ferramentas: declaracoes (functionDeclarations); executar(nome, args) -> { resposta, acao? }
  */
-export async function* responder(env, { sistema, historico, ferramentas, executar, propostas = [] }) {
+export async function* responder(env, { sistema, historico, ferramentas, executar, propostas = [], pensamento }) {
   if (env.JEAN_SIMULADO === '1') { yield* simulado(historico, executar); return; }
   if (!env.GEMINI_API_KEY) throw new ErroMotor('A chave do Gemini (GEMINI_API_KEY) não está configurada no Pages.', 503);
 
@@ -50,7 +50,8 @@ export async function* responder(env, { sistema, historico, ferramentas, executa
   // Configuracoes de pensamento, da preferida para a mais simples: se o Google recusar uma
   // (nome de nivel diferente num modelo), cai para a seguinte em vez de falhar.
   const pensamentos = [
-    { thinkingConfig: { thinkingLevel: env.JEAN_PENSAMENTO || 'LOW', includeThoughts: true } },
+    // Resposta que vai ser FALADA: pensamento minimo (14/11, conversa por voz lenta no PC).
+    { thinkingConfig: { thinkingLevel: pensamento || env.JEAN_PENSAMENTO || 'LOW', includeThoughts: true } },
     { thinkingConfig: { includeThoughts: true } },
     null,
   ];
@@ -278,18 +279,22 @@ export async function transcrever(env, bytes, mime, nomes = []) {
       { text: `Transcreva fielmente este áudio em português do Brasil, com pontuação. A assistente se chama Jean, pronunciado em inglês "Djin" (/dʒiːn/): quando ouvir "Djin", "Gin", "Jin" ou "Jim" chamando a assistente, escreva "Jean".${nomes.length ? ' Nomes próprios que podem aparecer (escreva assim): ' + nomes.join(', ') + '.' : ''} Não repita palavras nem trechos. Em "tom", descreva em poucas palavras o tom de voz e a intenção (ex.: "animado, com pressa"). Se não houver fala compreensível, devolva transcricao vazia.` },
     ] }],
     generationConfig: {
+      // Transcrever nao precisa raciocinar: pensamento minimo deixa bem mais rapido.
+      thinkingConfig: { thinkingLevel: 'MINIMAL' },
       responseMimeType: 'application/json',
       responseSchema: { type: 'object', properties: { transcricao: { type: 'string' }, tom: { type: 'string' } }, required: ['transcricao'] },
     },
   });
-  const modelos = [env.JEAN_MODELO || 'gemini-3.8-flash', env.JEAN_MODELO_RESERVA || 'gemini-3.5-flash-lite'];
-  let ultimoErro = null;
-  for (const modelo of modelos) {
+  // Modelo leve primeiro (mais rapido para so transcrever); o principal fica de reserva.
+  const modelos = [env.JEAN_MODELO_TRANSCRICAO || 'gemini-3.5-flash-lite', env.JEAN_MODELO || 'gemini-3.8-flash'];
+  let ultimoErro = null, semPensamento = null;
+  for (let k = 0; k < modelos.length; k++) {
+    const modelo = modelos[k];
     const inicio = Date.now();
     let r;
     try {
       r = await fetch(`${URL_BASE}${encodeURIComponent(modelo)}:generateContent`, {
-        method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: corpo,
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: semPensamento || corpo,
         signal: AbortSignal.timeout(PRAZO_INICIO_MS),
       });
     } catch (e) {
@@ -301,9 +306,13 @@ export async function transcrever(env, bytes, mime, nomes = []) {
       const texto = (j.candidates?.[0]?.content?.parts || []).filter((p) => p.text && !p.thought).map((p) => p.text).join('');
       let saida = {};
       try { saida = JSON.parse(texto); } catch { saida = { transcricao: texto }; }
-      return { transcricao: String(saida.transcricao || '').trim(), tom: String(saida.tom || '').trim(), motor: modelo };
+      return { transcricao: String(saida.transcricao || '').trim(), tom: String(saida.tom || '').trim(), motor: modelo, ms: Date.now() - inicio };
     }
     ultimoErro = await erroDoGoogle(r, modelo, Math.round((Date.now() - inicio) / 1000), 1);
+    // Modelo que nao aceita o nivel de pensamento: repete o mesmo sem ele.
+    if (ultimoErro.recusouPensamento && !semPensamento) {
+      const c = JSON.parse(corpo); delete c.generationConfig.thinkingConfig; semPensamento = JSON.stringify(c); k--; continue;
+    }
     if (![404, 429, 500, 502, 503, 504, 524].includes(r.status)) break;
   }
   throw ultimoErro;

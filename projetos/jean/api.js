@@ -269,6 +269,9 @@ function responderEmStreaming({ env, u, conversa, waitUntil, de, pagina, voz, ou
   const trabalho = (async () => {
     let resposta = '', fim = null, erro = null;
     const acoes = [];
+    // Tempos de cada etapa (14/11: "esta demorando mais que o normal"), mostrados na tela.
+    const inicioResposta = Date.now();
+    let primeiraPalavra = 0;
     await enviar({ tipo: 'conversa', id: conversa.id, titulo: conversa.titulo, nova: !!conversa.nova });
     if (ouvido) await enviar({ tipo: 'transcricao', texto: ouvido.transcricao, tom: ouvido.tom || null });
     try {
@@ -286,8 +289,9 @@ function responderEmStreaming({ env, u, conversa, waitUntil, de, pagina, voz, ou
       let sistema = sistemaBase + '\n\n' + await contextoParaJean(env, u.id, de, pagina);
       if (voz) sistema += '\n\n## Esta resposta vai ser FALADA em voz alta\nResponda como numa conversa falada: curto (até umas 4 frases), sem listas longas, sem tabela e sem código, a menos que o dono peça. Se precisar de código ou lista longa, diga que deixou na tela.';
       const exec = (nome, args) => executar(env, u, conversa.id, nome, args);
-      for await (const p of responder(env, { sistema, historico: falas, ferramentas: declaracoes(), executar: exec, propostas: PROPOSTAS })) {
+      for await (const p of responder(env, { sistema, historico: falas, ferramentas: declaracoes(), executar: exec, propostas: PROPOSTAS, pensamento: voz ? (env.JEAN_PENSAMENTO_VOZ || 'MINIMAL') : null })) {
         if (p.fim) { fim = p; break; }
+        if (p.texto && !primeiraPalavra) primeiraPalavra = Date.now() - inicioResposta;
         if (p.acao) { acoes.push(p.acao.id); await enviar({ tipo: 'acao', acao: p.acao }); continue; }
         resposta += p.texto;
         await enviar({ tipo: 'texto', t: p.texto });
@@ -310,7 +314,10 @@ function responderEmStreaming({ env, u, conversa, waitUntil, de, pagina, voz, ou
       await db(env).run('UPDATE jean_conversas SET atualizada_em = ? WHERE id = ?', agora(), conversa.id);
     }
     if (erro) await enviar({ tipo: 'erro', erro });
-    else await enviar({ tipo: 'fim', mensagem_id: mensagemId, motor: fim?.motor || null });
+    else await enviar({
+      tipo: 'fim', mensagem_id: mensagemId, motor: fim?.motor || null,
+      tempos: { transcricao: ouvido?.ms ?? null, primeira_palavra: primeiraPalavra || null, resposta: Date.now() - inicioResposta, ferramentas: fim?.ferramentas || [] },
+    });
     escritor.close().catch(() => { /* cliente ja saiu */ });
   })();
   trabalho.finally(() => clearInterval(pulso)).catch(() => {});

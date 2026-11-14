@@ -236,7 +236,21 @@ projeto a precisar dele.
   transcreve; qualquer navegador, microfone escolhido); (3) se o reconhecimento do
   navegador falhar por serviço indisponível, a conversa passa sozinha a ouvir pelo
   Gemini. Preferências lembradas no aparelho. Testado com microfone falso e com
-  reconhecimento que falha como no Brave. Falta o dono testar no PC.
+  reconhecimento que falha como no Brave. **Dono confirmou que funciona no PC** (14/11).
+
+- 🟡 **14/11 - Conversa por voz pelo Gemini lenta no PC** ("tanto para entender que
+  terminei de falar quanto para ela responder"). Feito: (1) fim da fala detectado com
+  0,75 s de silêncio (era 1,3 s), com histerese, e "Pensando..." aparece na hora; (2) o
+  ruído do ambiente agora é o menor volume do último 1,5 s, com teto (antes era medido só
+  no começo: quem começava falando logo, ou com a voz da Jean ainda saindo da caixa, ficava
+  "Não ouvi nada"); (3) transcrição pelo `gemini-3.5-flash-lite` com pensamento MINIMAL
+  (era o modelo principal com pensamento padrão; trocável por `JEAN_MODELO_TRANSCRICAO`);
+  (4) resposta que vai ser falada usa pensamento MINIMAL (`JEAN_PENSAMENTO_VOZ`); (5) a
+  conversa por voz mostra os tempos de cada etapa (transcrição, 1ª palavra, resposta
+  completa, voz começou, total, ferramentas consultadas) para medir no aparelho real.
+  Aqui (máquina fraca) o envio sai 1,3-1,6 s após o fim da fala. Próxima melhora possível,
+  se os tempos mostrarem que vale: começar a falar a primeira frase antes da resposta
+  terminar.
 
 ## Próximo passo
 

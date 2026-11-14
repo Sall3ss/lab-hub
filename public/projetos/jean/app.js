@@ -321,7 +321,7 @@
     modoGerando(true);
     var el = bolha('jean', '');
     el.classList.add('pensando');
-    var md = el.querySelector('.md'), bruto = '', terminou = false, falha = null;
+    var md = el.querySelector('.md'), bruto = '', terminou = false, falha = null, tempos = null;
     descer();
     // Vigia (14/11 no ar: a conversa por voz ficou "pensando" para sempre). O servidor
     // manda sinal de vida a cada 15 s; 75 s sem nada, ou 4 min no total, e desiste.
@@ -392,6 +392,7 @@
             falha = ev.erro;
           } else if (ev.tipo === 'fim') {
             terminou = true;
+            tempos = ev.tempos || null;
           }
         }
       }
@@ -416,7 +417,7 @@
     }
     // Voz automatica: le a resposta assim que chega (na conversa por voz quem le e o laco dela).
     if (!falha && !parou && bruto && vozAutomatica && !conversaVoz.ativa) falarMensagem(el);
-    return { bruto: bruto, falha: falha, parou: !!parou, el: el };
+    return { bruto: bruto, falha: falha, parou: !!parou, el: el, tempos: tempos };
   }
 
   // ---------------------------------------------------------------- voz (etapa 4)
@@ -427,7 +428,10 @@
     el.classList.add('falando');
     rotulo.textContent = 'Parar';
     VozJean.falar(el.dataset.bruto, {
-      aoComecar: function (motor) { $('voz-motor').textContent = motor ? 'Voz: ' + motor : ''; },
+      aoComecar: function (motor) {
+        $('voz-motor').textContent = motor ? 'Voz: ' + motor : '';
+        if (el.__resposta) { el.__resposta.vozComecou = Date.now() - el.__resposta.t0 - el.__resposta.esperou; mostrarTempos(el.__resposta); }
+      },
       aoTerminar: function (info) {
         el.classList.remove('falando');
         rotulo.textContent = 'Ouvir';
@@ -612,6 +616,7 @@
       escuta = await VozJean.escutarPeloGemini({
         aoNivel: function (n) { orbe.style.transform = 'scale(' + (1 + Math.min(n, 1) * 0.25).toFixed(3) + ')'; },
         aoComecarFala: function () { $('voz-transcricao').textContent = '(ouvindo você...)'; },
+        aoParar: function () { orbe.style.transform = ''; estadoVoz('Pensando...', 'pensando'); },
         aoFim: function (blob, segundos) {
           conversaVoz.escuta = null;
           orbe.style.transform = '';
@@ -645,20 +650,39 @@
     var contador = setInterval(function () {
       if (orbe.classList.contains('pensando')) $('voz-estado').textContent = 'Pensando... ' + Math.round((Date.now() - t0) / 1000) + ' s';
     }, 1000);
-    try { return await pedir(); }
-    catch (e) { return { falha: (e && e.message) || 'erro inesperado' }; }
+    $('voz-tempos').textContent = '';
+    var r;
+    try { r = await pedir(); }
+    catch (e) { r = { falha: (e && e.message) || 'erro inesperado' }; }
     finally { clearInterval(contador); }
+    r.t0 = t0; r.esperou = Date.now() - t0;
+    return r;
   }
 
   function responderNaConversa(r) {
     if (!conversaVoz.ativa) return;
     if (!r || r.falha || !r.bruto) { estadoVoz(r && r.falha ? 'Algo falhou: ' + r.falha : 'A Jean não respondeu.', 'parado'); return; }
     estadoVoz('Falando...', 'falando');
+    r.el.__resposta = r;
+    mostrarTempos(r);
     falarMensagem(r.el, function (info) {
       if (!conversaVoz.ativa) return;
       if (info && info.erro) { estadoVoz('Sem voz neste navegador. A resposta está na tela.', 'parado'); return; }
       escutarConversa();
     });
+  }
+
+  // Tempos da ultima volta, para medir onde demora (pedido do dono em 14/11).
+  function seg(ms) { return (ms / 1000).toFixed(1).replace('.', ',') + ' s'; }
+  function mostrarTempos(r) {
+    var t = r.tempos || {}, partes = [];
+    if (t.transcricao) partes.push('transcrição ' + seg(t.transcricao));
+    if (t.primeira_palavra) partes.push('1ª palavra ' + seg(t.primeira_palavra));
+    if (t.resposta) partes.push('resposta completa ' + seg(t.resposta));
+    if (r.vozComecou) partes.push('voz começou ' + seg(r.vozComecou) + ' depois');
+    partes.push('total ' + seg((r.vozComecou || 0) + r.esperou));
+    if (t.ferramentas && t.ferramentas.length) partes.push('consultou ' + t.ferramentas.join(', '));
+    $('voz-tempos').textContent = 'Tempos: ' + partes.join(' · ');
   }
 
   async function enviarFalaDaConversa(t) {

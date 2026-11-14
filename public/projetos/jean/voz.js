@@ -365,21 +365,29 @@ var VozJean = (function () {
    */
   async function escutarPeloGemini(opcoes) {
     var g = await gravar({});
-    var inicio = Date.now(), ruido = 0, amostras = 0, falou = false, ultimaVoz = 0, acabou = false;
-    var LIMIAR_MIN = 0.12, SILENCIO_MS = 1300, ESPERA_MAX_MS = 12000, FALA_MAX_MS = 120000;
+    var inicio = Date.now(), recentes = [], falou = false, ultimaVoz = 0, acabou = false;
+    // 14/11: 1300 ms de silencio parecia lento no PC; 750 ms com histerese (silencio =
+    // abaixo de 70% do limiar de fala) termina rapido sem cortar pausas curtas de respiracao.
+    // O ruido do ambiente e o MENOR volume do ultimo 1,5 s (medir so no comeco errava quando
+    // a pessoa ja comecava falando ou a voz da Jean ainda saia da caixa de som), com teto.
+    var LIMIAR_MIN = 0.12, LIMIAR_MAX = 0.3, SILENCIO_MS = 750, ESPERA_MAX_MS = 12000, FALA_MAX_MS = 120000;
     function fim(comAudio) {
       if (acabou) return; acabou = true;
       clearInterval(laco);
       if (!comAudio) { g.cancelar(); opcoes.aoFim(null, 0); return; }
+      if (opcoes.aoParar) opcoes.aoParar(); // a tela ja mostra "Pensando" enquanto o arquivo fecha
       var segs = g.segundos();
       g.terminar().then(function (blob) { opcoes.aoFim(blob, segs); });
     }
     var laco = setInterval(function () {
       var n = g.nivel(), agora = Date.now();
       if (opcoes.aoNivel) opcoes.aoNivel(n);
-      if (agora - inicio < 400) { ruido += n; amostras++; return; } // mede o ruido do ambiente
-      var limiar = Math.max(LIMIAR_MIN, (ruido / Math.max(1, amostras)) * 2.5);
+      if (agora - inicio < 200) return; // o clique de comecar
+      recentes.push(n); if (recentes.length > 15) recentes.shift();
+      var ruido = Math.min.apply(null, recentes);
+      var limiar = Math.min(LIMIAR_MAX, Math.max(LIMIAR_MIN, ruido * 2.5));
       if (n > limiar) { if (!falou && opcoes.aoComecarFala) opcoes.aoComecarFala(); falou = true; ultimaVoz = agora; }
+      else if (falou && n > limiar * 0.7) ultimaVoz = agora; // ainda falando baixinho
       if (falou && agora - ultimaVoz > SILENCIO_MS) fim(true);
       else if (!falou && agora - inicio > ESPERA_MAX_MS) fim(false);
       else if (agora - inicio > FALA_MAX_MS) fim(true);
