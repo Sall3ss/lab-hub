@@ -29,7 +29,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '1.1.0';
+const VERSAO = '1.2.0';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -144,14 +144,21 @@ async function tarefaTexto(cfg, t, pasta) {
       '-i', join(pasta, arq), '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'libopus', '-b:a', '24k', parte]);
     const dados = readFileSync(parte);
     log(`Transcrevendo parte ${i + 1}/${total} (${(dados.length / 1048576).toFixed(1)} MB)…`);
-    for (let tent = 1; ; tent++) {
+    // Limite do plano grátis da Groq (horas de áudio por hora/dia): espera o tempo que ela
+    // pede e manda de novo a MESMA parte, sem recomeçar a live. Desiste só depois de 8 h.
+    let esperado = 0;
+    for (;;) {
       try {
         await painel(cfg, `/tarefas/${t.id}/audio?parte=${i}&total=${total}&inicio=${inicio}`, { bruto: dados, tipo: 'audio/ogg' });
         break;
       } catch (e) {
-        // Limite da Groq: espera o tempo pedido e manda de novo a MESMA parte.
-        if (e.status === 429 && tent < 6) { const s = e.dados.esperar_s || 120; log(`Limite da Groq; esperando ${s}s.`); await dorme(s * 1000); continue; }
-        throw e;
+        if (e.status !== 429 || esperado > 8 * 3600) throw e;
+        const s = Math.min(Math.max(Number(e.dados.esperar_s) || 120, 30), 1800);
+        esperado += s;
+        const aviso = `limite da Groq: retoma em ${Math.ceil(s / 60)} min (parte ${i + 1}/${total})`;
+        log(aviso[0].toUpperCase() + aviso.slice(1) + '.');
+        await painel(cfg, `/tarefas/${t.id}/prorrogar`, { corpo: { progresso: aviso } }).catch(() => {});
+        await dorme(s * 1000);
       }
     }
     unlinkSync(parte);

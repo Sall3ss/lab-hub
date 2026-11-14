@@ -123,6 +123,10 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
 - Texto: legenda nativa (manual, depois automática `<língua>-orig`) → enviada em lotes; sem
   legenda → áudio `ba/w`, partes de 30 min em opus mono 16 kHz 24 kbps → painel → Groq.
   Sem `GROQ_API_KEY`, a tarefa falha com mensagem clara no cartão.
+- Limite do plano grátis da Groq (horas de áudio por hora e por dia): com 429 o agente espera
+  o tempo pedido e reenvia a mesma parte (não recomeça a live), mostrando "limite da Groq:
+  retoma em N min" no cartão; desiste só depois de 8 h de espera (1.2.0). Live longa no plano
+  grátis pode levar algumas horas para transcrever; no plano pago da Groq não espera.
 - Download cirúrgico: `yt-dlp --download-sections "*HH:MM:SS-HH:MM:SS" --force-keyframes-at-cuts
   -f "bv*[height<=1080]+ba/b" --merge-output-format mp4`, saída em
   `Cortex\<data> - <canal> - <vídeo>\curtos|longos\NN - <título>.mp4`, com um `.txt` ao lado
@@ -154,6 +158,9 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   falha: o passo 2 (`conectar`) só fala uma vez com o painel e fecha; quem fica rodando é o
   passo 3, que ele ainda não tinha feito. O passo 3 virou o atalho de ligar/desligar (1.1.0) e
   a tela PCs passou a mostrar esse comando sempre (não precisa da chave).
+- 14/11: primeiro vídeo da Kick parou em "Falta a chave GROQ_API_KEY" (esperado: Kick e Twitch
+  não têm legenda). Pendente: o dono criar a chave na Groq e gravar no Pages; depois, um deploy
+  para a Function enxergar a chave e "Tentar de novo" no vídeo.
 
 ## Decisões
 
