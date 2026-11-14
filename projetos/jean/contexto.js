@@ -49,7 +49,8 @@ export async function contextoParaJean(env, usuarioId, projetoAtual) {
       `### ${p.titulo} (projeto: "${p.slug}", fase: ${p.fase}${p.endereco ? ', no ar em ' + p.endereco : ''})`,
       p.ideia && `Ideia: ${p.ideia}`,
       p.objetivo && `Objetivo: ${p.objetivo}`,
-      g.estado && `Começo da seção "Estado" da ficha:\n${g.estado}`,
+      g.estado && `O que foi feito por último${g.ultima_atualizacao ? ' (registro mais recente: ' + g.ultima_atualizacao + ')' : ''}:\n${g.estado}`,
+      g.pendencias && `Pendências e limites anotados na ficha:\n${g.pendencias.slice(0, 700)}`,
       g.proximo && `Próximo passo segundo a ficha:\n${g.proximo}`,
       abertas.length
         ? `Tarefas abertas (${abertas.length}):\n` + abertas.slice(0, TAREFAS_POR_PROJETO).map((t) => `- [tarefa ${t.id}] ${t.titulo}`).join('\n') +

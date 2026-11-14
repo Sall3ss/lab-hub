@@ -21,8 +21,8 @@ const txt = (descricao) => ({ type: 'string', description: descricao });
 export function declaracoes() {
   const projeto = { type: 'string', description: 'Slug do projeto: ' + slugs().map((s) => `"${s}"`).join(', '), enum: slugs() };
   return [
-    { name: 'ler_ficha', description: 'Lê a ficha completa de um projeto do Lab Hub (estado detalhado, decisões, próximos passos). Use quando o resumo do contexto não bastar.',
-      parameters: { type: 'object', properties: { projeto }, required: ['projeto'] } },
+    { name: 'ler_ficha', description: 'Lê a ficha de um projeto do Lab Hub. Padrão (parte "recente"): os últimos registros do que foi feito, as pendências anotadas e o próximo passo; é rápido e basta para "onde parou" e "o que falta". Use parte "completa" só se precisar de histórico antigo ou de decisões.',
+      parameters: { type: 'object', properties: { projeto, parte: { type: 'string', enum: ['recente', 'completa'], description: 'recente (padrão) ou completa' } }, required: ['projeto'] } },
     { name: 'listar_pendencias', description: 'Lista tarefas (abertas e feitas) e notas de um projeto, ou de todos se projeto for omitido.',
       parameters: { type: 'object', properties: { projeto } } },
     { name: 'buscar_conversas', description: 'Procura nas conversas anteriores com o dono (título e texto). Use para "o que discutimos ontem", "aquela ideia de...".',
@@ -78,8 +78,16 @@ async function consultar(env, u, nome, args) {
   if (nome === 'ler_ficha') {
     const p = projetoPorSlug(args.projeto);
     if (!p) return { erro: 'projeto desconhecido' };
-    // 12 mil caracteres: a ficha inteira do Cyberidle (~30 mil) deixava o modelo lento demais.
-    return { projeto: p.slug, ficha: corta(p.ficha, 12000), cortada: p.ficha.length > 12000 };
+    // Padrao "recente" (ideia do dono, 14/11): so o que foi feito por ultimo + pendencias.
+    // A ficha inteira do Cyberidle (~30 mil caracteres) deixava o modelo lento (erro 524).
+    if (args.parte !== 'completa') {
+      return {
+        projeto: p.slug, parte: 'recente', ultima_atualizacao: p.ultima_atualizacao,
+        feito_por_ultimo: p.recente, pendencias: p.pendencias, proximo_passo: p.proximo,
+        dica: 'Se precisar de histórico antigo ou decisões, chame de novo com parte "completa".',
+      };
+    }
+    return { projeto: p.slug, parte: 'completa', ficha: corta(p.ficha, 12000), cortada: p.ficha.length > 12000 };
   }
   if (nome === 'listar_pendencias') {
     const { projetos } = await dadosDoPainel(env, u.id);

@@ -20,7 +20,7 @@ export function instrucaoDeSistema({ nomeDono, hoje }) {
 
 ## Sua visão do Lab Hub
 - Abaixo desta instrução vem o retrato atual dos projetos (cartão, começo do estado, próximo passo, tarefas abertas, notas) e as suas memórias sobre o dono. Use isso sem o dono precisar explicar onde está: ligue os pontos entre projetos quando fizer sentido.
-- O resumo é curto. Para detalhes de um projeto, use \`ler_ficha\`. Para pendências completas, \`listar_pendencias\`. Para "o que conversamos ontem", \`buscar_conversas\` e depois \`ler_conversa\`.
+- O resumo é curto. Para detalhes de um projeto, use \`ler_ficha\` (por padrão ela traz só o que foi feito por último, as pendências e o próximo passo; peça a ficha completa só para histórico ou decisões antigas). Para pendências completas, \`listar_pendencias\`. Para "o que conversamos ontem", \`buscar_conversas\` e depois \`ler_conversa\`.
 - Não invente o estado de um projeto: se não estiver no retrato nem na ficha, diga que não sabe.
 
 ## Ações (sempre com confirmação)

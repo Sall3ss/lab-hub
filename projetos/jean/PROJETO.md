@@ -112,6 +112,16 @@ projeto a precisar dele.
   com a tela. Se o Google recusar o nível de pensamento, o motor tenta sem ele. Testado
   com Google de mentira (5 cenários); falta o dono repetir o pedido no ar.
 
+- 🟢 **14/11 - "Ler só o que foi feito por último" (ideia do dono):** a ficha deixou de ir
+  inteira. O gerador quebra a seção Estado em registros datados e ordena pela DATA (as
+  fichas não estão em ordem: no Cyberidle o 31/10 era o 2º registro, então "o começo do
+  Estado" que a Jean recebia não era o mais novo). Cada projeto ganha: `estado` (últimos
+  registros, ~1.200 caracteres, vai em toda mensagem), `recente` (~3.500, padrão do
+  `ler_ficha`), `pendencias` (linhas com 🟡/🔴, pendente, falta, limite, conhecido, a rever)
+  e `ultima_atualizacao`. A ficha completa só com `ler_ficha(parte: "completa")`.
+  - Vale para as fichas que seguem o padrão de registro com data no começo
+    (`**DD/MM/AAAA - ...**` ou `- DD/MM ...`). Registro sem data não entra no "último".
+
 ## Próximo passo
 
 4. Áudio: gravar, enviar arquivo de áudio, transcrição pelo Gemini, voz da resposta.
