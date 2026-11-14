@@ -63,7 +63,10 @@
    conversas com busca, fixar, renomear, excluir; confirmada pelo dono no ar) e etapa 3
    (enxerga as fichas dos projetos, memórias, propõe nota/tarefa/memória com cartão de
    confirmação, painel "Pulso do Lab Hub"). Tudo grátis na BETA. Chave `GEMINI_API_KEY`
-   gravada pelo dono no Pages. O deploy agora roda `scripts/jean-contexto.mjs`. Estado e decisões em `projetos/jean/PROJETO.md`.
+   gravada pelo dono no Pages. O deploy agora roda `scripts/jean-contexto.mjs`.
+   14/11: tarefas da Jean chegam ao Claude Code pelo botão "Copiar para o Claude" no Pulso
+   (opção A). A opção B (Jean gravar tarefas no repositório, com token do GitHub) ficou
+   guardada na ficha da Jean como alternativa futura, a pedido do dono. Estado e decisões em `projetos/jean/PROJETO.md`.
 
 ## ClipStudio: arquivado em 15/10/2026
 

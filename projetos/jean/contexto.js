@@ -56,7 +56,7 @@ export async function contextoParaJean(env, usuarioId, projetoAtual) {
         ? `Tarefas abertas (${abertas.length}):\n` + abertas.slice(0, TAREFAS_POR_PROJETO).map((t) => `- [tarefa ${t.id}] ${t.titulo}`).join('\n') +
           (abertas.length > TAREFAS_POR_PROJETO ? '\n- ...' : '')
         : 'Tarefas abertas: nenhuma.',
-      p.notas.length && 'Notas recentes:\n' + p.notas.slice(0, NOTAS_POR_PROJETO).map((n) => `- (${n.criada_em.slice(0, 10)}) ${n.texto}`).join('\n'),
+      p.notas.length && 'Notas recentes:\n' + p.notas.slice(0, NOTAS_POR_PROJETO).map((n) => `- (${new Date(n.criada_em).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}) ${n.texto}`).join('\n'),
     ];
     return linhas.filter(Boolean).join('\n');
   });

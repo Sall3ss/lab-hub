@@ -218,3 +218,8 @@ details summary { cursor: pointer; font-size: .82rem; color: var(--suave); paddi
 .mini { flex-shrink: 0; align-self: center; font: inherit; font-size: .78rem; font-weight: 600; padding: .3rem .65rem; border-radius: 999px; border: 1px solid var(--borda); background: var(--painel); color: var(--texto); cursor: pointer; }
 .mini:hover { border-color: var(--destaque); color: var(--destaque); }
 .mini:disabled { opacity: .5; cursor: wait; }
+
+/* 14/11: "Copiar para o Claude" (opcao A) */
+.copiar-claude { justify-self: start; margin-top: .4rem; font: inherit; font-size: .82rem; font-weight: 600; padding: .45rem .85rem; border-radius: 999px; border: 1px solid var(--dourado); background: none; color: var(--dourado); cursor: pointer; }
+.copiar-claude:hover { background: color-mix(in srgb, var(--dourado) 12%, transparent); }
+.copiar-area { font: .82rem/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; width: 100%; padding: .7rem; border-radius: .75rem; border: 1px solid var(--borda); background: var(--fundo); color: var(--texto); resize: vertical; }

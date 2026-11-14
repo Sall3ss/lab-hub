@@ -81,6 +81,17 @@
     <div class="painel-corpo" id="painel-corpo"></div>
   </aside>
 
+  <dialog class="janela" id="janela-copiar" aria-labelledby="copiar-titulo">
+    <div class="janela-caixa">
+      <h2 id="copiar-titulo">Copie e cole no Claude Code</h2>
+      <p class="janela-texto">O navegador não deixou copiar sozinho. Selecione o texto abaixo, copie e cole na conversa do projeto.</p>
+      <textarea id="copiar-texto" class="copiar-area" rows="10" readonly aria-label="Texto para o Claude"></textarea>
+      <div class="janela-botoes">
+        <button type="button" class="primario" data-cancelar>Fechar</button>
+      </div>
+    </div>
+  </dialog>
+
   <dialog class="janela" id="janela-confirmar" aria-labelledby="confirmar-titulo">
     <div class="janela-caixa">
       <h2 id="confirmar-titulo"></h2>

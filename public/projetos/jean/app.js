@@ -429,7 +429,8 @@
     catch (e) { corpoPainel.innerHTML = '<p class="vazio-lateral">Não foi possível carregar. <button type="button" class="link" data-recarregar-painel>Tentar de novo</button></p>'; }
   }
 
-  function data(iso) { return iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : ''; }
+  // Data no horario de Brasilia (o banco guarda em UTC: a noite, a data em texto adiantava um dia).
+  function data(iso) { return iso ? new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' }) : ''; }
   var lixeira = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>';
 
   function desenharPainel() {
@@ -470,6 +471,8 @@
           return '<div class="linha"><div class="linha-texto"><span class="data">' + data(n.criada_em) + '</span> ' + esc(n.texto) + '</div>' +
             '<button type="button" class="icone pequeno" data-apagar="notas" data-id="' + n.id + '" aria-label="Excluir nota">' + lixeira + '</button></div>';
         }).join('') : '') +
+        ((abertas.length || p.notas.length)
+          ? '<button type="button" class="copiar-claude" data-copiar-claude="' + esc(p.slug) + '">Copiar para o Claude</button>' : '') +
         '<a class="projeto-abrir" href="' + esc(link) + '" target="_blank" rel="noopener">Abrir ' + esc(p.slug === 'hub' ? 'o hub' : p.titulo) + ' →</a>' +
         '</section>';
     }).join('');
@@ -481,6 +484,44 @@
     b.disabled = true;
     try { await api('/tarefas/' + b.dataset.tarefa, { method: 'PATCH', body: JSON.stringify({ estado: b.dataset.estado }) }); await carregarPainel(); }
     catch (e) { b.disabled = false; alertaPainel(erroDeRede(e)); }
+  });
+
+  // "Copiar para o Claude" (opcao A, escolhida pelo dono em 14/11): o Claude Code nao enxerga
+  // o banco da Jean, entao o dono leva as tarefas colando este texto na conversa do projeto.
+  // Comeca com a etiqueta do projeto ([Cyberidle], [Hub]), como combinado no CLAUDE.md.
+  function textoParaClaude(p) {
+    var abertas = p.tarefas.filter(function (t) { return t.estado === 'aberta'; });
+    var hoje = new Date().toLocaleDateString('pt-BR');
+    var etiqueta = p.slug === 'hub' ? '[Hub]' : '[' + p.titulo + ']';
+    var linhas = [etiqueta + ' Tarefas e notas que a Jean registrou para este projeto (copiado em ' + hoje + '):', ''];
+    if (abertas.length) {
+      linhas.push('Tarefas abertas:');
+      abertas.forEach(function (t) { linhas.push('- ' + t.titulo + (t.detalhe ? ' (' + t.detalhe.replace(/\s+/g, ' ') + ')' : '') + ' [Jean, tarefa ' + t.id + ', ' + data(t.criada_em) + ']'); });
+      linhas.push('');
+    }
+    if (p.notas.length) {
+      linhas.push('Notas:');
+      p.notas.forEach(function (n) { linhas.push('- (' + data(n.criada_em) + ') ' + n.texto.replace(/\s+/g, ' ')); });
+      linhas.push('');
+    }
+    linhas.push('Registre isso na ficha do projeto e me diga por onde começar.');
+    return linhas.join('\n');
+  }
+
+  corpoPainel.addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-copiar-claude]');
+    if (!b || !dadosPainel) return;
+    var p = dadosPainel.projetos.find(function (x) { return x.slug === b.dataset.copiarClaude; });
+    var texto = textoParaClaude(p);
+    var volta = b.textContent;
+    (navigator.clipboard ? navigator.clipboard.writeText(texto) : Promise.reject())
+      .then(function () { b.textContent = 'Copiado. Cole no Claude Code'; setTimeout(function () { b.textContent = volta; }, 2500); })
+      .catch(function () {
+        // Navegador sem acesso a area de copia (ex.: aberto dentro de outro app): mostra o texto.
+        $('copiar-texto').value = texto;
+        $('janela-copiar').showModal();
+        $('copiar-texto').select();
+      });
   });
 
   var apagarPendente = null;

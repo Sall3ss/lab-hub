@@ -31,6 +31,16 @@ projeto a precisar dele.
 
 ## Decisões
 
+- ⏳ **ALTERNATIVA GUARDADA PARA O FUTURO (pedido do dono em 14/11/2026: "deixe registrado
+  para no futuro lembrarmos dessa opção"). Opção B - a Jean grava as tarefas no
+  repositório:** ao confirmar um cartão de tarefa/nota, a Jean escreve num arquivo do
+  projeto no GitHub (ex.: `projetos/<slug>/TAREFAS-JEAN.md`), e o Claude Code, ao puxar o
+  repositório e perguntar "onde paramos", já vê sem ninguém colar nada. Custo: grátis, mas
+  exige um **token do GitHub (fine-grained, só o repo `lab-hub`, permissão Contents)**
+  criado pelo dono e gravado como secret do Pages; e cada confirmação vira um commit, que
+  dispara uma publicação. **Hoje vale a opção A** (botão "Copiar para o Claude"). Voltar a
+  oferecer a B se colar ficar trabalhoso.
+
 - **13/11 - Tudo grátis na fase BETA (pedido do dono):** *"no momento a ideia não é gastos a
   não ser que lá na frente pareça valer a pena"*. Consequência:
   - **Cérebro = Gemini no plano gratuito** (chave do Google AI Studio). Faz texto, áudio,
@@ -141,11 +151,12 @@ projeto a precisar dele.
 - 🟢 **14/11 - Pulso:** a caixinha de tarefa virou botão "Concluir / Reabrir" (o dono marcou
   a caixinha achando que era "aprovar" e a tarefa foi dada como feita) e os links "Abrir
   ..." abrem em outra aba (pedido do dono).
-- 🔴 **Aberto: as tarefas da Jean não chegam sozinhas ao Claude Code.** Moram só no banco
-  (D1); quem trabalha num projeto no Claude Code lê a ficha no repositório. Caminhos
-  propostos ao dono em 14/11: (A) botão "Copiar para o Claude" no Pulso (grátis, já); (B)
-  ao confirmar, a Jean grava as tarefas num arquivo do projeto no repositório (automático,
-  grátis, mas exige um token do GitHub criado pelo dono e guardado como secret).
+- 🟢 **14/11 - Tarefas da Jean → Claude Code: opção A (escolha do dono).** As tarefas moram
+  só no banco (D1) e o Claude Code lê a ficha no repositório, então não se encontram
+  sozinhas. No Pulso, cada projeto com tarefa aberta ou nota tem o botão **"Copiar para o
+  Claude"**: copia um texto que começa com a etiqueta do projeto (`[Cyberidle]`, `[Hub]`),
+  lista tarefas abertas e notas e pede para registrar na ficha. O dono cola na conversa do
+  projeto no Claude Code. Se o navegador não deixar copiar, abre uma janela com o texto.
 
 ## Próximo passo
 
