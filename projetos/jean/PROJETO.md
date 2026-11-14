@@ -122,6 +122,12 @@ projeto a precisar dele.
   - Vale para as fichas que seguem o padrão de registro com data no começo
     (`**DD/MM/AAAA - ...**` ou `- DD/MM ...`). Registro sem data não entra no "último".
 
+- 🟡 **14/11 - 2º erro 524 (ainda com a ficha de 12 mil caracteres):** veio do
+  `gemini-3.8-flash` sem tentar o reserva. Causa: depois da 1ª rodada (a Jean pede a
+  ficha) o motor fica preso ao mesmo modelo por causa das assinaturas, e a 2ª rodada, já
+  com a ficha dentro, passou de 100 s sem plano B. Agora essas rodadas tentam o mesmo
+  modelo 2 vezes, e a mensagem de erro traz rodada e segundos (para medir, não adivinhar).
+
 ## Próximo passo
 
 4. Áudio: gravar, enviar arquivo de áudio, transcrição pelo Gemini, voz da resposta.

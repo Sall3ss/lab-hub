@@ -65,15 +65,17 @@ export async function* responder(env, { sistema, historico, ferramentas, executa
       try {
         const corpo = { ...base, contents };
         if (!corpo.generationConfig) delete corpo.generationConfig;
-        r = await chamar(env, modelos, JSON.stringify(corpo));
+        r = await chamar(env, modelos, JSON.stringify(corpo), rodada);
         break;
       } catch (e) {
         if (!e.recusouPensamento || !base.generationConfig) throw e;
         base.generationConfig = pensamentos.shift();
       }
     }
-    // Depois da primeira resposta, fica no mesmo modelo: as assinaturas sao dele.
-    modelos = [r.modelo];
+    // Depois da primeira resposta, fica no mesmo modelo: as assinaturas sao dele. Sem
+    // modelo reserva nessas rodadas, o plano B e tentar o mesmo de novo (14/11: o 524 veio
+    // justamente na 2a rodada, com a ficha dentro).
+    modelos = [r.modelo, r.modelo];
     let fimLeitura = null;
     for await (const p of lerSSE(r.resposta)) {
       if (p.texto) yield { texto: p.texto };
@@ -104,16 +106,17 @@ export async function* responder(env, { sistema, historico, ferramentas, executa
   yield { fim: true, motor: modelos[0], entrada, saida, ferramentas: usadas };
 }
 
-async function chamar(env, modelos, corpo) {
+async function chamar(env, modelos, corpo, rodada) {
   let ultimoErro = null;
   for (const modelo of modelos) {
+    const inicio = Date.now();
     const r = await fetch(`${URL_BASE}${encodeURIComponent(modelo)}:streamGenerateContent?alt=sse`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
       body: corpo,
     });
     if (r.ok) return { modelo, resposta: r };
-    ultimoErro = await erroDoGoogle(r, modelo);
+    ultimoErro = await erroDoGoogle(r, modelo, Math.round((Date.now() - inicio) / 1000), rodada + 1);
     // Limite, modelo inexistente, fora do ar ou demorado demais: tenta a reserva.
     // Chave errada ou pedido recusado: nao adianta.
     if (![404, 429, 500, 502, 503, 504, 524].includes(r.status)) break;
@@ -121,14 +124,14 @@ async function chamar(env, modelos, corpo) {
   throw ultimoErro;
 }
 
-async function erroDoGoogle(r, modelo) {
+async function erroDoGoogle(r, modelo, segundos, rodada) {
   const corpo = await r.text().catch(() => '');
-  console.error('[jean/motor]', modelo, r.status, corpo.slice(0, 500));
+  console.error('[jean/motor]', modelo, r.status, `${segundos}s rodada ${rodada}`, corpo.slice(0, 500));
   if (r.status === 429) return new ErroMotor('O limite gratuito do Gemini foi atingido. Espere um minuto e tente de novo (se persistir, o limite do dia acabou e volta amanhã).', 429);
   if (r.status === 400 && /API key/i.test(corpo)) return new ErroMotor('A chave do Gemini foi recusada pelo Google. Confira o secret GEMINI_API_KEY no Pages.', 502);
   if (r.status === 403) return new ErroMotor('O Google recusou o acesso com esta chave (403). Confira se a chave é do Google AI Studio e está ativa.', 502);
   if (r.status === 400 && /thinking/i.test(corpo)) { const e = new ErroMotor('O modelo recusou a configuração de pensamento.', 502); e.recusouPensamento = true; return e; }
-  if (r.status === 524 || r.status === 504) return new ErroMotor(`O Gemini demorou demais para responder (erro ${r.status}, ${modelo}). Tente de novo; se repetir, peça algo mais curto.`, 504);
+  if (r.status === 524 || r.status === 504) return new ErroMotor(`O Gemini demorou demais para responder (erro ${r.status}, ${modelo}, rodada ${rodada}, ${segundos} s). Tente de novo; se repetir, peça algo mais curto.`, 504);
   return new ErroMotor(`O Gemini não respondeu (erro ${r.status}, ${modelo}). Tente de novo em instantes.`, 502);
 }
 
