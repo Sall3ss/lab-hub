@@ -21,10 +21,8 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
         Nova conversa
       </button>
-      <input class="busca" id="busca" type="search" placeholder="Buscar conversas" aria-label="Buscar conversas" />
-      <nav class="conversas" id="conversas">
-        <p class="vazio-lateral">Nenhuma conversa ainda. A primeira aparece aqui assim que você mandar uma mensagem.</p>
-      </nav>
+      <input class="busca" id="busca" type="search" placeholder="Buscar conversas" aria-label="Buscar conversas" autocomplete="off" />
+      <nav class="conversas" id="conversas" aria-live="polite"></nav>
       <div class="lateral-pe">
         <span class="quem" id="quem"></span>
         <button type="button" class="link" id="sair">Sair</button>
@@ -37,23 +35,25 @@
         <button type="button" class="icone so-celular" id="abrir-lateral" aria-label="Abrir lista de conversas">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
         </button>
-        <h1>Jean</h1>
+        <h1 id="titulo-conversa">Jean</h1>
         <span class="fase">Beta</span>
       </header>
 
-      <section class="conversa" id="mensagens" aria-live="polite">
-        <div class="boas-vindas">
+      <section class="conversa" id="rolagem">
+        <div class="boas-vindas" id="boas-vindas">
           <div class="emblema" aria-hidden="true">J</div>
           <h2 id="saudacao">Olá.</h2>
-          <p>Sou a Jean, a sua assistente aqui no Lab Hub. Em breve converso com você por texto e por voz, e acompanho o andamento de todos os projetos do hub.</p>
-          <p class="obra">Em construção: a conversa entra na próxima etapa.</p>
+          <p>Sou a Jean, a sua assistente aqui no Lab Hub. Pergunte, peça um texto, organize uma ideia.</p>
+          <p class="obra">Fase beta, no plano grátis do Gemini: não mande senha nem dado sensível.</p>
         </div>
+        <div class="mensagens" id="mensagens" aria-live="polite"></div>
       </section>
 
       <form class="entrada" id="entrada">
-        <textarea id="texto" rows="1" placeholder="Pergunte à Jean" aria-label="Mensagem para a Jean" disabled></textarea>
-        <button type="submit" class="enviar" aria-label="Enviar" disabled>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+        <textarea id="texto" rows="1" placeholder="Pergunte à Jean" aria-label="Mensagem para a Jean" enterkeyhint="send"></textarea>
+        <button type="submit" class="enviar" id="enviar" aria-label="Enviar" disabled>
+          <svg class="i-enviar" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+          <svg class="i-parar" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>
         </button>
       </form>
     </main>
@@ -61,8 +61,39 @@
 
   <p class="carregando" id="carregando">Abrindo a Jean...</p>
 
+  <!-- Menu de uma conversa (fixar, renomear, excluir) -->
+  <div class="menu-conversa" id="menu-conversa" role="menu" hidden>
+    <button type="button" role="menuitem" data-acao="fixar">Fixar</button>
+    <button type="button" role="menuitem" data-acao="renomear">Renomear</button>
+    <button type="button" role="menuitem" data-acao="excluir" class="perigo">Excluir</button>
+  </div>
+
+  <dialog class="janela" id="janela-renomear" aria-labelledby="renomear-titulo">
+    <form method="dialog" class="janela-caixa" id="form-renomear">
+      <h2 id="renomear-titulo">Renomear conversa</h2>
+      <input name="titulo" maxlength="120" required aria-label="Título da conversa" />
+      <p class="erro" data-erro hidden></p>
+      <div class="janela-botoes">
+        <button type="button" class="secundario" data-cancelar>Cancelar</button>
+        <button type="submit" class="primario">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="janela" id="janela-excluir" aria-labelledby="excluir-titulo">
+    <div class="janela-caixa">
+      <h2 id="excluir-titulo">Excluir conversa?</h2>
+      <p class="janela-texto">"<span id="excluir-nome"></span>" e todas as mensagens dela serão apagadas. Não dá para desfazer.</p>
+      <p class="erro" data-erro hidden></p>
+      <div class="janela-botoes">
+        <button type="button" class="secundario" data-cancelar>Cancelar</button>
+        <button type="button" class="primario perigo" id="confirmar-excluir">Excluir</button>
+      </div>
+    </div>
+  </dialog>
+
   <script src="/navegador.js"></script>
-  <script src="/campos.js"></script>
+  <script src="./texto.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

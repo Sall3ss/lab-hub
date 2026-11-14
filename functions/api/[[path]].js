@@ -46,7 +46,10 @@ export async function onRequest(context) {
     if (rota === 'p') {
       const projeto = PROJETOS[partes[1]];
       if (!projeto) return json({ erro: 'projeto nao encontrado', projeto: partes[1] || '' }, 404);
-      return await projeto.rotas({ request, env, data, u, partes: partes.slice(2), metodo, json });
+      // waitUntil: deixa o projeto terminar um trabalho (ex.: gravar a resposta de uma IA
+      // em streaming) mesmo que a tela feche antes. Lab Hub, 13/11/2026.
+      const waitUntil = context.waitUntil ? context.waitUntil.bind(context) : null;
+      return await projeto.rotas({ request, env, data, u, partes: partes.slice(2), metodo, json, waitUntil });
     }
 
     // Exemplo de rota da casca: listar/criar "itens" (troque pelo domínio do cliente).

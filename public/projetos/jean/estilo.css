@@ -79,3 +79,81 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
   .boas-vindas h2 { font-size: 1.6rem; }
   .entrada { width: calc(100% - 1.5rem); margin-bottom: .75rem; }
 }
+
+/* ---- etapa 2: lista de conversas ---- */
+.conversas h3 { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--suave); margin: .9rem .5rem .35rem; font-weight: 600; }
+.item { display: flex; align-items: center; border-radius: .75rem; }
+.item:hover, .item.ativo { background: var(--borda); }
+.item.ativo .item-abrir { font-weight: 600; }
+.item-abrir { flex: 1; min-width: 0; display: flex; align-items: center; gap: .35rem; font: inherit; font-size: .9rem; text-align: left; background: none; border: 0; color: var(--texto); padding: .55rem .6rem; cursor: pointer; }
+.item-abrir span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pino { width: 14px; height: 14px; flex-shrink: 0; color: var(--dourado); }
+.item-mais { flex-shrink: 0; width: 2rem; height: 2rem; display: grid; place-items: center; border: 0; background: none; color: var(--suave); border-radius: .5rem; cursor: pointer; opacity: 0; }
+.item:hover .item-mais, .item.ativo .item-mais, .item-mais:focus-visible { opacity: 1; }
+.item-mais svg { fill: currentColor; stroke: none; }
+@media (hover: none) { .item-mais { opacity: 1; } }
+
+.menu-conversa { position: fixed; z-index: 40; min-width: 11rem; background: var(--painel); border: 1px solid var(--borda); border-radius: .9rem; padding: .35rem; box-shadow: 0 12px 32px rgb(0 0 0 / .18); display: grid; }
+.menu-conversa button { font: inherit; text-align: left; background: none; border: 0; color: var(--texto); padding: .6rem .75rem; border-radius: .6rem; cursor: pointer; }
+.menu-conversa button:hover, .menu-conversa button:focus-visible { background: var(--borda); outline: none; }
+.perigo { color: var(--destaque) !important; }
+
+/* ---- janelas (renomear, excluir) ---- */
+.janela { border: 0; padding: 0; border-radius: 1.25rem; background: var(--painel); color: var(--texto); width: min(26rem, calc(100vw - 2rem)); box-shadow: 0 20px 60px rgb(0 0 0 / .3); }
+.janela::backdrop { background: rgb(0 0 0 / .4); }
+.janela-caixa { padding: 1.4rem; display: grid; gap: .9rem; }
+.janela h2 { margin: 0; font-size: 1.15rem; }
+.janela-texto { margin: 0; color: var(--suave); line-height: 1.45; overflow-wrap: anywhere; }
+.janela input { font: inherit; padding: .7rem .85rem; border-radius: .75rem; border: 1px solid var(--borda); background: var(--fundo); color: var(--texto); width: 100%; }
+.janela-botoes { display: flex; justify-content: flex-end; gap: .5rem; flex-wrap: wrap; }
+.primario, .secundario { font: inherit; font-weight: 600; border-radius: 999px; padding: .6rem 1.1rem; cursor: pointer; }
+.primario { border: 0; background: var(--destaque); color: #fff; }
+.primario.perigo { color: #fff !important; }
+.secundario { border: 1px solid var(--borda); background: none; color: var(--texto); }
+.erro { margin: 0; padding: .6rem .8rem; border-radius: .7rem; background: color-mix(in srgb, var(--destaque) 12%, transparent); color: var(--destaque); font-size: .9rem; }
+
+/* ---- mensagens ---- */
+.mensagens { max-width: 48rem; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem; }
+.msg-usuario { align-self: flex-end; max-width: 85%; }
+.balao { background: var(--lateral); border: 1px solid var(--borda); padding: .7rem 1rem; border-radius: 1.25rem 1.25rem .35rem 1.25rem; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+.msg-jean { display: flex; gap: .75rem; align-items: flex-start; }
+.avatar { flex-shrink: 0; width: 2rem; height: 2rem; border-radius: .7rem; display: grid; place-items: center; font-weight: 700; color: #fff; background: linear-gradient(135deg, var(--destaque), var(--dourado)); }
+.corpo { flex: 1; min-width: 0; }
+.md { line-height: 1.6; overflow-wrap: anywhere; }
+.md > :first-child { margin-top: .2rem; }
+.md > :last-child { margin-bottom: 0; }
+.md p { margin: 0 0 .8rem; }
+.md ul, .md ol { margin: 0 0 .8rem; padding-left: 1.4rem; }
+.md li { margin: .2rem 0; }
+.md h3, .md h4, .md h5, .md h6 { margin: 1.1rem 0 .5rem; line-height: 1.3; }
+.md blockquote { margin: 0 0 .8rem; padding: .2rem 0 .2rem .9rem; border-left: 3px solid var(--dourado); color: var(--suave); }
+.md code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .88em; background: var(--lateral); border: 1px solid var(--borda); padding: .05rem .35rem; border-radius: .35rem; }
+.md a { color: var(--destaque); }
+.md hr { border: 0; border-top: 1px solid var(--borda); margin: 1rem 0; }
+.codigo { margin: 0 0 .8rem; border: 1px solid var(--borda); border-radius: .8rem; overflow: hidden; background: var(--lateral); }
+.codigo-topo { display: flex; justify-content: space-between; align-items: center; padding: .35rem .5rem .35rem .85rem; font-size: .78rem; color: var(--suave); border-bottom: 1px solid var(--borda); }
+.codigo pre { margin: 0; padding: .85rem; overflow-x: auto; }
+.codigo pre code { background: none; border: 0; padding: 0; font-size: .85rem; }
+.copiar-codigo, .acao { font: inherit; font-size: .78rem; background: none; border: 0; color: var(--suave); cursor: pointer; padding: .3rem .5rem; border-radius: .5rem; }
+.copiar-codigo:hover, .acao:hover { background: var(--borda); color: var(--texto); }
+.acoes { margin-top: .35rem; margin-left: -.5rem; }
+.pensando .acoes { visibility: hidden; }
+.pensando .md::after { content: ''; display: inline-block; width: 2.4rem; height: .6rem; margin-top: .6rem;
+  background: radial-gradient(circle, var(--destaque) 40%, transparent 42%) 0 50% / .8rem .6rem repeat-x; animation: pulso 1s infinite ease-in-out; }
+@keyframes pulso { 50% { opacity: .3; } }
+.parou { color: var(--suave); font-size: .85rem; font-style: italic; }
+.msg-falha { align-self: center; max-width: 100%; }
+.falha { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .25rem .6rem; text-align: center; font-size: .9rem; padding: .6rem 1rem; border-radius: 1rem; background: color-mix(in srgb, var(--destaque) 10%, transparent); color: var(--texto); }
+
+/* ---- botão enviar / parar ---- */
+.i-parar { display: none; }
+.gerando .i-enviar { display: none; }
+.gerando .i-parar { display: block; fill: currentColor; }
+.gerando .enviar { background: var(--texto); color: var(--painel); }
+
+@media (max-width: 760px) {
+  .conversa { padding: 1.25rem .9rem; }
+  .msg-usuario { max-width: 92%; }
+  .avatar { width: 1.75rem; height: 1.75rem; font-size: .9rem; }
+  .msg-jean { gap: .6rem; }
+}

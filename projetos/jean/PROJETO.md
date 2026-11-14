@@ -21,7 +21,7 @@ Beta.
 | O quê | Onde |
 | --- | --- |
 | Tela | `public/projetos/jean/` (atalho `/jean`) |
-| Servidor (rotas `/api/p/jean/...`) | `projetos/jean/api.js` |
+| Servidor (rotas `/api/p/jean/...`) | `projetos/jean/api.js` (rotas), `motor.js` (Gemini), `personalidade.js` (quem a Jean é) |
 | Tabelas | prefixo `jean_`, migration `migrations/0005_jean_base.sql` |
 | Esta ficha | `projetos/jean/PROJETO.md` |
 
@@ -65,11 +65,23 @@ projeto a precisar dele.
   tela (lateral de conversas, saudação com o nome, caixa de mensagem ainda desligada).
   Conferido em teste local e em print no PC (1280, claro e escuro) e no celular (390).
 
+- 🟢 **Etapa 2 (13/11):** conversa por texto com o Gemini grátis, resposta aparecendo aos
+  poucos (streaming), botão Parar, "Tentar de novo" quando falha, lista de conversas com
+  busca (título e falas), fixar, renomear e excluir (com confirmação). Endereço guarda a
+  conversa aberta (`?c=<id>`). No PC Enter envia; no celular Enter quebra linha.
+  Chave `GEMINI_API_KEY` gravada pelo dono no Pages em 13/11.
+  Conferido aqui só com o **modo simulado** e com respostas falsas do Google (chave
+  recusada, limite com troca para o reserva, resposta normal): a primeira conversa real é
+  no ar.
+  - Modelos: `gemini-3.8-flash`, reserva `gemini-3.5-flash-lite` (tabela de preços do
+    Google, 13/11: ambos com plano grátis). Trocáveis pelas variáveis `JEAN_MODELO` e
+    `JEAN_MODELO_RESERVA` no Pages, sem código.
+  - Lição do teste: escrever no streaming SEM esperar a escrita. Esperando, se a tela fecha
+    no meio o servidor trava e a resposta não é gravada.
+  - O texto da conversa não usa a máscara de MAIÚSCULAS da casa: é conversa, não cadastro.
+
 ## Próximo passo
 
-2. Conversa por texto com o Gemini grátis: conversas na lateral, busca, fixar, excluir.
-   **Precisa do dono:** criar a chave grátis no Google AI Studio e gravá-la como secret
-   `GEMINI_API_KEY` no Pages `lab-hub` (pelo painel da Cloudflare, nunca nesta máquina).
 3. Contexto dos projetos + "pulso do Lab Hub" + memórias + ações com confirmação.
 4. Áudio: gravar, enviar arquivo de áudio, transcrição pelo Gemini, voz da resposta.
 5. Painel global (Ctrl+K) no hub e botão no Cyberidle.
