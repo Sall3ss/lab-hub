@@ -29,6 +29,8 @@
 
 const URL_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
 const MAX_RODADAS = 6;
+const PRAZO_INICIO_MS = 90000;   // para o Google comecar a responder
+const PRAZO_SILENCIO_MS = 60000; // sem nenhum byte no meio da resposta
 
 export class ErroMotor extends Error {
   constructor(mensagem, status) { super(mensagem); this.status = status; }
@@ -155,11 +157,21 @@ async function chamar(env, modelos, corpo, rodada) {
   let ultimoErro = null;
   for (const modelo of modelos) {
     const inicio = Date.now();
-    const r = await fetch(`${URL_BASE}${encodeURIComponent(modelo)}:streamGenerateContent?alt=sse`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
-      body: corpo,
-    });
+    // 14/11 no ar: a conversa por voz ficou "pensando" para sempre. Nada aqui pode esperar
+    // sem prazo: 90 s para o Google comecar a responder.
+    let r;
+    try {
+      r = await fetch(`${URL_BASE}${encodeURIComponent(modelo)}:streamGenerateContent?alt=sse`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
+        body: corpo,
+        signal: AbortSignal.timeout(PRAZO_INICIO_MS),
+      });
+    } catch (e) {
+      console.error('[jean/motor]', modelo, 'sem resposta', e && e.name);
+      ultimoErro = new ErroMotor(`O Gemini não começou a responder em ${PRAZO_INICIO_MS / 1000} s (${modelo}, rodada ${rodada + 1}). Tente de novo.`, 504);
+      continue;
+    }
     if (r.ok) return { modelo, resposta: r };
     ultimoErro = await erroDoGoogle(r, modelo, Math.round((Date.now() - inicio) / 1000), rodada + 1);
     // Limite, modelo inexistente, fora do ar ou demorado demais: tenta a reserva.
@@ -189,7 +201,13 @@ async function* lerSSE(r) {
   const partes = [];
   let entrada = 0, saida = 0, bloqueio = null;
   for (;;) {
-    const { value, done } = await leitor.read();
+    // Leitura com prazo: se o Google parar de mandar no meio, desiste em vez de esperar
+    // para sempre (era o que deixava a tela "pensando" sem fim).
+    let prazo;
+    const { value, done } = await Promise.race([
+      leitor.read(),
+      new Promise((_, falha) => { prazo = setTimeout(() => falha(new ErroMotor(`O Gemini parou de mandar a resposta no meio (${PRAZO_SILENCIO_MS / 1000} s sem nada). Tente de novo.`, 504)), PRAZO_SILENCIO_MS); }),
+    ]).catch((e) => { leitor.cancel().catch(() => {}); throw e; }).finally(() => clearTimeout(prazo));
     if (done) break;
     resto += dec.decode(value, { stream: true });
     let i;
@@ -268,9 +286,16 @@ export async function transcrever(env, bytes, mime, nomes = []) {
   let ultimoErro = null;
   for (const modelo of modelos) {
     const inicio = Date.now();
-    const r = await fetch(`${URL_BASE}${encodeURIComponent(modelo)}:generateContent`, {
-      method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: corpo,
-    });
+    let r;
+    try {
+      r = await fetch(`${URL_BASE}${encodeURIComponent(modelo)}:generateContent`, {
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: corpo,
+        signal: AbortSignal.timeout(PRAZO_INICIO_MS),
+      });
+    } catch (e) {
+      ultimoErro = new ErroMotor(`O Gemini não ouviu o áudio em ${PRAZO_INICIO_MS / 1000} s (${modelo}). Tente de novo.`, 504);
+      continue;
+    }
     if (r.ok) {
       const j = await r.json();
       const texto = (j.candidates?.[0]?.content?.parts || []).filter((p) => p.text && !p.thought).map((p) => p.text).join('');
@@ -304,7 +329,9 @@ export async function vozDoGemini(env, texto) {
   let ultimoErro = null;
   for (const modelo of modelos) {
     const inicio = Date.now();
-    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions?alt=sse', {
+    let r;
+    try { r = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions?alt=sse', {
+      signal: AbortSignal.timeout(45000),
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY, 'Api-Revision': '2026-05-20' },
       body: JSON.stringify({
@@ -317,7 +344,10 @@ export async function vozDoGemini(env, texto) {
         response_format: { type: 'audio' },
         generation_config: { speech_config: [{ voice: env.JEAN_VOZ || 'Kore' }] },
       }),
-    });
+    }); } catch (e) {
+      ultimoErro = new ErroMotor(`A voz do Gemini não respondeu em 45 s (${modelo}).`, 504);
+      continue;
+    }
     if (r.ok) return { resposta: r, modelo };
     ultimoErro = await erroDoGoogle(r, modelo, Math.round((Date.now() - inicio) / 1000), 1);
     if (![404, 429, 500, 502, 503, 504, 524].includes(r.status)) break;

@@ -323,6 +323,15 @@
     el.classList.add('pensando');
     var md = el.querySelector('.md'), bruto = '', terminou = false, falha = null;
     descer();
+    // Vigia (14/11 no ar: a conversa por voz ficou "pensando" para sempre). O servidor
+    // manda sinal de vida a cada 15 s; 75 s sem nada, ou 4 min no total, e desiste.
+    var inicioPedido = Date.now(), ultimoSinal = Date.now(), estourou = null;
+    var vigia = setInterval(function () {
+      var agora = Date.now();
+      if (agora - ultimoSinal > 75000) estourou = 'A resposta parou de chegar (75 s sem nenhum sinal).';
+      else if (agora - inicioPedido > 240000) estourou = 'A Jean passou de 4 minutos sem terminar.';
+      if (estourou) { clearInterval(vigia); controle.abort(); }
+    }, 5000);
 
     try {
       var r;
@@ -352,6 +361,7 @@
       for (;;) {
         var parte = await leitor.read();
         if (parte.done) break;
+        ultimoSinal = Date.now();
         resto += dec.decode(parte.value, { stream: true });
         var i;
         while ((i = resto.indexOf('\n\n')) >= 0) {
@@ -387,8 +397,9 @@
       }
       if (!terminou && !falha) falha = 'A resposta foi interrompida no meio.';
     } catch (e) {
-      var parou = e.name === 'AbortError';
-      if (e.name === 'AbortError') {
+      var parou = e.name === 'AbortError' && !estourou;
+      if (estourou) falha = estourou + ' Tente de novo.';
+      else if (e.name === 'AbortError') {
         if (bruto) md.insertAdjacentHTML('beforeend', '<p class="parou">(você parou a resposta)</p>');
         else mostrarFalhaSimples('Você parou a resposta.');
       }
@@ -398,6 +409,7 @@
       el.classList.remove('pensando');
       if (!bruto && !el.querySelector('.proposta')) el.remove();
       if (falha) mostrarFalha(falha);
+      clearInterval(vigia);
       if (estado.gerando === controle) estado.gerando = null;
       modoGerando(false);
       carregarLista();
@@ -571,7 +583,14 @@
     boasVindas.hidden = true;
     bolha('usuario', t);
     descer();
-    var r = await gerar({ texto: t, conversa_id: estado.atual && estado.atual.id, de: projetoDe, pagina: pagina });
+    var t0 = Date.now();
+    var contador = setInterval(function () {
+      if (orbe.classList.contains('pensando')) $('voz-estado').textContent = 'Pensando... ' + Math.round((Date.now() - t0) / 1000) + ' s';
+    }, 1000);
+    var r;
+    try { r = await gerar({ texto: t, conversa_id: estado.atual && estado.atual.id, de: projetoDe, pagina: pagina }); }
+    catch (e) { r = { falha: (e && e.message) || 'erro inesperado' }; }
+    finally { clearInterval(contador); }
     if (!conversaVoz.ativa) return;
     if (r.falha || !r.bruto) { estadoVoz(r.falha ? 'Algo falhou: ' + r.falha : 'A Jean não respondeu.', 'parado'); return; }
     estadoVoz('Falando...', 'falando');
