@@ -29,10 +29,30 @@ body {
 }
 ::selection { background: var(--ciano); color: #001014; }
 
+/* ---- fundo com a planta do dono ----
+   Recortes de "Lab Hub System Schematic" (public/hub-fundo/), já sem o papel azul:
+   esfera colorida no centro (o destaque), chip e fluxo de dados em ciano, bem fracos,
+   nos cantos. Fica fixo atrás de tudo e não recebe clique. */
+.fundo-arte { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.fundo-arte img { display: block; max-width: none; user-select: none; }
+.fa-esfera { position: absolute; left: 50%; top: 62%; width: min(86vmin, 820px); aspect-ratio: 1; transform: translate(-50%, -50%); }
+.fa-esfera img { width: 100%; height: 100%; opacity: .78; animation: girar 240s linear infinite;
+  filter: drop-shadow(0 0 18px rgb(190 70 255 / .45)) saturate(1.15); }
+/* Luz do núcleo de plasma: rosa, pulsando devagar. */
+.fa-esfera::before { content: ""; position: absolute; inset: 22%; border-radius: 50%;
+  background: radial-gradient(circle, rgb(255 140 235 / .55) 0%, rgb(220 70 230 / .28) 30%, rgb(140 60 255 / .1) 55%, transparent 72%);
+  animation: pulsar 5s ease-in-out infinite; }
+.fa-esfera::after { content: ""; position: absolute; inset: -12%; border-radius: 50%;
+  background: radial-gradient(circle, rgb(160 60 255 / .14), transparent 65%); }
+.fa-chip { position: absolute; left: -3rem; top: 16%; width: 30rem; opacity: .14; transform: rotate(-4deg); }
+.fa-fluxo { position: absolute; right: -4rem; bottom: -1rem; width: 50rem; opacity: .12; }
+@keyframes girar { to { transform: rotate(360deg); } }
+@keyframes pulsar { 50% { opacity: .55; transform: scale(.9); } }
+
 .rotulo-tec { margin: 0; font-family: var(--mono); font-size: .72rem; letter-spacing: .12em; color: var(--ciano); opacity: .8; }
 
 /* ---- topo ---- */
-.topo { position: relative; border-bottom: 1px solid var(--fio); background: linear-gradient(180deg, rgb(11 16 24 / .9), rgb(7 9 14 / .6)); overflow: hidden; }
+.topo { position: relative; border-bottom: 1px solid var(--fio); background: linear-gradient(180deg, rgb(11 16 24 / .8), rgb(7 9 14 / .35)); overflow: hidden; }
 .topo::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
   background: linear-gradient(90deg, transparent, var(--ciano) 20%, transparent 45%); background-size: 220% 100%; animation: varredura 6s linear infinite; }
 .topo-dentro { max-width: 72rem; margin: 0 auto; padding: 1.75rem 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1.25rem; flex-wrap: wrap; }
@@ -90,7 +110,7 @@ body {
     radial-gradient(260px circle at var(--mx, 80%) var(--my, 0%), rgb(0 240 255 / calc(var(--prox) * .1)), transparent 70%),
     linear-gradient(rgb(0 240 255 / .03) 1px, transparent 1px) 0 0 / 16px 16px,
     linear-gradient(90deg, rgb(0 240 255 / .03) 1px, transparent 1px) 0 0 / 16px 16px,
-    linear-gradient(160deg, var(--painel-2), var(--painel));
+    linear-gradient(160deg, rgb(15 22 33 / .74), rgb(11 16 24 / .66));
   clip-path: polygon(calc(var(--chanfro) - .5px) 0, 100% 0, 100% calc(100% - var(--chanfro) + .5px), calc(100% - var(--chanfro) + .5px) 100%, 0 100%, 0 calc(var(--chanfro) - .5px)); }
 
 /* Cantoneiras de HUD nos cantos não chanfrados. */
@@ -191,6 +211,9 @@ body {
 @media (max-width: 30rem) {
   .topo h1 { font-size: 1.9rem; }
   .telemetria { width: 100%; }
+  .fa-esfera { width: 118vw; top: 50%; }
+  .fa-chip { width: 18rem; left: -5rem; top: 6%; }
+  .fa-fluxo { display: none; }
   .grade { grid-template-columns: 1fr; }
   .cartao h2 { font-size: 1.75rem; }
   .esquema { width: 7.5rem; }

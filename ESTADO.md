@@ -21,6 +21,11 @@
   acrescentando a chave com o slug). Cartões acendem quando o mouse se aproxima. Contador
   virou visor de telemetria; filtros viraram seletores de comando. Menu de três pontos e
   "Sobre o projeto" mantidos. Conferido em print no PC (1280) e no celular (390).
+- Fundo com a planta "Lab Hub System Schematic" que o dono mandou (imagem dele): recortes
+  em `public/hub-fundo/` (esfera.webp colorida, chip.webp e fluxo.webp em ciano), já sem o
+  papel azul. A esfera é o centro (opacidade .78, gira devagar, núcleo rosa pulsando no
+  CSS); chip e fluxo bem fracos nos cantos (no celular, só esfera e chip). Cartões ficaram
+  translúcidos para a esfera aparecer através deles. ~600 KB no total.
 - Estrutura de isolamento por projeto e o comando `scripts/novo-projeto.mjs`, testado numa
   cópia descartável com dois projetos: pastas separadas, registro da API gerado, slug
   repetido e slug inválido recusados, rota `/ping` respondendo.
