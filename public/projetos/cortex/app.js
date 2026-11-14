@@ -143,10 +143,24 @@
   }
 
   function desenharPC() {
-    var el = $('pc');
-    el.classList.toggle('online', !!estado.pc.online);
-    el.querySelector('.pc-txt').textContent = estado.pc.online ? 'PC online' : 'PC offline';
-    el.title = estado.pc.visto_em ? 'Agente do PC visto por último em ' + data(estado.pc.visto_em) : 'Agente do PC ainda não conectado (etapa 2)';
+    var el = $('pc'), pc = estado.pc || {};
+    el.classList.toggle('online', pc.online > 0);
+    el.querySelector('.pc-txt').textContent = !pc.total ? 'Conectar PC' : pc.online ? (pc.online === 1 ? pc.nomes_online[0] + ' online' : pc.online + ' PCs online') : 'PC offline';
+    el.title = pc.total ? 'PCs conectados (toque para ver)' : 'Nenhum PC conectado ainda: toque para conectar';
+  }
+  $('pc').addEventListener('click', abrirPCs);
+
+  // O que o PC está fazendo com este cartão, em uma linha.
+  function situacao(x, esperaTxt) {
+    if (x.erro) return '<div class="c-estado falha"><span class="ponto"></span>' + esc(x.erro) + '</div>';
+    if (x.tarefa_estado === 'pega') return '<div class="c-estado espera"><span class="ponto"></span>' + esc((x.tarefa_pc ? x.tarefa_pc + ': ' : '') + (x.tarefa_progresso || esperaTxt)) + '</div>';
+    if (x.tarefa_estado === 'pendente') {
+      var pc = estado.pc || {};
+      var txt = !pc.total ? 'Conecte um PC para começar' : !pc.online ? 'Esperando um PC ligar' : 'Na fila do PC';
+      if (x.corte_fila && pc.total && !pc.baixam) txt = 'Nenhum PC recebe downloads (ver PCs)';
+      return '<div class="c-estado espera"><span class="ponto"></span>' + txt + '</div>';
+    }
+    return '';
   }
 
   function desenharQuadro() {
@@ -170,11 +184,8 @@
   }
 
   function cartaoVideo(v) {
-    var st;
-    if (v.erro) st = '<div class="c-estado falha"><span class="ponto"></span>' + esc(v.erro) + '</div>';
-    else if (v.etapa === 'entrada') st = '<div class="c-estado espera"><span class="ponto"></span>' + (estado.pc.online ? 'Na fila do PC' : 'Esperando o PC ligar') + '</div>';
-    else if (v.etapa === 'transcricao') st = '<div class="c-estado espera"><span class="ponto"></span>Transcrevendo…</div>';
-    else st = '<div class="c-estado espera"><span class="ponto"></span>IA marcando os cortes…</div>';
+    var st = situacao(v, v.etapa === 'entrada' ? 'buscando o texto…' : 'transcrevendo…');
+    if (!st && v.etapa === 'roteiro') st = '<div class="c-estado espera"><span class="ponto"></span>Texto pronto: aguardando a IA (etapa 3)</div>';
     return '<button type="button" class="cartao' + (v.id === selVideo ? ' sel' : '') + '" data-video="' + v.id + '">' +
       '<div class="c-linha"><span class="tag-plat ' + v.plataforma + '">' + PLAT[v.plataforma] + '</span>' +
       (v.duracao_s ? '<span class="c-tc">' + tc(v.duracao_s) + '</span>' : '') + '</div>' +
@@ -185,11 +196,10 @@
   function cartaoCorte(c) {
     var acoes = '';
     if (c.estado === 'triagem') acoes = '<button type="button" class="mini sim" data-acao="download" data-corte="' + c.id + '">✓ Aprovar</button><button type="button" class="mini nao" data-acao="descartado" data-corte="' + c.id + '">✕ Descartar</button>';
-    else if (c.estado === 'download') acoes = '<button type="button" class="mini nao" data-acao="triagem" data-corte="' + c.id + '">Cancelar</button>';
+    else if (c.estado === 'download' && c.erro) acoes = '<button type="button" class="mini sim" data-tentar-corte="' + c.id + '">↻ Tentar de novo</button><button type="button" class="mini nao" data-acao="triagem" data-corte="' + c.id + '">Cancelar</button>';
+    else if (c.estado === 'download' && c.tarefa_estado !== 'pega') acoes = '<button type="button" class="mini nao" data-acao="triagem" data-corte="' + c.id + '">Cancelar</button>';
     else if (c.estado === 'edicao') acoes = '<button type="button" class="mini sim" data-acao="publicado" data-corte="' + c.id + '">✓ Publicado</button>';
-    var st = '';
-    if (c.erro) st = '<div class="c-estado falha"><span class="ponto"></span>' + esc(c.erro) + '</div>';
-    else if (c.estado === 'download') st = '<div class="c-estado espera"><span class="ponto"></span>' + (estado.pc.online ? 'Na fila do PC' : 'Esperando o PC ligar') + '</div>';
+    var st = c.estado === 'download' || c.erro ? situacao({ erro: c.erro, tarefa_estado: c.tarefa_estado, tarefa_pc: c.tarefa_pc, tarefa_progresso: c.tarefa_progresso, corte_fila: true }, 'baixando…') : '';
     return '<div role="button" tabindex="0" class="cartao ' + c.tipo + '" data-corte-abrir="' + c.id + '">' +
       '<div class="c-linha"><span class="tipo ' + c.tipo + '">' + (c.tipo === 'longo' ? 'LONGO' : 'CURTO') + '</span>' +
       '<span class="c-tc">' + tc(c.inicio_s) + '</span><span>' + duracao(c.fim_s - c.inicio_s) + '</span>' +
@@ -200,6 +210,8 @@
   }
 
   quadroEl.addEventListener('click', function (ev) {
+    var tn = ev.target.closest('[data-tentar-corte]');
+    if (tn) { ev.stopPropagation(); tentar('cortes', Number(tn.dataset.tentarCorte), tn); return; }
     var b = ev.target.closest('[data-acao]');
     if (b) { ev.stopPropagation(); mudarEstado(Number(b.dataset.corte), b.dataset.acao, b); return; }
     var v = ev.target.closest('[data-video]');
@@ -222,6 +234,12 @@
   quadroEl.addEventListener('keydown', function (ev) {
     if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches('[data-corte-abrir]')) { ev.preventDefault(); abrirCorte(Number(ev.target.dataset.corteAbrir), true); }
   });
+
+  function tentar(tipo, id, botao) {
+    if (botao) botao.disabled = true;
+    return api('/' + tipo + '/' + id + '/tentar', { metodo: 'POST' }).then(function () { aviso('Voltou para a fila do PC.'); return carregar(); })
+      .catch(function (e) { aviso(e.message, true); if (botao) botao.disabled = false; });
+  }
 
   function mudarEstado(id, novo, botao) {
     if (botao) botao.disabled = true;
@@ -345,6 +363,7 @@
         '<dt>Etapa</dt><dd>' + etapas[v.etapa] + '</dd>' +
         '<dt>Importado</dt><dd>' + data(v.criado_em) + '</dd>' +
         (v.erro ? '<dt>Falha</dt><dd style="color:var(--perigo)">' + esc(v.erro) + '</dd>' : '') + '</dl>' +
+        (v.erro ? '<div class="acoes"><button class="btn btn-ok" type="button" id="v-tentar">↻ Tentar de novo</button></div>' : '') +
         '<form class="bloco" id="f-video"><label class="campo"><span>Título</span><input name="titulo" maxlength="200" value="' + esc(v.titulo || '') + '" placeholder="O PC preenche com o título original"></label>' +
         '<p class="msg-form" id="msg-video"></p><div class="acoes"><button class="btn btn-cor" type="submit">Salvar</button>' +
         '<button class="btn" type="button" id="v-marcar">+ Marcar corte</button></div></form>' +
@@ -357,6 +376,8 @@
               .catch(function (e) { $('msg-video').textContent = e.message; });
           };
           box.querySelector('#v-marcar').onclick = function () { formCorte(null); };
+          var vt = box.querySelector('#v-tentar');
+          if (vt) vt.onclick = function () { tentar('videos', v.id, vt).then(fecharGaveta); };
           box.querySelector('#v-arquivar').onclick = function () {
             confirmar('Arquivar este vídeo? Ele e os cortes dele saem do quadro (nada é apagado).', 'Arquivar').then(function (sim) {
               if (!sim) return;
@@ -463,6 +484,87 @@
           }).catch(function (e) { msg.textContent = e.message; btn.disabled = false; });
         };
       });
+  }
+
+  // ---------- PCs (agente que roda em casa e no trabalho) ----------
+  var PAINEL = location.origin;
+  function copiar(botao, texto) {
+    var feito = function () { var t = botao.textContent; botao.textContent = 'Copiado'; setTimeout(function () { botao.textContent = t; }, 1500); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(texto).then(feito, function () { aviso('Não consegui copiar: selecione o texto e copie.', true); });
+    else aviso('Selecione o texto e copie.', true);
+  }
+  function blocoCmd(id, texto) {
+    return '<pre class="cmd" id="' + id + '">' + esc(texto) + '<button type="button" class="mini" data-copiar="' + id + '">Copiar</button></pre>';
+  }
+  function ligarCopiar(box) {
+    box.querySelectorAll('[data-copiar]').forEach(function (b) {
+      b.onclick = function () { var pre = $(b.dataset.copiar); copiar(b, pre.firstChild.textContent); };
+    });
+  }
+  var INSTALAR = 'winget install OpenJS.NodeJS.LTS\nwinget install yt-dlp.yt-dlp\nwinget install Gyan.FFmpeg';
+
+  function abrirPCs() {
+    api('/agentes').then(function (j) {
+      var lista = j.agentes;
+      var itens = lista.map(function (a) {
+        var f = a.ferramentas || {};
+        return '<div class="pc-item"><div class="pc-cab"><b>' + esc(a.nome) + '</b><span class="pc-st' + (a.online ? ' on' : '') + '">' + (a.online ? 'ONLINE' : 'OFFLINE') + '</span></div>' +
+          '<div class="pc-det">' + (a.visto_em ? 'Visto por último ' + data(a.visto_em) : 'Ainda não falou com o painel') +
+          (a.versao ? ' · agente ' + esc(a.versao) + (a.desatualizado ? ' (atualiza sozinho ao reiniciar)' : '') : '') +
+          (f.ytdlp ? ' · yt-dlp ' + esc(f.ytdlp) : '') + '</div>' +
+          '<div class="simnao"><span>Recebe os downloads de corte?</span><button type="button" data-baixa="' + a.id + '" data-v="1" class="' + (a.baixa_cortes ? 'on' : '') + '">Sim</button>' +
+          '<button type="button" data-baixa="' + a.id + '" data-v="0" class="nao' + (a.baixa_cortes ? '' : ' on') + '">Não</button></div>' +
+          '<div class="acoes"><button type="button" class="btn btn-perigo btn-fino" data-desligar="' + a.id + '" data-nome="' + esc(a.nome) + '">Desconectar</button></div></div>';
+      }).join('');
+      abrirGaveta('PCs conectados',
+        '<p style="margin:0;color:var(--metal);font-size:.84rem">O painel decide; o PC só baixa. Buscar o texto de um vídeo qualquer PC ligado faz. O vídeo do corte vai só para o PC marcado com <b>Sim</b> em "Recebe os downloads".</p>' +
+        (lista.length ? '<div class="pcs">' + itens + '</div>' : '<p class="alerta">Nenhum PC conectado ainda. Conecte o primeiro abaixo.</p>') +
+        '<form class="passo" id="f-pc" novalidate><h3><i>+</i>Conectar um PC</h3>' +
+        '<label class="campo"><span>Nome do PC</span><input name="nome" data-mask="upper" maxlength="40" placeholder="CASA, TRABALHO…"></label>' +
+        '<p class="msg-form" id="msg-pc"></p><div class="acoes"><button class="btn btn-cor" type="submit">Gerar chave e instruções</button></div></form>',
+        function (box) {
+          if (window.Campos) Campos.aplicar(box);
+          box.querySelectorAll('[data-baixa]').forEach(function (b) {
+            b.onclick = function () {
+              api('/agentes/' + b.dataset.baixa, { metodo: 'PATCH', corpo: { baixa_cortes: b.dataset.v === '1' } })
+                .then(function () { abrirPCs(); carregar(); }).catch(function (e) { aviso(e.message, true); });
+            };
+          });
+          box.querySelectorAll('[data-desligar]').forEach(function (b) {
+            b.onclick = function () {
+              confirmar('Desconectar o PC ' + b.dataset.nome + '? A chave dele para de valer na hora. Para voltar, gere uma chave nova.', 'Desconectar').then(function (sim) {
+                if (!sim) return;
+                api('/agentes/' + b.dataset.desligar, { metodo: 'DELETE' }).then(function () { aviso('PC desconectado.'); abrirPCs(); carregar(); })
+                  .catch(function (e) { aviso(e.message, true); });
+              });
+            };
+          });
+          box.querySelector('#f-pc').onsubmit = function (ev) {
+            ev.preventDefault();
+            var nome = this.nome.value.trim(), msg = box.querySelector('#msg-pc'), btn = this.querySelector('[type=submit]');
+            if (!nome) { msg.textContent = 'Dê um nome ao PC.'; return; }
+            btn.disabled = true;
+            api('/agentes', { metodo: 'POST', corpo: { nome: nome } }).then(function (r) { mostrarChave(r); carregar(); })
+              .catch(function (e) { msg.textContent = e.message; btn.disabled = false; });
+          };
+        });
+    }).catch(function (e) { aviso(e.message, true); });
+  }
+
+  function mostrarChave(r) {
+    var conectar = 'mkdir C:\\Cortex -Force | Out-Null; cd C:\\Cortex\n' +
+      'Invoke-WebRequest -UseBasicParsing ' + PAINEL + '/projetos/cortex/agente/cortex-agente.mjs -OutFile cortex-agente.mjs\n' +
+      'node cortex-agente.mjs conectar ' + PAINEL + ' ' + r.chave;
+    var ligar = 'cd C:\\Cortex\nnode cortex-agente.mjs iniciar-com-windows\nnode cortex-agente.mjs';
+    abrirGaveta('Conectar o PC ' + r.nome,
+      '<p class="alerta">A chave deste PC aparece <b>só agora</b>. Faça os passos com esta tela aberta, <b>no próprio PC ' + esc(r.nome) + '</b>. Se perder, desconecte e gere outra.</p>' +
+      '<div class="passo"><h3><i>1</i>Instalar os programas (só na primeira vez)</h3><p>Abra o <b>PowerShell</b> (menu Iniciar › digite PowerShell) e rode uma linha por vez. Depois <b>feche e abra o PowerShell de novo</b>.</p>' + blocoCmd('cmd1', INSTALAR) + '</div>' +
+      '<div class="passo"><h3><i>2</i>Baixar o agente e conectar</h3><p>No PowerShell novo, cole tudo de uma vez:</p>' + blocoCmd('cmd2', conectar) +
+      '<p>Deve aparecer <b>"Conectado! Este PC aparece no painel como ' + esc(r.nome) + '"</b>.</p></div>' +
+      '<div class="passo"><h3><i>3</i>Deixar ligado sozinho e começar</h3><p>A primeira linha faz o agente abrir sozinho (minimizado) toda vez que você entrar no Windows. A segunda já liga agora: deixe a janela aberta.</p>' + blocoCmd('cmd3', ligar) +
+      '<p>Os cortes caem em <b>Vídeos › Cortex</b>, uma pasta por vídeo, com Curtos e Longos separados e um .txt com título, descrição e tags ao lado de cada arquivo.</p></div>' +
+      '<div class="acoes"><button class="btn" type="button" id="pc-voltar">Voltar para PCs</button></div>',
+      function (box) { ligarCopiar(box); box.querySelector('#pc-voltar').onclick = abrirPCs; });
   }
 
   // ---------- início e atualização ----------

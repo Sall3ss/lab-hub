@@ -13,12 +13,22 @@
 //   POST   /cortes                 { video_id, tipo, inicio_s, fim_s, titulo, ... } corte manual
 //   PATCH  /cortes/:id             { estado?, titulo?, descricao?, tags?, gancho?, inicio_s?, fim_s? }
 //   DELETE /cortes/:id
+//   POST   /videos/:id/tentar | /cortes/:id/tentar   devolve a tarefa que falhou para a fila
+//   GET    /agentes                lista os PCs conectados
+//   POST   /agentes                { nome } -> gera a chave do PC (mostrada UMA vez)
+//   PATCH  /agentes/:id            { baixa_cortes }
+//   DELETE /agentes/:id            desconecta (revoga a chave)
+//
+// As rotas do proprio PC (sem sessao, com a chave dele) ficam em maquina.js.
 //
 // Etapa 2 (agente do PC) e etapa 3 (Groq + Claude) entram aqui; ver a ficha.
 // Autoria: Claude (Opus 5.5), Lab Hub, 14/11/2026.
 
 import { db } from '../../lib/db.js';
 import { auditar } from '../../lib/audit.js';
+import { hashChave, AGENTE_VERSAO } from './maquina.js';
+
+export { maquina } from './maquina.js';
 
 const PC_ONLINE_MS = 2 * 60 * 1000;   // agente que falou nos ultimos 2 min = online
 const DURACAO = { curto: [15, 180], longo: [5 * 60, 90 * 60] };   // limites aceitos (s)
@@ -42,20 +52,24 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
     const [videos, cortes, pc] = await Promise.all([
       db(env).all(
         `SELECT v.id, v.url, v.plataforma, v.titulo, v.canal, v.duracao_s, v.etapa, v.erro, v.criado_em, v.atualizado_em,
-                (SELECT COUNT(*) FROM cortex_cortes c WHERE c.video_id = v.id AND c.estado <> 'descartado') AS cortes
+                (SELECT COUNT(*) FROM cortex_cortes c WHERE c.video_id = v.id AND c.estado <> 'descartado') AS cortes,
+                ${TAREFA_SQL('t.video_id = v.id AND t.tipo = \'texto\'')}
            FROM cortex_videos v WHERE v.usuario_id = ? AND v.arquivado = 0
           ORDER BY v.atualizado_em DESC LIMIT 300`, u.id),
       db(env).all(
         `SELECT c.id, c.video_id, c.tipo, c.origem, c.inicio_s, c.fim_s, c.titulo, c.gancho, c.nota, c.estado,
-                c.erro, c.atualizado_em, v.titulo AS video_titulo, v.plataforma
+                c.erro, c.atualizado_em, v.titulo AS video_titulo, v.plataforma,
+                ${TAREFA_SQL('t.corte_id = c.id')}
            FROM cortex_cortes c JOIN cortex_videos v ON v.id = c.video_id
           WHERE c.usuario_id = ? AND c.estado <> 'descartado' AND v.arquivado = 0
           ORDER BY c.atualizado_em DESC LIMIT 500`, u.id),
-      db(env).first(
-        'SELECT MAX(visto_em) AS visto_em FROM cortex_agentes WHERE usuario_id = ? AND revogado_em IS NULL', u.id),
+      listarAgentes(env, u.id),
     ]);
-    const visto = pc && pc.visto_em;
-    return json({ videos, cortes, pc: { visto_em: visto || null, online: !!visto && Date.now() - Date.parse(visto) < PC_ONLINE_MS } });
+    const online = pc.filter((a) => a.online);
+    return json({ videos, cortes, pc: {
+      total: pc.length, online: online.length, nomes_online: online.map((a) => a.nome),
+      baixam: pc.filter((a) => a.baixa_cortes).length,
+    } });
   }
 
   if (rota === 'videos' && !id && metodo === 'POST') {
@@ -76,6 +90,23 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
       u.id, videoId, agora, agora);
     await auditar(env, { quem: u.email, acao: 'criar', entidade: 'cortex_videos', entidade_id: videoId, depois: link, ip: data.ip });
     return json({ ok: true, id: videoId, ...link }, 201);
+  }
+
+  if (rota === 'agentes') return await rotasAgentes({ request, env, data, u, id, metodo, json, agora });
+
+  if ((rota === 'videos' || rota === 'cortes') && id && partes[2] === 'tentar' && metodo === 'POST') {
+    const campo = rota === 'videos' ? 'video_id' : 'corte_id';
+    const tabela = rota === 'videos' ? 'cortex_videos' : 'cortex_cortes';
+    const dono = await db(env).first(`SELECT id FROM ${tabela} WHERE id = ? AND usuario_id = ?`, Number(id), u.id);
+    if (!dono) return json({ erro: 'não encontrado' }, 404);
+    const filtroTipo = rota === 'videos' ? " AND tipo = 'texto'" : '';
+    const r = await db(env).run(
+      `UPDATE cortex_tarefas SET estado = 'pendente', tentativas = 0, erro = NULL, atualizada_em = ?
+        WHERE ${campo} = ? AND estado = 'falhou'${filtroTipo}`, agora, dono.id);
+    if (!r.meta.changes) return json({ erro: 'Não há falha para tentar de novo.' }, 409);
+    await db(env).run(`UPDATE ${tabela} SET erro = NULL, atualizado_em = ? WHERE id = ?`, agora, dono.id);
+    await auditar(env, { quem: u.email, acao: 'tentar-de-novo', entidade: tabela, entidade_id: dono.id, ip: data.ip });
+    return json({ ok: true });
   }
 
   if (rota === 'videos' && id) {
@@ -185,6 +216,71 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
   }
 
   return json({ erro: 'rota nao encontrada', projeto: 'cortex' }, 404);
+}
+
+// Situacao da tarefa mais recente de um video/corte, para o cartao dizer o que o PC esta fazendo.
+function TAREFA_SQL(filtro) {
+  const ult = `FROM cortex_tarefas t WHERE ${filtro} ORDER BY t.id DESC LIMIT 1`;
+  return `(SELECT t.estado ${ult}) AS tarefa_estado,
+          (SELECT t.progresso ${ult}) AS tarefa_progresso,
+          (SELECT a.nome FROM cortex_tarefas t JOIN cortex_agentes a ON a.id = t.agente_id WHERE ${filtro} AND t.estado = 'pega' ORDER BY t.id DESC LIMIT 1) AS tarefa_pc`;
+}
+
+async function listarAgentes(env, usuarioId) {
+  const lista = await db(env).all(
+    `SELECT id, nome, baixa_cortes, visto_em, versao, ferramentas, criado_em FROM cortex_agentes
+      WHERE usuario_id = ? AND revogado_em IS NULL ORDER BY id`, usuarioId);
+  for (const a of lista) {
+    a.online = !!a.visto_em && Date.now() - Date.parse(a.visto_em) < PC_ONLINE_MS;
+    a.desatualizado = !!a.versao && a.versao !== AGENTE_VERSAO;
+    try { a.ferramentas = JSON.parse(a.ferramentas || '{}'); } catch { a.ferramentas = {}; }
+  }
+  return lista;
+}
+
+async function rotasAgentes({ request, env, data, u, id, metodo, json, agora }) {
+  if (!id && metodo === 'GET') return json({ agentes: await listarAgentes(env, u.id), versao_atual: AGENTE_VERSAO });
+
+  if (!id && metodo === 'POST') {
+    const corpo = await request.json().catch(() => ({}));
+    const nome = String(corpo.nome || '').trim().toUpperCase().slice(0, 40);
+    if (!nome) return json({ erro: 'Dê um nome ao PC (ex.: CASA, TRABALHO).' }, 400);
+    const repetido = await db(env).first(
+      'SELECT id FROM cortex_agentes WHERE usuario_id = ? AND nome = ? AND revogado_em IS NULL', u.id, nome);
+    if (repetido) return json({ erro: 'Já existe um PC com esse nome. Desconecte o antigo ou use outro nome.' }, 409);
+    // A chave nasce aqui, vai UMA vez para a tela do dono e o banco guarda so o hash.
+    const bytes = crypto.getRandomValues(new Uint8Array(32));
+    const chave = 'cx_' + btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const r = await db(env).run(
+      'INSERT INTO cortex_agentes (usuario_id, nome, chave_hash, criado_em) VALUES (?, ?, ?, ?)',
+      u.id, nome, await hashChave(chave), agora);
+    await auditar(env, { quem: u.email, acao: 'conectar-pc', entidade: 'cortex_agentes', entidade_id: r.meta.last_row_id, depois: { nome }, ip: data.ip });
+    return json({ ok: true, id: r.meta.last_row_id, nome, chave }, 201);
+  }
+
+  const ag = id && await db(env).first(
+    'SELECT id, nome, baixa_cortes FROM cortex_agentes WHERE id = ? AND usuario_id = ? AND revogado_em IS NULL', Number(id), u.id);
+  if (!ag) return json({ erro: 'PC não encontrado' }, 404);
+
+  if (metodo === 'PATCH') {
+    const corpo = await request.json().catch(() => ({}));
+    const baixa = corpo.baixa_cortes ? 1 : 0;
+    await db(env).run('UPDATE cortex_agentes SET baixa_cortes = ? WHERE id = ?', baixa, ag.id);
+    await auditar(env, { quem: u.email, acao: 'editar', entidade: 'cortex_agentes', entidade_id: ag.id,
+      antes: { baixa_cortes: ag.baixa_cortes }, depois: { baixa_cortes: baixa }, ip: data.ip });
+    return json({ ok: true });
+  }
+
+  if (metodo === 'DELETE') {
+    // Revoga (nao apaga): a linha fica para o historico das tarefas que esse PC fez.
+    await db(env).batch([
+      ['UPDATE cortex_agentes SET revogado_em = ? WHERE id = ?', [agora, ag.id]],
+      ["UPDATE cortex_tarefas SET estado = 'pendente', agente_id = NULL, pega_ate = NULL, progresso = NULL WHERE agente_id = ? AND estado = 'pega'", [ag.id]],
+    ]);
+    await auditar(env, { quem: u.email, acao: 'desconectar-pc', entidade: 'cortex_agentes', entidade_id: ag.id, antes: { nome: ag.nome }, ip: data.ip });
+    return json({ ok: true });
+  }
+  return json({ erro: 'rota nao encontrada' }, 404);
 }
 
 // ---------- link: qual plataforma, qual video ----------

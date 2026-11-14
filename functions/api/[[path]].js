@@ -34,6 +34,18 @@ export async function onRequest(context) {
     // Lab Hub, 13/11/2026 (nasceu com a Jean). Claude (Opus 5.5).
     if (rota === 'sessao') return await rotasSessao({ request, env, data, partes, metodo, json });
 
+    // Rotas de MÁQUINA de um projeto: /api/p/<slug>/maquina/... (ex.: o agente que roda no
+    // PC do dono, no Cortex). Não há pessoa logada, então não passam pela sessão: só chegam
+    // ao projeto que exporta `maquina`, e é ele que confere a credencial da máquina (chave
+    // própria, guardada como hash). Projeto que não exporta `maquina` responde 404 aqui.
+    // Lab Hub, 14/11/2026. Claude (Opus 5.5).
+    if (rota === 'p' && partes[2] === 'maquina') {
+      const projeto = PROJETOS[partes[1]];
+      if (!projeto || typeof projeto.maquina !== 'function') return json({ erro: 'rota nao encontrada' }, 404);
+      const waitUntil = context.waitUntil ? context.waitUntil.bind(context) : null;
+      return await projeto.maquina({ request, env, data, partes: partes.slice(3), metodo, json, waitUntil });
+    }
+
     const u = await usuarioAtual(request, env);
     if (!u) return json({ erro: 'sessão expirada', reautenticar: true }, 401);
     if (precisaDefinirAcesso(u)) {

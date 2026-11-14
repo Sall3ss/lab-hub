@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 14/11/2026 (Cortex criado: central de cortes, etapa 1).**
+**Atualizado em 14/11/2026 (Cortex: agente do PC, casa e trabalho).**
 
 ## Pronto
 
@@ -97,7 +97,10 @@
    a nuvem (Cloudflare pessoal) guarda link, transcrição, roteiro e estado; o PC do dono só
    busca texto/áudio leve e baixa os minutos marcados (yt-dlp) para o Movavi. Etapa 1 pronta
    (cartão no hub, tabelas `cortex_*` na migration 0006, quadro de 7 colunas, linha do tempo,
-   corte manual, triagem). Faltam agente do PC (etapa 2) e Groq + Claude (etapa 3). Arquitetura,
+   corte manual, triagem). Etapa 2 no ar: agente do PC (`cortex-agente.mjs`, Node sem
+   dependências) conectado pela tela Cortex › PCs, um por máquina (casa e trabalho). A porta da
+   API ganhou `/api/p/<slug>/maquina/...` (sem sessão; o projeto confere a chave). Falta o
+   Claude (etapa 3) e a chave `GROQ_API_KEY` para vídeos sem legenda. Arquitetura,
    modelo de dados e próximos passos em `projetos/cortex/PROJETO.md`.
 
 ## ClipStudio: arquivado em 15/10/2026

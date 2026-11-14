@@ -25,7 +25,8 @@ Beta.
 | Tela | `public/projetos/cortex/` (atalho `/cortex`) |
 | Servidor (rotas `/api/p/cortex/...`) | `projetos/cortex/api.js` |
 | Tabelas | prefixo `cortex_`, `migrations/0006_cortex_base.sql` |
-| Agente do PC (etapa 2) | `projetos/cortex/agente/` (roda no Windows do dono, nunca na nuvem) |
+| Rotas do PC (sem sessão, com chave do PC) | `projetos/cortex/maquina.js` |
+| Agente do PC | `public/projetos/cortex/agente/cortex-agente.mjs` (servido pelo site para o PC baixar; roda no Windows do dono, nunca na nuvem) |
 | Esta ficha | `projetos/cortex/PROJETO.md` |
 
 ## Arquitetura: quem faz o quê
@@ -74,7 +75,7 @@ Por que esse desenho:
 | `cortex_transcricao` | o texto em pedaços com `inicio_s`/`fim_s` (live de 6 h passa de 400 KB; em pedaços cabe no D1 e a IA aponta o minuto) |
 | `cortex_cortes` | o corte: `tipo` longo/curto, `origem` ia/manual, início/fim, título, descrição, tags (JSON), gancho, motivo e nota da IA, `estado` (triagem → download → edicao → publicado, ou descartado), caminho do arquivo no PC |
 | `cortex_tarefas` | fila do PC: `texto` (buscar legenda/áudio) ou `baixar_corte`; pendente → pega (com prazo) → feita/falhou, tentativas |
-| `cortex_agentes` | o PC (ou PCs) do dono: chave guardada só como hash, `visto_em` (mostra "PC online"), revogação |
+| `cortex_agentes` | o PC (ou PCs) do dono: chave guardada só como hash, `visto_em` (mostra "PC online"), revogação, `baixa_cortes` (0007), versão do agente e das ferramentas |
 
 O **Kanban não tem tabela**: as colunas saem do estado. V1 Entrada, V2 Transcrição, V3 Roteiro
 IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 Publicado
@@ -95,16 +96,27 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   tem plano grátis com limite diário. Com legenda nativa do YouTube, a Groq nem é chamada.
 - Segredos (o dono grava no Pages, nunca nesta máquina): `ANTHROPIC_API_KEY`, `GROQ_API_KEY`.
 
-## O agente do PC (etapa 2)
+## O agente do PC (etapa 2, no ar em 14/11)
 
-- **Node.js 20+ sem dependência nenhuma** (fetch nativo), um arquivo `agente.mjs` + `config.json`
-  com o endereço do painel e a chave do agente. Usa `yt-dlp.exe` e `ffmpeg.exe` (instalados com
-  `winget`).
-- Chave do agente: gerada no próprio painel (botão "Conectar PC"), mostrada uma vez na tela do
-  dono, banco guarda só o hash. Revogável.
-- Rotas de máquina em `/api/p/cortex/maquina/...`, autenticadas pela chave e não pela sessão.
-  Isso pede um ajuste pequeno e genérico na porta única da API (`functions/api/[[path]].js`):
-  um projeto pode expor `maquina(...)`, que confere a própria credencial. Fica para a etapa 2.
+- **Node.js 20+ sem dependência nenhuma** (fetch nativo): `cortex-agente.mjs` + `config.json`
+  (endereço do painel, chave, pasta) em `C:\Cortex`. Usa `yt-dlp` e `ffmpeg` (winget).
+- **Mais de um PC (casa e trabalho):** cada um com nome e chave próprios, gerados na tela
+  Cortex › PCs (botão no canto superior direito). A chave aparece uma vez na tela do dono; o
+  banco guarda só o hash; "Desconectar" revoga na hora. Buscar texto qualquer PC online faz; o
+  download do corte só vai para PC com "Recebe os downloads de corte? Sim".
+- Comandos: `conectar <painel> <chave>`, (vazio) roda, `iniciar-com-windows` (cria
+  `cortex-laco.cmd` + atalho na pasta Inicializar; religa em 30 s se cair; saída 2 = parar de
+  vez), `parar-de-iniciar`, `pasta "<caminho>"`.
+- Atualiza sozinho: o painel informa `versao_atual` (`AGENTE_VERSAO` em `maquina.js`); se for
+  diferente, o agente baixa o arquivo novo do site e reinicia. **Ao mudar o agente, suba a
+  versão nos dois lugares.**
+- Rotas de máquina em `/api/p/cortex/maquina/...` (`maquina.js`), autenticadas pela chave e não
+  pela sessão. A porta única da API (`functions/api/[[path]].js`) ganhou a regra genérica:
+  `/api/p/<slug>/maquina/...` vai para o `maquina()` exportado pelo projeto, que confere a
+  própria credencial; projeto sem `maquina` responde 404.
+- Texto: legenda nativa (manual, depois automática `<língua>-orig`) → enviada em lotes; sem
+  legenda → áudio `ba/w`, partes de 30 min em opus mono 16 kHz 24 kbps → painel → Groq.
+  Sem `GROQ_API_KEY`, a tarefa falha com mensagem clara no cartão.
 - Download cirúrgico: `yt-dlp --download-sections "*HH:MM:SS-HH:MM:SS" --force-keyframes-at-cuts
   -f "bv*[height<=1080]+ba/b" --merge-output-format mp4`, saída em
   `Cortex\<data> - <canal> - <vídeo>\curtos|longos\NN - <título>.mp4`, com um `.txt` ao lado
@@ -117,8 +129,11 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
 1. 🟢 **Base (14/11):** projeto, cartão no hub, banco completo, tela de editor (quadro de 7
    colunas, linha do tempo com faixas L/C, gaveta de vídeo e de corte, marcar corte à mão,
    aprovar/descartar/cancelar/publicado, arquivar e excluir com confirmação). Testado local.
-2. ⬜ Agente do PC + rotas de máquina + "Conectar PC" na tela.
-3. ⬜ Transcrição (legenda nativa → Groq) e roteiro com o Claude.
+2. 🟢 **Agente do PC (14/11):** rotas de máquina, tela PCs (casa e trabalho), fila com prazo,
+   3 tentativas, "tentar de novo", legenda nativa, áudio → Groq (pronto, falta a chave), download
+   cirúrgico com .txt de metadados. Testado local de ponta a ponta com yt-dlp/ffmpeg simulados
+   (nada baixado na VPS). Falta o teste real no PC do dono.
+3. ⬜ Roteiro com o Claude (e gravar `GROQ_API_KEY` para vídeos sem legenda).
 4. ⬜ Acabamento: tentar de novo em falha, filtro por vídeo/plataforma, copiar metadados.
 
 ## Estado
@@ -128,7 +143,13 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
 - Live em andamento não entra: o link aceito é o do vídeo gravado (VOD) ou clipe. Para pegar a
   live logo que acabar, colar o link do VOD (YouTube costuma manter o mesmo link da live).
 
+- 14/11: etapa 2 publicada. O dono conecta o PC de casa e o do trabalho pela tela PCs.
+
 ## Decisões
+
+- 14/11: PC do trabalho é máquina da empresa. O agente funciona lá igual, mas baixar vídeo e
+  instalar programas nela depende da política da empresa; por isso existe a opção de o PC não
+  receber downloads de corte (só ajudar a buscar texto) ou nem ser conectado.
 
 - 14/11: nome **Cortex** (cortes + córtex, a IA que decide). Trocável a qualquer momento: só o
   slug/pasta fica, e é interno.
