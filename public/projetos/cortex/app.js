@@ -503,6 +503,12 @@
   }
   var INSTALAR = 'winget install OpenJS.NodeJS.LTS\nwinget install yt-dlp.yt-dlp\nwinget install Gyan.FFmpeg';
 
+  function LIGAR() {
+    return 'cd C:\\Cortex\n' +
+      'Invoke-WebRequest -UseBasicParsing ' + PAINEL + '/projetos/cortex/agente/cortex-agente.mjs -OutFile cortex-agente.mjs\n' +
+      'node cortex-agente.mjs criar-atalho';
+  }
+
   function abrirPCs() {
     api('/agentes').then(function (j) {
       var lista = j.agentes;
@@ -519,11 +525,15 @@
       abrirGaveta('PCs conectados',
         '<p style="margin:0;color:var(--metal);font-size:.84rem">O painel decide; o PC só baixa. Buscar o texto de um vídeo qualquer PC ligado faz. O vídeo do corte vai só para o PC marcado com <b>Sim</b> em "Recebe os downloads".</p>' +
         (lista.length ? '<div class="pcs">' + itens + '</div>' : '<p class="alerta">Nenhum PC conectado ainda. Conecte o primeiro abaixo.</p>') +
+        (lista.length ? '<div class="passo"><h3><i>⏻</i>Ligar e desligar o Cortex num PC já conectado</h3>' +
+          '<p>Se ainda não tem o atalho <b>Cortex - ligar e desligar</b> na área de trabalho desse PC, abra o PowerShell nele e cole:</p>' + blocoCmd('cmd-atalho', LIGAR()) +
+          '<p>Dois cliques no atalho liga; dois cliques de novo desliga.</p></div>' : '') +
         '<form class="passo" id="f-pc" novalidate><h3><i>+</i>Conectar um PC</h3>' +
         '<label class="campo"><span>Nome do PC</span><input name="nome" data-mask="upper" maxlength="40" placeholder="CASA, TRABALHO…"></label>' +
         '<p class="msg-form" id="msg-pc"></p><div class="acoes"><button class="btn btn-cor" type="submit">Gerar chave e instruções</button></div></form>',
         function (box) {
           if (window.Campos) Campos.aplicar(box);
+          ligarCopiar(box);
           box.querySelectorAll('[data-baixa]').forEach(function (b) {
             b.onclick = function () {
               api('/agentes/' + b.dataset.baixa, { metodo: 'PATCH', corpo: { baixa_cortes: b.dataset.v === '1' } })
@@ -555,13 +565,15 @@
     var conectar = 'mkdir C:\\Cortex -Force | Out-Null; cd C:\\Cortex\n' +
       'Invoke-WebRequest -UseBasicParsing ' + PAINEL + '/projetos/cortex/agente/cortex-agente.mjs -OutFile cortex-agente.mjs\n' +
       'node cortex-agente.mjs conectar ' + PAINEL + ' ' + r.chave;
-    var ligar = 'cd C:\\Cortex\nnode cortex-agente.mjs iniciar-com-windows\nnode cortex-agente.mjs';
+    var ligar = LIGAR();
     abrirGaveta('Conectar o PC ' + r.nome,
       '<p class="alerta">A chave deste PC aparece <b>só agora</b>. Faça os passos com esta tela aberta, <b>no próprio PC ' + esc(r.nome) + '</b>. Se perder, desconecte e gere outra.</p>' +
       '<div class="passo"><h3><i>1</i>Instalar os programas (só na primeira vez)</h3><p>Abra o <b>PowerShell</b> (menu Iniciar › digite PowerShell) e rode uma linha por vez. Depois <b>feche e abra o PowerShell de novo</b>.</p>' + blocoCmd('cmd1', INSTALAR) + '</div>' +
       '<div class="passo"><h3><i>2</i>Baixar o agente e conectar</h3><p>No PowerShell novo, cole tudo de uma vez:</p>' + blocoCmd('cmd2', conectar) +
       '<p>Deve aparecer <b>"Conectado! Este PC aparece no painel como ' + esc(r.nome) + '"</b>.</p></div>' +
-      '<div class="passo"><h3><i>3</i>Deixar ligado sozinho e começar</h3><p>A primeira linha faz o agente abrir sozinho (minimizado) toda vez que você entrar no Windows. A segunda já liga agora: deixe a janela aberta.</p>' + blocoCmd('cmd3', ligar) +
+      '<div class="passo"><h3><i>3</i>Criar o atalho de ligar e desligar</h3><p>No mesmo PowerShell, cole:</p>' + blocoCmd('cmd3', ligar) +
+      '<p>Aparece na área de trabalho o atalho <b>Cortex - ligar e desligar</b>, e o Cortex já fica <b>ligado</b> (minimizado na barra de tarefas). Daqui pra frente:</p>' +
+      '<p>• <b>Dois cliques no atalho</b> com ele desligado → liga.<br>• <b>Dois cliques de novo</b> → desliga. Se estiver baixando algo, o trabalho volta para a fila e nada se perde.<br>• Desligado, não roda nada no PC. O que você importar no painel espera até ligar.</p>' +
       '<p>Os cortes caem em <b>Vídeos › Cortex</b>, uma pasta por vídeo, com Curtos e Longos separados e um .txt com título, descrição e tags ao lado de cada arquivo.</p></div>' +
       '<div class="acoes"><button class="btn" type="button" id="pc-voltar">Voltar para PCs</button></div>',
       function (box) { ligarCopiar(box); box.querySelector('#pc-voltar').onclick = abrirPCs; });

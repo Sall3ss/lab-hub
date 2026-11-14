@@ -10,25 +10,31 @@
 // Uso (o painel mostra os comandos prontos na tela "PCs"):
 //   node cortex-agente.mjs conectar <endereço do painel> <chave>   grava config.json
 //   node cortex-agente.mjs                                         roda (deixe a janela aberta)
-//   node cortex-agente.mjs iniciar-com-windows                     liga sozinho ao entrar no Windows
-//   node cortex-agente.mjs parar-de-iniciar                        desfaz o de cima
+//   node cortex-agente.mjs criar-atalho                            cria "Cortex - ligar e desligar" na área de trabalho
+//   node cortex-agente.mjs alternar                                liga se estiver desligado, desliga se estiver ligado
+//   node cortex-agente.mjs iniciar-com-windows | parar-de-iniciar  (opcional) ligar sozinho ao entrar no Windows
+//
+// Desligado, o agente não roda nem consome nada do PC; as tarefas esperam na fila do painel.
+// Ao desligar no meio de um trabalho, ele interrompe, devolve a tarefa para a fila (sem
+// contar como falha) e avisa o painel que saiu.
 //
 // Precisa de: Node.js 20+, yt-dlp e ffmpeg no PATH. Nenhuma biblioteca extra.
 // Resiliência: falha de rede espera e tenta de novo (até 5 min entre tentativas); tarefa
 // tem prazo no painel e volta para a fila se este PC sumir; 3 tentativas antes de desistir.
 // Autoria: Claude (Opus 5.5), Lab Hub, 14/11/2026.
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, statSync, readdirSync, appendFileSync, unlinkSync, renameSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '1.0.0';
+const VERSAO = '1.1.0';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
 const ARQ_TRAVA = join(AQUI, 'agente.trava');
+const ARQ_PARAR = join(AQUI, 'agente.parar');      // existe = pedido para desligar
 const PARTE_AUDIO_S = 30 * 60;
 const WIN = process.platform === 'win32';
 
@@ -54,12 +60,18 @@ function lerConfig() {
   try { return JSON.parse(readFileSync(ARQ_CONFIG, 'utf8')); } catch { return null; }
 }
 
+const filhos = new Set();   // yt-dlp/ffmpeg rodando agora (para interromper ao desligar)
+let atual = null;           // { cfg, tarefa, pasta } em execução
+let parando = false;
+
 // Roda um programa e devolve a saída. `aoLer` recebe cada linha (para mostrar progresso).
 function rodar(prog, args, { aoLer, cwd } = {}) {
   return new Promise((ok, falha) => {
     let saida = '', erro = '';
     let p;
     try { p = spawn(prog, args, { cwd, windowsHide: true }); } catch (e) { falha(e); return; }
+    filhos.add(p);
+    p.on('close', () => filhos.delete(p));
     const ler = (buf, ehErro) => {
       const txt = buf.toString();
       if (ehErro) erro = (erro + txt).slice(-4000); else saida += txt;
@@ -252,6 +264,7 @@ function progresso(cfg, t, rotulo) {
 async function executar(cfg, t) {
   const pasta = join(tmpdir(), 'cortex-' + t.id + '-' + Date.now());
   mkdirSync(pasta, { recursive: true });
+  atual = { cfg, tarefa: t, pasta };
   // Prazo renovado a cada 5 min enquanto a tarefa roda (legenda/áudio não têm % para avisar).
   const vivo = setInterval(() => painel(cfg, `/tarefas/${t.id}/prorrogar`, { corpo: {} }).catch(() => {}), 5 * 60000);
   try {
@@ -261,14 +274,39 @@ async function executar(cfg, t) {
       await painel(cfg, `/tarefas/${t.id}/concluir`, { corpo: { arquivo_local: caminho } });
     }
   } catch (e) {
+    if (parando) return;    // interrompida pelo "desligar": quem devolve a tarefa é parar()
     if (e instanceof ErroPainel && e.dados.perdida) { log('A tarefa saiu deste PC (cancelada ou venceu o prazo).'); return; }
     const definitivo = !!(e.definitivo || (e instanceof ErroPainel && e.dados.definitivo));
     log(`FALHOU (tentativa ${t.tentativa}): ${e.message}`);
     await painel(cfg, `/tarefas/${t.id}/falhar`, { corpo: { erro: e.message, definitivo } }).catch((e2) => log('Não consegui avisar o painel da falha:', e2.message));
   } finally {
     clearInterval(vivo);
+    atual = null;
     rmSync(pasta, { recursive: true, force: true });
   }
+}
+
+// Desligar com educação: interrompe o que estiver baixando, devolve a tarefa para a fila
+// (sem contar como falha), avisa o painel e sai com 2 (o laço não religa).
+async function parar(motivo) {
+  if (parando) return;
+  parando = true;
+  log(motivo || 'Desligando…');
+  for (const p of filhos) {
+    if (WIN) spawnSync('taskkill', ['/pid', String(p.pid), '/T', '/F'], { windowsHide: true });
+    else { try { p.kill('SIGTERM'); } catch { /* */ } }
+  }
+  const a = atual;
+  if (a) {
+    await painel(a.cfg, `/tarefas/${a.tarefa.id}/devolver`, { corpo: {} }).catch(() => {});
+    rmSync(a.pasta, { recursive: true, force: true });
+    log('O trabalho em andamento voltou para a fila do painel.');
+  }
+  const cfg = lerConfig();
+  if (cfg) await painel(cfg, '/tchau', { corpo: {} }).catch(() => {});
+  try { unlinkSync(ARQ_PARAR); } catch { /* o laço já leu, ou foi Ctrl+C */ }
+  log('Agente DESLIGADO.');
+  process.exit(2);
 }
 
 async function ferramentas() {
@@ -286,6 +324,8 @@ async function principal() {
   }
   cfg.pasta = cfg.pasta || join(homedir(), 'Videos', 'Cortex');
   travar();
+  try { unlinkSync(ARQ_PARAR); } catch { /* ligar à mão vale mais que um pedido antigo */ }
+  setInterval(() => { if (existsSync(ARQ_PARAR)) parar('Pedido de desligar recebido (atalho).'); }, 2000);
 
   const f = await ferramentas();
   log(`Cortex agente ${VERSAO} · painel ${cfg.painel} · pasta ${cfg.pasta}`);
@@ -298,7 +338,7 @@ async function principal() {
   }
 
   let espera = 20000, oiEm = 0;
-  for (;;) {
+  while (!parando) {
     try {
       if (Date.now() - oiEm > 10 * 60000) {
         const oi = await painel(cfg, '/oi', { corpo: { versao: VERSAO, ferramentas: f } });
@@ -308,6 +348,7 @@ async function principal() {
       }
       const { tarefa } = await painel(cfg, '/proxima');
       espera = 20000;
+      if (parando) break;            // pediu para desligar enquanto perguntava: não pega nada
       if (tarefa) { await executar(cfg, tarefa); continue; }   // terminou uma: já pede a próxima
     } catch (e) {
       if (e instanceof ErroPainel && e.status === 401) {
@@ -321,6 +362,7 @@ async function principal() {
     }
     await dorme(espera);
   }
+  await new Promise(() => {});      // desligando: parar() termina de avisar o painel e encerra
 }
 
 // Saída 2 = parar de vez (sem chave, chave revogada, programa faltando): o laço do
@@ -334,7 +376,7 @@ function travar() {
   writeFileSync(ARQ_TRAVA, String(process.pid));
   const soltar = () => { try { if (Number(readFileSync(ARQ_TRAVA, 'utf8')) === process.pid) unlinkSync(ARQ_TRAVA); } catch { /* */ } };
   process.on('exit', soltar);
-  process.on('SIGINT', () => { log('Agente encerrado.'); process.exit(0); });
+  process.on('SIGINT', () => parar('Ctrl+C: desligando…'));
 }
 
 // Versão nova no painel: baixa, troca este arquivo e reinicia sozinho.
@@ -349,16 +391,100 @@ async function atualizar(cfg, versao) {
     log(`Atualizado para a versão ${versao}. Reiniciando…`);
     try { unlinkSync(ARQ_TRAVA); } catch { /* */ }
     // Com "iniciar com o Windows", o laço religa sozinho; rodando à mão, religo eu.
-    if (!process.env.CORTEX_LACO) spawn(process.execPath, [eu], { detached: true, stdio: 'ignore', windowsHide: false }).unref();
+    if (!process.env.CORTEX_LACO) ligarEmSegundoPlano();
     process.exit(0);
   } catch (e) {
     log(`Não consegui atualizar (${e.message}); sigo na versão ${VERSAO}.`);
   }
 }
 
+// ---------------------------------------------------------------- ligar e desligar
+const EU = resolve(fileURLToPath(import.meta.url));
+const ARQ_LACO = join(AQUI, 'cortex-laco.cmd');
+const ARQ_ALTERNAR = join(AQUI, 'cortex-alternar.cmd');
+const ARQ_ICONE = join(AQUI, 'cortex.ico');
+const INICIAR_WIN = join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup', 'Cortex agente.cmd');
+
+// Laço da janela minimizada: se o agente cair (erro, atualização), volta em 30 s.
+// Saída 2 (desligado pelo atalho, chave revogada, programa faltando) fecha a janela.
+function criarLaco() {
+  writeFileSync(ARQ_LACO, ['@echo off', 'title Cortex agente (ligado)', `cd /d "${AQUI}"`, 'set CORTEX_LACO=1', ':de_novo',
+    `"${process.execPath}" "${EU}"`,
+    'if errorlevel 2 if not errorlevel 3 goto fim', 'if exist agente.parar goto fim',
+    'timeout /t 30 /nobreak >nul', 'goto de_novo', ':fim', 'exit', ''].join('\r\n'));
+  return ARQ_LACO;
+}
+
+function pidRodando() {
+  if (!existsSync(ARQ_TRAVA)) return 0;
+  const pid = Number(readFileSync(ARQ_TRAVA, 'utf8'));
+  try { if (pid) { process.kill(pid, 0); return pid; } } catch { /* morto */ }
+  return 0;
+}
+
+function ligarEmSegundoPlano() {
+  if (WIN) {
+    criarLaco();
+    spawn('cmd.exe', ['/c', `start "Cortex agente" /min "${ARQ_LACO}"`],
+      { detached: true, stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true }).unref();
+  } else {
+    spawn(process.execPath, [EU], { detached: true, stdio: 'ignore' }).unref();
+  }
+}
+
+async function alternar() {
+  if (!lerConfig()) { console.log('Este PC ainda não está conectado ao painel (passo 2 da tela PCs).'); process.exit(1); }
+  const pid = pidRodando();
+  if (!pid) {
+    try { unlinkSync(ARQ_PARAR); } catch { /* */ }
+    ligarEmSegundoPlano();
+    console.log('');
+    console.log('  Cortex LIGADO.');
+    console.log('  Ele fica minimizado na barra de tarefas pegando o trabalho da fila.');
+    console.log('  Para desligar: dois cliques no atalho de novo.');
+    return;
+  }
+  writeFileSync(ARQ_PARAR, '1');
+  console.log('Desligando o Cortex (se estiver baixando algo, devolve para a fila)…');
+  for (let i = 0; i < 30 && pidRodando(); i++) await dorme(500);
+  if (pidRodando()) {   // não respondeu em 15 s: encerra à força; o painel devolve a tarefa no prazo
+    if (WIN) spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true });
+    else { try { process.kill(pid); } catch { /* */ } }
+    try { unlinkSync(ARQ_TRAVA); } catch { /* */ }
+  }
+  console.log('');
+  console.log('  Cortex DESLIGADO. Nada dele roda neste PC até você ligar de novo.');
+  console.log('  O que chegar no painel espera na fila.');
+}
+
+async function criarAtalho() {
+  const cfg = lerConfig();
+  if (!cfg) { console.log('Conecte este PC primeiro (passo 2 da tela PCs).'); process.exit(1); }
+  criarLaco();
+  writeFileSync(ARQ_ALTERNAR, ['@echo off', 'title Cortex', `cd /d "${AQUI}"`,
+    `"${process.execPath}" "${EU}" alternar`, 'timeout /t 5 >nul', ''].join('\r\n'));
+  try {
+    const r = await fetch(cfg.painel + '/projetos/cortex/agente/cortex.ico', { signal: AbortSignal.timeout(30000) });
+    if (r.ok) writeFileSync(ARQ_ICONE, Buffer.from(await r.arrayBuffer()));
+  } catch { /* sem ícone próprio, fica o padrão */ }
+  const q = (t) => "'" + String(t).replace(/'/g, "''") + "'";
+  const ps = [
+    "$d = [Environment]::GetFolderPath('Desktop')",
+    "$s = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $d 'Cortex - ligar e desligar.lnk'))",
+    `$s.TargetPath = ${q(ARQ_ALTERNAR)}`, `$s.WorkingDirectory = ${q(AQUI)}`,
+    "$s.Description = 'Liga ou desliga o agente do Cortex neste PC'",
+    existsSync(ARQ_ICONE) ? `$s.IconLocation = ${q(ARQ_ICONE + ',0')}` : '',
+    '$s.Save()',
+  ].filter(Boolean).join('; ');
+  const r = spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', ps], { encoding: 'utf8', windowsHide: true });
+  if (r.status !== 0) { console.log('Não consegui criar o atalho:', (r.stderr || r.error?.message || '').trim()); process.exit(1); }
+  if (existsSync(INICIAR_WIN)) { unlinkSync(INICIAR_WIN); console.log('(Tirei o "ligar sozinho com o Windows": agora é você quem liga.)'); }
+  console.log('Atalho "Cortex - ligar e desligar" criado na área de trabalho.');
+  if (!pidRodando()) { await alternar(); } else console.log('O Cortex já está ligado.');
+}
+
 // ---------------------------------------------------------------- comandos
 const [cmd, a1, a2] = process.argv.slice(2);
-const atalho = join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup', 'Cortex agente.cmd');
 
 if (cmd === 'conectar') {
   if (!/^https:\/\/\S+$/.test(a1 || '') || !/^cx_/.test(a2 || '')) {
@@ -372,21 +498,22 @@ if (cmd === 'conectar') {
     const oi = await painel(cfg, '/oi', { corpo: { versao: VERSAO, ferramentas: await ferramentas() } });
     console.log(`Conectado! Este PC aparece no painel como "${oi.nome}".`);
     console.log(`Os cortes vão para: ${cfg.pasta}`);
-    console.log('Agora rode:  node cortex-agente.mjs');
+    console.log('Falta ligar: rode  node cortex-agente.mjs criar-atalho  (cria o atalho e já liga).');
   } catch (e) {
     console.log('Gravei a configuração, mas o painel não respondeu:', e.message);
   }
+} else if (cmd === 'criar-atalho') {
+  if (!WIN) { console.log('Só no Windows.'); process.exit(1); }
+  await criarAtalho();
+} else if (cmd === 'alternar') {
+  await alternar();
 } else if (cmd === 'iniciar-com-windows') {
   if (!WIN) { console.log('Só no Windows.'); process.exit(1); }
-  // Laço: se o agente cair (erro, atualização), volta sozinho em 30 s; saída 2 encerra.
-  const laco = join(AQUI, 'cortex-laco.cmd');
-  writeFileSync(laco, ['@echo off', 'title Cortex agente', `cd /d "${AQUI}"`, 'set CORTEX_LACO=1', ':de_novo',
-    `"${process.execPath}" "${resolve(fileURLToPath(import.meta.url))}"`,
-    'if errorlevel 2 if not errorlevel 3 goto fim', 'timeout /t 30 /nobreak >nul', 'goto de_novo', ':fim', ''].join('\r\n'));
-  writeFileSync(atalho, `@echo off\r\nstart "Cortex agente" /min "${laco}"\r\n`);
+  criarLaco();
+  writeFileSync(INICIAR_WIN, `@echo off\r\nstart "Cortex agente" /min "${ARQ_LACO}"\r\n`);
   console.log('Pronto: o agente liga sozinho (minimizado) quando você entrar no Windows.');
 } else if (cmd === 'parar-de-iniciar') {
-  try { unlinkSync(atalho); console.log('O agente não liga mais sozinho.'); } catch { console.log('Não estava ligando sozinho.'); }
+  try { unlinkSync(INICIAR_WIN); console.log('O agente não liga mais sozinho.'); } catch { console.log('Não estava ligando sozinho.'); }
 } else if (cmd === 'pasta') {
   const cfg = lerConfig();
   if (!cfg || !a1) { console.log('Uso: node cortex-agente.mjs pasta "D:\\Videos\\Cortex"'); process.exit(1); }
@@ -395,5 +522,5 @@ if (cmd === 'conectar') {
 } else if (!cmd) {
   principal().catch((e) => { log('Erro inesperado:', e.stack || e.message); process.exit(1); });
 } else {
-  console.log('Comandos: conectar | iniciar-com-windows | parar-de-iniciar | pasta "<caminho>" | (vazio para rodar)');
+  console.log('Comandos: conectar | criar-atalho | alternar | pasta "<caminho>" | iniciar-com-windows | parar-de-iniciar | (vazio para rodar)');
 }

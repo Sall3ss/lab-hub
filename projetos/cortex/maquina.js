@@ -11,13 +11,15 @@
 //   POST /tarefas/:id/audio?parte&total&inicio          corpo = audio cru (ogg/opus) -> Groq
 //   POST /tarefas/:id/concluir            { arquivo_local? }
 //   POST /tarefas/:id/falhar              { erro, definitivo? }
+//   POST /tarefas/:id/devolver            o dono desligou o PC no meio: volta para a fila sem contar falha
+//   POST /tchau                           o PC foi desligado pelo atalho: aparece offline na hora
 //
 // O PC nunca recebe nada que nao seja dele: toda consulta filtra pelo dono da chave.
 // Autoria: Claude (Opus 5.5), Lab Hub, 14/11/2026.
 
 import { db } from '../../lib/db.js';
 
-export const AGENTE_VERSAO = '1.0.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+export const AGENTE_VERSAO = '1.1.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
 const PRAZO_MIN = { texto: 30, baixar_corte: 60 };
 const MAX_TENTATIVAS = 3;
 const VISTO_A_CADA_MS = 60 * 1000;      // grava "visto_em" no maximo 1x por minuto (poupa escrita no D1)
@@ -48,6 +50,12 @@ export async function maquina({ request, env, partes, metodo, json }) {
     await db(env).run('UPDATE cortex_agentes SET visto_em = ?, versao = ?, ferramentas = ? WHERE id = ?',
       iso, String(corpo.versao || '').slice(0, 20), JSON.stringify(corpo.ferramentas || {}).slice(0, 500), ag.id);
     return json({ ok: true, nome: ag.nome, baixa_cortes: !!ag.baixa_cortes, versao_atual: AGENTE_VERSAO, intervalo_s: 20 });
+  }
+
+  if (rota === 'tchau') {
+    // "visto" fica 3 min no passado: a tela mostra offline na hora, mas guarda quando saiu.
+    await db(env).run('UPDATE cortex_agentes SET visto_em = ? WHERE id = ?', new Date(agora.getTime() - 3 * 60000).toISOString(), ag.id);
+    return json({ ok: true });
   }
 
   if (!ag.visto_em || agora - Date.parse(ag.visto_em) > VISTO_A_CADA_MS) {
@@ -179,6 +187,13 @@ export async function maquina({ request, env, partes, metodo, json }) {
         [corpo.arquivo_local ? `${ag.nome}: ${String(corpo.arquivo_local).slice(0, 400)}` : null, iso, tarefa.corte_id]]);
     }
     await db(env).batch(lotes);
+    return json({ ok: true });
+  }
+
+  if (acao === 'devolver') {
+    await db(env).run(
+      "UPDATE cortex_tarefas SET estado = 'pendente', agente_id = NULL, pega_ate = NULL, progresso = NULL, atualizada_em = ? WHERE id = ?",
+      iso, tarefa.id);
     return json({ ok: true });
   }
 

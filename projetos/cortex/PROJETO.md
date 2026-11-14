@@ -104,9 +104,15 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   Cortex › PCs (botão no canto superior direito). A chave aparece uma vez na tela do dono; o
   banco guarda só o hash; "Desconectar" revoga na hora. Buscar texto qualquer PC online faz; o
   download do corte só vai para PC com "Recebe os downloads de corte? Sim".
-- Comandos: `conectar <painel> <chave>`, (vazio) roda, `iniciar-com-windows` (cria
-  `cortex-laco.cmd` + atalho na pasta Inicializar; religa em 30 s se cair; saída 2 = parar de
-  vez), `parar-de-iniciar`, `pasta "<caminho>"`.
+- **Liga e desliga quando o dono quiser** (pedido de 14/11: não ligar sozinho com o Windows,
+  para não consumir a máquina sem uso). `criar-atalho` põe **"Cortex - ligar e desligar"** na
+  área de trabalho (ícone da tesoura, `cortex.ico`) e já liga. O atalho roda `alternar`:
+  desligado → abre a janela minimizada (`cortex-laco.cmd`, que religa em 30 s se o agente
+  cair); ligado → cria `agente.parar`, o agente interrompe o yt-dlp/ffmpeg, **devolve** a tarefa
+  para a fila sem contar falha, avisa o painel (`/tchau`, aparece offline na hora) e sai com 2.
+- Outros comandos: `conectar <painel> <chave>` (só grava a config e testa; NÃO deixa rodando),
+  (vazio) roda nesta janela, `pasta "<caminho>"`, e os opcionais `iniciar-com-windows` /
+  `parar-de-iniciar`.
 - Atualiza sozinho: o painel informa `versao_atual` (`AGENTE_VERSAO` em `maquina.js`); se for
   diferente, o agente baixa o arquivo novo do site e reinicia. **Ao mudar o agente, suba a
   versão nos dois lugares.**
@@ -144,12 +150,16 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   live logo que acabar, colar o link do VOD (YouTube costuma manter o mesmo link da live).
 
 - 14/11: etapa 2 publicada. O dono conecta o PC de casa e o do trabalho pela tela PCs.
+- 14/11: o dono fez os passos 1 e 2 e o PC ficou online por ~2 min e depois offline. Não era
+  falha: o passo 2 (`conectar`) só fala uma vez com o painel e fecha; quem fica rodando é o
+  passo 3, que ele ainda não tinha feito. O passo 3 virou o atalho de ligar/desligar (1.1.0) e
+  a tela PCs passou a mostrar esse comando sempre (não precisa da chave).
 
 ## Decisões
 
-- 14/11: PC do trabalho é máquina da empresa. O agente funciona lá igual, mas baixar vídeo e
-  instalar programas nela depende da política da empresa; por isso existe a opção de o PC não
-  receber downloads de corte (só ajudar a buscar texto) ou nem ser conectado.
+- 14/11: PC do trabalho liberado pelo dono ("posso utilizar normalmente com essas liberdades").
+  Cada PC escolhe se recebe download de corte.
+- 14/11: agente liga e desliga à mão pelo atalho da área de trabalho, não com o Windows.
 
 - 14/11: nome **Cortex** (cortes + córtex, a IA que decide). Trocável a qualquer momento: só o
   slug/pasta fica, e é interno.
