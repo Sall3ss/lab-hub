@@ -128,6 +128,15 @@ projeto a precisar dele.
   com a ficha dentro, passou de 100 s sem plano B. Agora essas rodadas tentam o mesmo
   modelo 2 vezes, e a mensagem de erro traz rodada e segundos (para medir, não adivinhar).
 
+- 🟢 **14/11 - O 524 sumiu no ar** (com a ficha resumida, a resposta chegou).
+- 🟡 **14/11 - Proposta anunciada sem cartão:** a Jean escreveu "preparei uma tarefa,
+  confirme no cartão" sem chamar `criar_tarefa`; nada foi criado. Agora: (1) a
+  instrução diz que propor = chamar a ferramenta; (2) o servidor confere: se o texto
+  anuncia proposta/cartão e nenhuma ferramenta de proposta foi chamada no turno, faz mais
+  uma chamada com `toolConfig.functionCallingConfig.mode = "ANY"` (o Gemini é obrigado a
+  chamar uma das propostas) e o cartão aparece; se mesmo assim falhar, avisa na própria
+  resposta para pedir de novo. Testado com Google de mentira (4 cenários).
+
 ## Próximo passo
 
 4. Áudio: gravar, enviar arquivo de áudio, transcrição pelo Gemini, voz da resposta.

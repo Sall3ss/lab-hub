@@ -45,6 +45,7 @@ export function declaracoes() {
 }
 
 const CONSULTAS = new Set(['ler_ficha', 'listar_pendencias', 'buscar_conversas', 'ler_conversa']);
+export const PROPOSTAS = ['criar_nota', 'criar_tarefa', 'concluir_tarefa', 'lembrar', 'esquecer', 'sugerir_fase'];
 const corta = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n) + ' [...]' : s; };
 const limpo = (s, n) => String(s == null ? '' : s).trim().slice(0, n);
 

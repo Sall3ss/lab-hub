@@ -40,7 +40,7 @@ export class ErroMotor extends Error {
  * historico: [{ papel: 'usuario'|'jean', conteudo }] terminando na fala do usuario.
  * ferramentas: declaracoes (functionDeclarations); executar(nome, args) -> { resposta, acao? }
  */
-export async function* responder(env, { sistema, historico, ferramentas, executar }) {
+export async function* responder(env, { sistema, historico, ferramentas, executar, propostas = [] }) {
   if (env.JEAN_SIMULADO === '1') { yield* simulado(historico, executar); return; }
   if (!env.GEMINI_API_KEY) throw new ErroMotor('A chave do Gemini (GEMINI_API_KEY) não está configurada no Pages.', 503);
 
@@ -58,6 +58,7 @@ export async function* responder(env, { sistema, historico, ferramentas, executa
   let modelos = [env.JEAN_MODELO || 'gemini-3.8-flash', env.JEAN_MODELO_RESERVA || 'gemini-3.5-flash-lite'];
   let entrada = 0, saida = 0;
   const usadas = [];
+  let textoTurno = '';
 
   for (let rodada = 0; rodada < MAX_RODADAS; rodada++) {
     let r;
@@ -78,13 +79,23 @@ export async function* responder(env, { sistema, historico, ferramentas, executa
     modelos = [r.modelo, r.modelo];
     let fimLeitura = null;
     for await (const p of lerSSE(r.resposta)) {
-      if (p.texto) yield { texto: p.texto };
+      if (p.texto) { textoTurno += p.texto; yield { texto: p.texto }; }
       else fimLeitura = p;
     }
     entrada += fimLeitura.entrada || 0;
     saida += fimLeitura.saida || 0;
 
     const chamadas = fimLeitura.partes.filter((p) => p.functionCall);
+    if (!chamadas.length && executar && propostas.length && anunciouSemChamar(textoTurno, usadas, propostas)) {
+      // 14/11 no ar: a Jean escreveu "preparei uma tarefa, confirme no cartao" sem chamar a
+      // ferramenta, e o cartao nao existia. Aqui o servidor cobra a chamada, com o modo
+      // ANY (o Gemini e obrigado a chamar uma das ferramentas de proposta).
+      contents.push({ role: 'model', parts: fimLeitura.partes });
+      yield* cobrarProposta(env, r.modelo, base, contents, propostas, executar, usadas);
+      yield { fim: true, motor: r.modelo, entrada, saida, ferramentas: usadas };
+      return;
+    }
+
     if (!chamadas.length || !executar) {
       if (fimLeitura.bloqueio) yield { texto: `\n\n_(O Gemini interrompeu esta resposta: ${fimLeitura.bloqueio}.)_` };
       yield { fim: true, motor: r.modelo, entrada, saida, ferramentas: usadas };
@@ -104,6 +115,40 @@ export async function* responder(env, { sistema, historico, ferramentas, executa
   }
   yield { texto: '\n\n_(Parei aqui: foram consultas demais para uma mensagem só.)_' };
   yield { fim: true, motor: modelos[0], entrada, saida, ferramentas: usadas };
+}
+
+// O texto diz que ha uma proposta/cartao esperando, mas nenhuma ferramenta de proposta
+// foi chamada neste turno.
+function anunciouSemChamar(texto, usadas, propostas) {
+  if (usadas.some((n) => propostas.includes(n))) return false;
+  return /(no cart[aã]o|confirm(e|ar) (a|o|no|na|abaixo)|preparei (uma|a|o)|propus|deixei (pronta|pronto)|aguardando (a )?(sua )?confirma)/i.test(texto);
+}
+
+async function* cobrarProposta(env, modelo, base, contents, propostas, executar, usadas) {
+  const corpo = {
+    ...base,
+    contents: [...contents, { role: 'user', parts: [{ text: '[Aviso do sistema, não do dono] Você anunciou uma proposta, mas não chamou a ferramenta, então o cartão não apareceu. Chame AGORA a ferramenta da proposta que você anunciou, com os mesmos dados. Não escreva texto.' }] }],
+    toolConfig: { functionCallingConfig: { mode: 'ANY', allowedFunctionNames: propostas } },
+  };
+  if (!corpo.generationConfig) delete corpo.generationConfig;
+  const falhou = '\n\n_(A proposta não chegou a virar cartão. Peça de novo: "crie o cartão dessa tarefa".)_';
+  let fim = null;
+  try {
+    const r = await chamar(env, [modelo, modelo], JSON.stringify(corpo), 99);
+    for await (const p of lerSSE(r.resposta)) if (!p.texto) fim = p;
+  } catch (e) {
+    console.error('[jean/motor] cobrar proposta', e && e.message);
+    yield { texto: falhou };
+    return;
+  }
+  const chamadas = (fim ? fim.partes : []).filter((p) => p.functionCall && propostas.includes(p.functionCall.name));
+  let cartoes = 0;
+  for (const c of chamadas) {
+    usadas.push(c.functionCall.name);
+    const feito = await executar(c.functionCall.name, c.functionCall.args || {});
+    if (feito.acao) { cartoes++; yield { acao: feito.acao }; }
+  }
+  if (!cartoes) yield { texto: falhou };
 }
 
 async function chamar(env, modelos, corpo, rodada) {

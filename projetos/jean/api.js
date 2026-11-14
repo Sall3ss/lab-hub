@@ -24,7 +24,7 @@ import { auditar } from '../../lib/audit.js';
 import { responder, ErroMotor } from './motor.js';
 import { instrucaoDeSistema } from './personalidade.js';
 import { contextoParaJean, dadosDoPainel, projetoPorSlug } from './contexto.js';
-import { declaracoes, executar, decidirAcao, publica } from './ferramentas.js';
+import { declaracoes, executar, decidirAcao, publica, PROPOSTAS } from './ferramentas.js';
 
 const MAX_TEXTO = 20000;         // caracteres por mensagem
 const MAX_HISTORICO = 30;        // falas enviadas ao modelo (o plano gratis tem limite por minuto)
@@ -207,7 +207,7 @@ function responderEmStreaming({ env, u, conversa, waitUntil, de }) {
       while (falas.length && falas[0].papel !== 'usuario') falas.shift();
       const sistema = sistemaBase + '\n\n' + await contextoParaJean(env, u.id, de);
       const exec = (nome, args) => executar(env, u, conversa.id, nome, args);
-      for await (const p of responder(env, { sistema, historico: falas, ferramentas: declaracoes(), executar: exec })) {
+      for await (const p of responder(env, { sistema, historico: falas, ferramentas: declaracoes(), executar: exec, propostas: PROPOSTAS })) {
         if (p.fim) { fim = p; break; }
         if (p.acao) { acoes.push(p.acao.id); await enviar({ tipo: 'acao', acao: p.acao }); continue; }
         resposta += p.texto;
