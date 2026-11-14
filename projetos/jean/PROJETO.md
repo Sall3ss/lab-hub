@@ -21,7 +21,8 @@ Beta.
 | O quê | Onde |
 | --- | --- |
 | Tela | `public/projetos/jean/` (atalho `/jean`) |
-| Servidor (rotas `/api/p/jean/...`) | `projetos/jean/api.js` (rotas), `motor.js` (Gemini), `personalidade.js` (quem a Jean é) |
+| Servidor (rotas `/api/p/jean/...`) | `projetos/jean/api.js` (rotas), `motor.js` (Gemini), `personalidade.js` (quem a Jean é), `contexto.js` (o que ela enxerga), `ferramentas.js` (consultas e propostas) |
+| Retrato dos projetos | `projetos/jean/contexto-gerado.js`, GERADO por `scripts/jean-contexto.mjs` (roda no deploy) |
 | Tabelas | prefixo `jean_`, migration `migrations/0005_jean_base.sql` |
 | Esta ficha | `projetos/jean/PROJETO.md` |
 
@@ -80,8 +81,29 @@ projeto a precisar dele.
     no meio o servidor trava e a resposta não é gravada.
   - O texto da conversa não usa a máscara de MAIÚSCULAS da casa: é conversa, não cadastro.
 
+- 🟢 **Etapa 3 (13/11):** a Jean enxerga o Lab Hub e propõe ações.
+  - **Contexto a cada mensagem** (`contexto.js`): cartão de cada projeto, começo da seção
+    Estado e o Próximo passo da ficha, tarefas abertas, notas recentes, memórias do dono e
+    de qual projeto ela foi chamada (`?de=<slug>`, aparece como etiqueta "em ..." no topo).
+  - As fichas entram no código do servidor na publicação (`scripts/jean-contexto.mjs`,
+    passo "Gerar o contexto da Jean" no deploy). O próprio hub entra como projeto "hub"
+    (PROJETO.md + ESTADO.md). Ficha inteira só pela ferramenta `ler_ficha` (a do Cyberidle
+    tem ~30 mil caracteres; ir inteira em toda mensagem gastaria a cota grátis à toa).
+  - **Consultas** (rodam na hora): `ler_ficha`, `listar_pendencias`, `buscar_conversas`,
+    `ler_conversa`.
+  - **Propostas** (cartão Confirmar / Recusar; nada grava sem confirmar): `criar_nota`,
+    `criar_tarefa`, `concluir_tarefa`, `lembrar`, `esquecer`, `sugerir_fase` (vira tarefa).
+    Confirmar é auditado. O cartão continua na conversa depois de recarregar.
+  - **Pulso do Lab Hub** (botão no topo): por projeto, fase, próximo passo, tarefas
+    (marcar feita, excluir) e notas (excluir); aba Memórias (excluir). Exclusão confirma.
+  - Lição: o Gemini 3 assina as chamadas de ferramenta (`thoughtSignature`); as partes da
+    resposta voltam ao modelo exatamente como vieram, e a conversa fica no mesmo modelo
+    depois da primeira resposta (a assinatura é dele).
+  - Conferido aqui com o modo simulado (propostas, confirmar, recusar, decidir duas vezes
+    recusado, painel, recarregar) e com um Google de mentira (ferramenta, depois texto). A
+    primeira conversa real com ferramentas é no ar.
+
 ## Próximo passo
 
-3. Contexto dos projetos + "pulso do Lab Hub" + memórias + ações com confirmação.
 4. Áudio: gravar, enviar arquivo de áudio, transcrição pelo Gemini, voz da resposta.
 5. Painel global (Ctrl+K) no hub e botão no Cyberidle.

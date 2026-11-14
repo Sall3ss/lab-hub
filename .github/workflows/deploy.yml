@@ -69,6 +69,11 @@ jobs:
           wranglerVersion: ${{ env.WRANGLER_VERSION }}
           command: pages project create ${{ env.PAGES_PROJECT }} --production-branch main
 
+      # Jean (13/11/2026): retrato dos projetos (cartao + ficha) que a assistente enxerga.
+      # Regerado aqui para nunca publicar ficha velha. Lab Hub, Claude (Opus 5.5).
+      - name: Gerar o contexto da Jean
+        run: node scripts/jean-contexto.mjs
+
       - name: Publicar Pages
         uses: cloudflare/wrangler-action@v3
         with:

@@ -14,6 +14,8 @@
   var toque = window.matchMedia('(hover: none)').matches;
 
   var estado = { conversas: [], atual: null, gerando: null, menuDe: null };
+  // De qual projeto a Jean foi chamada (?de=<slug>), para ela saber o que e "este projeto".
+  var projetoDe = new URL(location.href).searchParams.get('de') || null;
 
   // ---------------------------------------------------------------- utilidades
   function irParaEntrar() {
@@ -175,7 +177,7 @@
   });
 
   // ---------------------------------------------------------------- mensagens
-  function bolha(papel, conteudo) {
+  function bolha(papel, conteudo, acoes) {
     var el = document.createElement('div');
     el.className = 'msg msg-' + papel;
     if (papel === 'usuario') {
@@ -187,6 +189,7 @@
       el.querySelector('.md').innerHTML = TextoJean.paraHtml(conteudo);
       el.dataset.bruto = conteudo;
     }
+    (acoes || []).forEach(function (a) { cartaoAcao(el, a); });
     msgs.appendChild(el);
     return el;
   }
@@ -194,7 +197,7 @@
   function mostrarConversa(lista) {
     msgs.innerHTML = '';
     boasVindas.hidden = lista.length > 0;
-    lista.forEach(function (m) { bolha(m.papel, m.conteudo); });
+    lista.forEach(function (m) { bolha(m.papel, m.conteudo === '(proposta abaixo)' ? '' : m.conteudo, m.acoes); });
     descer();
   }
 
@@ -254,7 +257,7 @@
     var b;
     if ((b = ev.target.closest('[data-repetir]'))) {
       b.closest('.msg').remove();
-      return gerar({ repetir: true, conversa_id: estado.atual && estado.atual.id });
+      return gerar({ repetir: true, conversa_id: estado.atual && estado.atual.id, de: projetoDe });
     }
     if ((b = ev.target.closest('[data-copiar]'))) return copiar(b.closest('.msg').dataset.bruto, b);
     if ((b = ev.target.closest('.copiar-codigo'))) return copiar(b.closest('.codigo').querySelector('code').textContent, b);
@@ -285,7 +288,7 @@
     boasVindas.hidden = true;
     bolha('usuario', texto);
     descer();
-    gerar({ texto: texto, conversa_id: estado.atual && estado.atual.id });
+    gerar({ texto: texto, conversa_id: estado.atual && estado.atual.id, de: projetoDe });
   });
 
   campo.addEventListener('input', ajustarCampo);
@@ -334,6 +337,10 @@
             el.classList.remove('pensando');
             md.innerHTML = TextoJean.paraHtml(bruto);
             if (acompanhar) descer();
+          } else if (ev.tipo === 'acao') {
+            el.classList.remove('pensando');
+            cartaoAcao(el, ev.acao);
+            if (noFim()) descer();
           } else if (ev.tipo === 'erro') {
             falha = ev.erro;
           } else if (ev.tipo === 'fim') {
@@ -351,7 +358,7 @@
     } finally {
       el.dataset.bruto = bruto;
       el.classList.remove('pensando');
-      if (!bruto) el.remove();
+      if (!bruto && !el.querySelector('.proposta')) el.remove();
       if (falha) mostrarFalha(falha);
       if (estado.gerando === controle) estado.gerando = null;
       modoGerando(false);
@@ -359,12 +366,150 @@
     }
   }
 
+  // ---------------------------------------------------------------- propostas (cartões)
+  var ROTULO_ESTADO = { confirmada: 'Feito', recusada: 'Recusada' };
+  function cartaoAcao(bolhaEl, a) {
+    var corpo = bolhaEl.querySelector('.corpo');
+    var c = corpo.querySelector('.proposta[data-id="' + a.id + '"]') || document.createElement('div');
+    c.className = 'proposta proposta-' + a.estado;
+    c.dataset.id = a.id;
+    c.innerHTML = '<div class="proposta-texto"><span class="proposta-rotulo">' +
+      (a.estado === 'pendente' ? 'Proposta da Jean' : ROTULO_ESTADO[a.estado] || a.estado) + '</span><span></span></div>' +
+      (a.estado === 'pendente'
+        ? '<div class="proposta-botoes"><button type="button" class="secundario" data-decidir="recusar">Recusar</button>' +
+          '<button type="button" class="primario" data-decidir="confirmar">Confirmar</button></div>'
+        : '') + '<p class="erro" data-erro hidden></p>';
+    c.querySelector('.proposta-texto span:last-child').textContent = a.resumo;
+    if (!c.parentNode) corpo.insertBefore(c, corpo.querySelector('.acoes'));
+  }
+
+  msgs.addEventListener('click', async function (ev) {
+    var b = ev.target.closest('[data-decidir]');
+    if (!b) return;
+    var c = b.closest('.proposta');
+    c.querySelectorAll('button').forEach(function (x) { x.disabled = true; });
+    try {
+      var r = await api('/acoes/' + c.dataset.id, { method: 'POST', body: JSON.stringify({ decisao: b.dataset.decidir }) });
+      cartaoAcao(c.closest('.msg'), r.acao);
+      if (!painel.hidden) carregarPainel();
+    } catch (e) {
+      c.querySelectorAll('button').forEach(function (x) { x.disabled = false; });
+      mostrarErro(c, erroDeRede(e));
+    }
+  });
+
+  // ---------------------------------------------------------------- pulso do Lab Hub
+  var painel = $('painel'), veuPainel = $('veu-painel'), corpoPainel = $('painel-corpo');
+  var abaAtual = 'projetos', dadosPainel = null;
+  var FASE = { beta: 'Beta', pronto: 'Pronto para migrar', migrado: 'Migrado', 'no ar': 'No ar' };
+  var TIPO = { fato: 'Fato', preferencia: 'Preferência', decisao: 'Decisão', regra: 'Regra' };
+
+  function abrirPainel(abrir) {
+    painel.hidden = !abrir;
+    veuPainel.hidden = !abrir;
+    if (abrir) { carregarPainel(); $('fechar-painel').focus(); }
+  }
+  $('abrir-painel').addEventListener('click', function () { abrirPainel(true); });
+  $('fechar-painel').addEventListener('click', function () { abrirPainel(false); });
+  veuPainel.addEventListener('click', function () { abrirPainel(false); });
+
+  painel.querySelectorAll('[data-aba]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      abaAtual = b.dataset.aba;
+      painel.querySelectorAll('[data-aba]').forEach(function (x) {
+        x.classList.toggle('ativa', x === b); x.setAttribute('aria-selected', x === b ? 'true' : 'false');
+      });
+      desenharPainel();
+    });
+  });
+
+  async function carregarPainel() {
+    if (!dadosPainel) corpoPainel.innerHTML = '<p class="vazio-lateral">Carregando...</p>';
+    try { dadosPainel = await api('/painel'); desenharPainel(); }
+    catch (e) { corpoPainel.innerHTML = '<p class="vazio-lateral">Não foi possível carregar. <button type="button" class="link" data-recarregar-painel>Tentar de novo</button></p>'; }
+  }
+
+  function data(iso) { return iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : ''; }
+  var lixeira = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>';
+
+  function desenharPainel() {
+    if (!dadosPainel) return;
+    if (abaAtual === 'memorias') {
+      var ms = dadosPainel.memorias;
+      corpoPainel.innerHTML = ms.length
+        ? '<p class="painel-dica">O que a Jean lembra entre conversas. Para guardar algo novo, peça a ela: "Jean, lembre que...".</p>' +
+          ms.map(function (m) {
+            return '<div class="linha"><div class="linha-texto"><span class="etiqueta">' + esc(TIPO[m.tipo] || m.tipo) + '</span>' +
+              (m.projeto_slug ? '<span class="etiqueta">' + esc(m.projeto_slug) + '</span>' : '') + ' ' + esc(m.texto) + '</div>' +
+              '<button type="button" class="icone pequeno" data-apagar="memorias" data-id="' + m.id + '" aria-label="Apagar memória">' + lixeira + '</button></div>';
+          }).join('')
+        : '<p class="vazio-lateral">A Jean ainda não guardou nenhuma memória. Diga, por exemplo: "Jean, lembre que eu prefiro respostas curtas".</p>';
+      return;
+    }
+    corpoPainel.innerHTML = dadosPainel.projetos.map(function (p) {
+      var abertas = p.tarefas.filter(function (t) { return t.estado === 'aberta'; });
+      var feitas = p.tarefas.filter(function (t) { return t.estado === 'feita'; });
+      var link = p.slug === 'hub' ? '/' : (p.endereco || '/projetos/' + encodeURIComponent(p.slug) + '/');
+      var tarefa = function (t) {
+        return '<div class="linha"><label class="tarefa' + (t.estado === 'feita' ? ' feita' : '') + '"><input type="checkbox" data-tarefa="' + t.id + '"' +
+          (t.estado === 'feita' ? ' checked' : '') + '><span>' + esc(t.titulo) + (t.detalhe ? '<small>' + esc(t.detalhe) + '</small>' : '') + '</span></label>' +
+          '<button type="button" class="icone pequeno" data-apagar="tarefas" data-id="' + t.id + '" aria-label="Excluir tarefa">' + lixeira + '</button></div>';
+      };
+      return '<section class="projeto">' +
+        '<div class="projeto-topo"><h3>' + esc(p.titulo) + '</h3><span class="fase">' + esc(FASE[p.fase] || p.fase) + '</span></div>' +
+        (p.proximo ? '<p class="projeto-proximo"><strong>Próximo passo:</strong> ' + esc(p.proximo.replace(/\n+/g, ' ').slice(0, 220)) + (p.proximo.length > 220 ? '...' : '') + '</p>' : '') +
+        '<h4>Tarefas abertas (' + abertas.length + ')</h4>' +
+        (abertas.length ? abertas.map(tarefa).join('') : '<p class="painel-vazio">Nenhuma. Peça à Jean: "crie uma tarefa aqui para..."</p>') +
+        (feitas.length ? '<details><summary>' + feitas.length + ' feita' + (feitas.length > 1 ? 's' : '') + '</summary>' + feitas.map(tarefa).join('') + '</details>' : '') +
+        (p.notas.length ? '<h4>Notas</h4>' + p.notas.map(function (n) {
+          return '<div class="linha"><div class="linha-texto"><span class="data">' + data(n.criada_em) + '</span> ' + esc(n.texto) + '</div>' +
+            '<button type="button" class="icone pequeno" data-apagar="notas" data-id="' + n.id + '" aria-label="Excluir nota">' + lixeira + '</button></div>';
+        }).join('') : '') +
+        '<a class="projeto-abrir" href="' + esc(link) + '">Abrir ' + esc(p.slug === 'hub' ? 'o hub' : p.titulo) + ' →</a>' +
+        '</section>';
+    }).join('');
+  }
+
+  corpoPainel.addEventListener('change', async function (ev) {
+    var cb = ev.target.closest('[data-tarefa]');
+    if (!cb) return;
+    cb.disabled = true;
+    try { await api('/tarefas/' + cb.dataset.tarefa, { method: 'PATCH', body: JSON.stringify({ estado: cb.checked ? 'feita' : 'aberta' }) }); await carregarPainel(); }
+    catch (e) { cb.checked = !cb.checked; cb.disabled = false; alertaPainel(erroDeRede(e)); }
+  });
+
+  var apagarPendente = null;
+  var NOME_APAGAR = { tarefas: 'tarefa', notas: 'nota', memorias: 'memória' };
+  corpoPainel.addEventListener('click', function (ev) {
+    if (ev.target.closest('[data-recarregar-painel]')) return carregarPainel();
+    var b = ev.target.closest('[data-apagar]');
+    if (!b) return;
+    apagarPendente = { tipo: b.dataset.apagar, id: b.dataset.id };
+    var linha = b.closest('.linha');
+    $('confirmar-titulo').textContent = 'Excluir ' + NOME_APAGAR[apagarPendente.tipo] + '?';
+    $('confirmar-texto').textContent = '"' + linha.textContent.trim().slice(0, 160) + '" será apagada. Não dá para desfazer.';
+    mostrarErro($('janela-confirmar'), '');
+    $('janela-confirmar').showModal();
+  });
+  $('confirmar-sim').addEventListener('click', async function () {
+    var j = $('janela-confirmar');
+    try {
+      await api('/' + apagarPendente.tipo + '/' + apagarPendente.id, { method: 'DELETE' });
+      j.close();
+      await carregarPainel();
+    } catch (e) { mostrarErro(j, erroDeRede(e)); }
+  });
+  function alertaPainel(msg) {
+    corpoPainel.insertAdjacentHTML('afterbegin', '<p class="erro">' + esc(msg) + '</p>');
+  }
+
   // ---------------------------------------------------------------- início
   $('abrir-lateral').addEventListener('click', function () { lateral(true); });
   document.querySelectorAll('[data-fechar-lateral]').forEach(function (el) {
     el.addEventListener('click', function () { lateral(false); });
   });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { lateral(false); fecharMenu(); } });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { lateral(false); fecharMenu(); if (!painel.hidden) abrirPainel(false); } });
+  if (projetoDe) { var chip = $('contexto-chip'); chip.textContent = 'em ' + projetoDe; chip.hidden = false; }
 
   $('sair').addEventListener('click', async function () {
     try { await fetch('/api/sessao/sair', { method: 'POST', credentials: 'same-origin' }); } catch (e) { /* sai mesmo assim */ }

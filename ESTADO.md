@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 13/11/2026 (Jean: etapa 2, conversa por texto com o Gemini grátis).**
+**Atualizado em 13/11/2026 (Jean: etapa 3, contexto dos projetos, memórias e ações com confirmação).**
 
 ## Pronto
 
@@ -60,8 +60,10 @@
    projeto que precisa de login manda para `/entrar/?volta=...`.
 9. 🟡 **Jean (13/11): assistente do hub, em `/jean`.** Etapa 1 no ar (login, tabelas
    `jean_*`, casca da tela) e etapa 2 (conversa por texto com o Gemini grátis, lista de
-   conversas com busca, fixar, renomear, excluir). Tudo grátis na BETA. Chave
-   `GEMINI_API_KEY` gravada pelo dono no Pages. Estado e decisões em `projetos/jean/PROJETO.md`.
+   conversas com busca, fixar, renomear, excluir; confirmada pelo dono no ar) e etapa 3
+   (enxerga as fichas dos projetos, memórias, propõe nota/tarefa/memória com cartão de
+   confirmação, painel "Pulso do Lab Hub"). Tudo grátis na BETA. Chave `GEMINI_API_KEY`
+   gravada pelo dono no Pages. O deploy agora roda `scripts/jean-contexto.mjs`. Estado e decisões em `projetos/jean/PROJETO.md`.
 
 ## ClipStudio: arquivado em 15/10/2026
 
