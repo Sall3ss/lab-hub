@@ -25,7 +25,7 @@ import { db } from '../../lib/db.js';
 import { auditar } from '../../lib/audit.js';
 import { responder, ErroMotor, transcrever, vozDoGemini } from './motor.js';
 import { instrucaoDeSistema } from './personalidade.js';
-import { contextoParaJean, dadosDoPainel, projetoPorSlug } from './contexto.js';
+import { contextoParaJean, dadosDoPainel, projetoPorSlug, todosOsProjetos } from './contexto.js';
 import { declaracoes, executar, decidirAcao, publica, PROPOSTAS } from './ferramentas.js';
 
 const MAX_TEXTO = 20000;         // caracteres por mensagem
@@ -197,7 +197,7 @@ async function mensagemDeAudio({ request, env, u, json, waitUntil }) {
   if (bytes.length > MAX_AUDIO) return json({ erro: 'Áudio grande demais (máximo de uns 8 MB, perto de 10 minutos).' }, 413);
 
   let ouvido;
-  try { ouvido = await transcrever(env, bytes, mime); }
+  try { ouvido = await transcrever(env, bytes, mime, ['Jean', 'Lab Hub', 'Pulso', ...todosOsProjetos().map((p) => p.titulo)]); }
   catch (e) { return json({ erro: e instanceof ErroMotor ? e.message : 'Não foi possível ouvir o áudio agora. Tente de novo.' }, 502); }
   if (!ouvido.transcricao) return json({ erro: 'Não consegui entender o áudio. Fale mais perto do microfone e tente de novo.' }, 422);
 

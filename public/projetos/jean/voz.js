@@ -201,34 +201,76 @@ var VozJean = (function () {
   // ------------------------------------------------------------------ ouvir (Modo A)
   var Reconhecedor = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-  // O navegador nao conhece "Jean" em ingles: costuma escrever Djin, Gin, Jim...
+  // O navegador nao conhece "Jean" em ingles nem os nomes do hub: corrige os enganos comuns.
   function corrigirNome(t) {
     return t
-      .replace(/^(\s*)(djin|djim|gin|jin|jim|gim|dim|din)\b/i, '$1Jean')
-      .replace(/\b(djin|djim|gin|jin|jim|gim)\b(?=\s*[,!?])/gi, 'Jean');
+      .replace(/^(\s*)(djin|djim|gin|jin|jim|gim|dim|din|jean)\b[,.]?/i, '$1Jean,')
+      .replace(/\b(djin|djim|gin|jin|jim|gim)\b(?=\s*[,!?])/gi, 'Jean')
+      .replace(/\bcyber[\s-]?(idol|ido|idle|aidol|aidou|aido|idou|ideal|ideo|io)\b/gi, 'Cyberidle')
+      .replace(/\blab[\s-]?(hub|hab|rub|rab|ab)\b/gi, 'Lab Hub')
+      .replace(/^Jean,\s*$/, 'Jean');
   }
 
-  /** Ditado: escuta em pt-BR e devolve o texto enquanto a pessoa fala. */
+  // 14/11 no ar (Android): o Chrome do celular reenvia a frase INTEIRA a cada pedaco
+  // ("dim o que", "dim o que ficou", "dim o que ficou faltando"...) e somar os pedacos
+  // duplicava tudo. Agora o texto e remontado do zero a cada evento, e um pedaco que
+  // apenas repete o anterior com mais palavras SUBSTITUI o anterior em vez de somar.
+  function normal(t) { return t.toLowerCase().replace(/[^\p{L}\p{N} ]/gu, '').replace(/\s+/g, ' ').trim(); }
+  function juntar(pedacos) {
+    var partes = [];
+    pedacos.forEach(function (t) {
+      t = String(t || '').trim();
+      if (!t) return;
+      var ult = partes[partes.length - 1];
+      if (ult === undefined) { partes.push(t); return; }
+      var a = normal(ult).split(' '), b = normal(t).split(' '), comum = 0;
+      while (comum < a.length && comum < b.length && a[comum] === b[comum]) comum++;
+      if (comum === b.length && b.length <= a.length) return;                 // repetiu igual ou menor: ignora
+      if (comum >= 1 && comum >= a.length - 1) partes[partes.length - 1] = t;  // cresceu (ou corrigiu a ultima palavra): troca
+      else partes.push(t);
+    });
+    // Mesma palavra 3+ vezes seguidas ("dim dim dim") vira uma so. "que que" (2x) e fala normal.
+    return partes.join(' ').replace(/\b(\p{L}+)(\s+\1\b){2,}/giu, '$1').replace(/\s+/g, ' ').trim();
+  }
+
+  var android = /Android/i.test(navigator.userAgent);
+
+  /**
+   * Ouve em pt-BR. opcoes.aoTexto(texto) enquanto fala; aoFim(texto) ao terminar.
+   * opcoes.continuo: no ditado, segue ouvindo ate a pessoa parar (no Android, que nao
+   * aguenta o modo continuo, isso e feito religando a escuta a cada frase).
+   */
   function ouvir(opcoes) {
     if (!Reconhecedor) return null;
     var rec = new Reconhecedor();
     rec.lang = 'pt-BR';
     rec.interimResults = true;
-    rec.continuous = true;
-    var finalizado = '';
+    rec.continuous = !android;
+    rec.maxAlternatives = 1;
+    var anteriores = '', atual = '', parado = false;
+    function textoTodo() { return corrigirNome(juntar([anteriores, atual])); }
     rec.onresult = function (ev) {
-      var parcial = '';
-      for (var i = ev.resultIndex; i < ev.results.length; i++) {
-        var r = ev.results[i];
-        if (r.isFinal) finalizado += r[0].transcript + ' ';
-        else parcial += r[0].transcript;
-      }
-      if (opcoes.aoTexto) opcoes.aoTexto(corrigirNome((finalizado + parcial).replace(/\s+/g, ' ').trim()), !parcial);
+      var lista = [];
+      for (var i = 0; i < ev.results.length; i++) lista.push(ev.results[i][0].transcript);
+      atual = juntar(lista);
+      if (opcoes.aoTexto) opcoes.aoTexto(textoTodo());
     };
-    rec.onerror = function (ev) { if (opcoes.aoErro) opcoes.aoErro(ev.error); };
-    rec.onend = function () { if (opcoes.aoFim) opcoes.aoFim(corrigirNome(finalizado.trim())); };
+    rec.onerror = function (ev) {
+      if (ev.error === 'no-speech' || ev.error === 'aborted') return; // silencio: so termina
+      if (opcoes.aoErro) opcoes.aoErro(ev.error);
+    };
+    rec.onend = function () {
+      if (android && opcoes.continuo && !parado) {
+        anteriores = juntar([anteriores, atual]); atual = '';
+        try { rec.start(); return; } catch (e) { /* nao religou: termina */ }
+      }
+      if (opcoes.aoFim) opcoes.aoFim(textoTodo());
+    };
     try { rec.start(); } catch (e) { if (opcoes.aoErro) opcoes.aoErro('start'); return null; }
-    return { parar: function () { try { rec.stop(); } catch (e) { /* ja parou */ } }, abortar: function () { try { rec.abort(); } catch (e) { /* nada */ } } };
+    return {
+      parar: function () { parado = true; try { rec.stop(); } catch (e) { /* ja parou */ } },
+      abortar: function () { parado = true; try { rec.abort(); } catch (e) { /* nada */ } },
+    };
   }
 
   // ------------------------------------------------------------------ gravar (Modo B)

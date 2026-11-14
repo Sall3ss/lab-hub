@@ -204,6 +204,17 @@ projeto a precisar dele.
   respondeu falando com "Voz: Gemini (gemini-3.8-flash-tts)". O streaming de voz do
   Google foi lido certo (não precisou da reserva do navegador).
 
+- 🟡 **14/11 - Ditado duplicando palavras no celular (print do dono):** "Jean dim dim dim
+  ... o que que ficou faltando dim o que que ficou faltando no projeto...". Causa: o
+  Chrome do Android reenvia a frase inteira a cada pedaço e o código somava os pedaços.
+  Corrigido em `voz.js`: o texto é remontado do zero a cada evento; pedaço que repete o
+  anterior com mais palavras (ou corrigindo a última) substitui em vez de somar; palavra
+  repetida 3+ vezes seguidas vira uma; no Android a escuta é por frase (o modo contínuo
+  é o que dá problema lá) e o ditado religa sozinho até você parar. Correções de nomes:
+  Djin/Gin/Jim/Dim no começo → "Jean", "Cyber Idol/ido/idle" → "Cyberidle", "Lab Rub" →
+  "Lab Hub". No áudio gravado (Gemini), a transcrição recebe a lista de nomes do hub.
+  Testado com a sequência exata do print. Falta o dono repetir no celular.
+
 ## Próximo passo
 
 - MVP completo (etapas 1 a 5). Próximo passo é decisão do dono.

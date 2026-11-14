@@ -452,6 +452,7 @@
     VozJean.parar();
     var antes = campo.value.trim() ? campo.value.trim() + ' ' : '';
     ditado = VozJean.ouvir({
+      continuo: true,
       aoTexto: function (t) { campo.value = antes + t; ajustarCampo(); },
       aoErro: function (e) { if (e === 'not-allowed' || e === 'service-not-allowed') aviso('O navegador bloqueou o microfone. Libere o microfone para este site e tente de novo.'); },
       aoFim: function () { ditado = null; botaoDitado.classList.remove('ouvindo'); botaoDitado.setAttribute('aria-label', 'Ditar (falar e o texto aparece)'); campo.focus(); },

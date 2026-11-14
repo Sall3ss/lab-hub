@@ -251,13 +251,13 @@ async function* simulado(historico, executar) {
  * Modo B: o Gemini OUVE o audio gravado e devolve { transcricao, tom }. O audio nao fica
  * guardado em lugar nenhum: so a transcricao vai para a conversa.
  */
-export async function transcrever(env, bytes, mime) {
+export async function transcrever(env, bytes, mime, nomes = []) {
   if (env.JEAN_SIMULADO === '1') return { transcricao: 'Mensagem de voz simulada: crie uma tarefa de teste', tom: 'calmo (simulado)' };
   if (!env.GEMINI_API_KEY) throw new ErroMotor('A chave do Gemini (GEMINI_API_KEY) não está configurada no Pages.', 503);
   const corpo = JSON.stringify({
     contents: [{ role: 'user', parts: [
       { inlineData: { mimeType: mime, data: paraBase64(bytes) } },
-      { text: 'Transcreva fielmente este áudio em português do Brasil, com pontuação. A assistente se chama Jean, pronunciado em inglês "Djin" (/dʒiːn/): quando ouvir "Djin", "Gin", "Jin" ou "Jim" chamando a assistente, escreva "Jean". Em "tom", descreva em poucas palavras o tom de voz e a intenção (ex.: "animado, com pressa"). Se não houver fala compreensível, devolva transcricao vazia.' },
+      { text: `Transcreva fielmente este áudio em português do Brasil, com pontuação. A assistente se chama Jean, pronunciado em inglês "Djin" (/dʒiːn/): quando ouvir "Djin", "Gin", "Jin" ou "Jim" chamando a assistente, escreva "Jean".${nomes.length ? ' Nomes próprios que podem aparecer (escreva assim): ' + nomes.join(', ') + '.' : ''} Não repita palavras nem trechos. Em "tom", descreva em poucas palavras o tom de voz e a intenção (ex.: "animado, com pressa"). Se não houver fala compreensível, devolva transcricao vazia.` },
     ] }],
     generationConfig: {
       responseMimeType: 'application/json',
