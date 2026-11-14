@@ -225,6 +225,19 @@ projeto a precisar dele.
   60 s; caminho normal intacto. **Dono repetiu no celular e deu certo** (transcrição sem
   repetição e resposta falada).
 
+- 🟡 **14/11 - No PC a voz "não registrou nenhuma transcrição"** (no celular funciona).
+  Navegador do dono não informado. Causas prováveis: navegador sem o serviço de
+  reconhecimento (Brave, Opera), microfone padrão do navegador diferente do configurado,
+  e o erro "não ouvi nada" que sumia calado. Feito: (1) toda falha de escuta vira
+  mensagem com o que fazer; (2) janela **Microfone** (na conversa por voz): escolher o
+  microfone (gravar e ouvir pelo Gemini), medidor de volume ao vivo, e escolher como a
+  conversa por voz ouve - **Navegador** (texto ao vivo, microfone padrão do navegador) ou
+  **Gemini** (grava, percebe quando você parou de falar pelo volume e o Gemini
+  transcreve; qualquer navegador, microfone escolhido); (3) se o reconhecimento do
+  navegador falhar por serviço indisponível, a conversa passa sozinha a ouvir pelo
+  Gemini. Preferências lembradas no aparelho. Testado com microfone falso e com
+  reconhecimento que falha como no Brave. Falta o dono testar no PC.
+
 ## Próximo passo
 
 - MVP completo (etapas 1 a 5). Próximo passo é decisão do dono.

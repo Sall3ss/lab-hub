@@ -101,6 +101,7 @@
       <p class="voz-transcricao" id="voz-transcricao"></p>
       <p class="voz-motor" id="voz-motor"></p>
       <div class="voz-botoes">
+        <button type="button" class="secundario" id="voz-microfone">Microfone</button>
         <button type="button" class="secundario" id="voz-falar-agora" hidden>Falar agora</button>
         <button type="button" class="primario" id="voz-encerrar">Encerrar</button>
       </div>
@@ -124,6 +125,26 @@
     </div>
     <div class="painel-corpo" id="painel-corpo"></div>
   </aside>
+
+  <dialog class="janela" id="janela-microfone" aria-labelledby="mic-titulo">
+    <div class="janela-caixa">
+      <h2 id="mic-titulo">Microfone</h2>
+      <label class="mic-campo">Microfone usado para gravar áudio e para ouvir pelo Gemini
+        <select id="mic-lista"></select>
+      </label>
+      <div class="mic-medidor" aria-hidden="true"><span id="mic-nivel"></span></div>
+      <p class="janela-texto" id="mic-dica">Fale alguma coisa: a barra acima deve se mexer.</p>
+      <fieldset class="mic-modo">
+        <legend>Na conversa por voz, ouvir com</legend>
+        <label><input type="radio" name="escuta" value="navegador"> <span><strong>Navegador</strong> - o texto aparece enquanto você fala. Usa o microfone padrão do próprio navegador.</span></label>
+        <label><input type="radio" name="escuta" value="gemini"> <span><strong>Gemini</strong> - entende melhor nomes e contexto, funciona em qualquer navegador e usa o microfone escolhido acima. Leva uns segundos a mais.</span></label>
+      </fieldset>
+      <p class="janela-texto pequeno">Para trocar o microfone do modo Navegador (Chrome ou Edge): clique no cadeado ao lado do endereço do site › Configurações do site › Microfone. No Windows, confira também Configurações › Sistema › Som › Entrada.</p>
+      <div class="janela-botoes">
+        <button type="button" class="primario" data-cancelar>Fechar</button>
+      </div>
+    </div>
+  </dialog>
 
   <dialog class="janela" id="janela-copiar" aria-labelledby="copiar-titulo">
     <div class="janela-caixa">

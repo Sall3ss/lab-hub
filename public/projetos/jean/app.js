@@ -455,6 +455,19 @@
   marcarVozAutomatica();
   document.addEventListener('pointerdown', function () { VozJean.destravar(); });
 
+  // Erros do reconhecimento de voz do navegador, em portugues e com o que fazer.
+  function erroDeEscuta(cod) {
+    var msgs = {
+      'not-allowed': 'O navegador bloqueou o microfone. Clique no cadeado ao lado do endereço do site e libere o microfone.',
+      'service-not-allowed': 'O reconhecimento de voz deste navegador não está disponível (acontece no Brave e no Opera). Use o botão de gravar áudio, ou na conversa por voz escolha ouvir pelo Gemini (botão Microfone).',
+      'network': 'O reconhecimento de voz deste navegador não está funcionando (acontece no Brave e no Opera, ou sem internet). Use o botão de gravar áudio, ou na conversa por voz escolha ouvir pelo Gemini (botão Microfone).',
+      'audio-capture': 'O navegador não encontrou microfone. Confira se ele está conectado e escolhido (botão Microfone, na conversa por voz).',
+      'language-not-supported': 'O reconhecimento de voz deste navegador não aceita português. Use o botão de gravar áudio.',
+    };
+    return msgs[cod] || 'O reconhecimento de voz falhou (' + cod + '). Use o botão de gravar áudio.';
+  }
+  var NAO_OUVI = 'Não ouvi nada. Confira qual microfone o navegador está usando (conversa por voz › botão Microfone) ou use o botão de gravar áudio.';
+
   // ---- Modo A: ditado (o texto aparece na caixa enquanto fala)
   var ditado = null;
   var botaoDitado = $('ditado');
@@ -463,11 +476,12 @@
     if (ditado) { ditado.parar(); return; }
     VozJean.parar();
     var antes = campo.value.trim() ? campo.value.trim() + ' ' : '';
+    var ouviuAlgo = false, errou = false;
     ditado = VozJean.ouvir({
       continuo: true,
-      aoTexto: function (t) { campo.value = antes + t; ajustarCampo(); },
-      aoErro: function (e) { if (e === 'not-allowed' || e === 'service-not-allowed') aviso('O navegador bloqueou o microfone. Libere o microfone para este site e tente de novo.'); },
-      aoFim: function () { ditado = null; botaoDitado.classList.remove('ouvindo'); botaoDitado.setAttribute('aria-label', 'Ditar (falar e o texto aparece)'); campo.focus(); },
+      aoTexto: function (t) { if (t) ouviuAlgo = true; campo.value = antes + t; ajustarCampo(); },
+      aoErro: function (e) { errou = true; aviso(erroDeEscuta(e)); },
+      aoFim: function () { if (!ouviuAlgo && !errou) aviso(NAO_OUVI); ditado = null; botaoDitado.classList.remove('ouvindo'); botaoDitado.setAttribute('aria-label', 'Ditar (falar e o texto aparece)'); campo.focus(); },
     });
     if (ditado) { botaoDitado.classList.add('ouvindo'); botaoDitado.setAttribute('aria-label', 'Parar o ditado'); }
   });
@@ -545,7 +559,13 @@
   // ---- Conversa por voz (Modo A, maos livres): ouve -> envia na pausa -> fala -> ouve
   var conversaVoz = { ativa: false, escuta: null, silencio: null, ultimo: '' };
   var telaVoz = $('voz-conversa'), orbe = $('voz-orbe');
-  $('abrir-conversa-voz').hidden = !VozJean.temDitado;
+  // Como ouvir na conversa por voz: 'navegador' (texto ao vivo) ou 'gemini' (grava e o
+  // Gemini transcreve; qualquer navegador, microfone escolhido). Lembrado no aparelho.
+  var escutaPreferida = VozJean.temDitado ? 'navegador' : 'gemini';
+  try { escutaPreferida = localStorage.getItem('jean.escuta') || escutaPreferida; } catch (e) { /* nada */ }
+  if (!VozJean.temDitado) escutaPreferida = 'gemini';
+  function ouvirPeloGemini() { return escutaPreferida === 'gemini' || conversaVoz.forcarGemini; }
+  $('abrir-conversa-voz').hidden = !(VozJean.temDitado || VozJean.temGravador);
   function estadoVoz(texto, classe) {
     $('voz-estado').textContent = texto;
     orbe.className = 'voz-orbe ' + (classe || '');
@@ -553,6 +573,8 @@
   }
   function escutarConversa() {
     if (!conversaVoz.ativa) return;
+    orbe.style.transform = '';
+    if (ouvirPeloGemini()) return escutarConversaPeloGemini();
     conversaVoz.ultimo = '';
     $('voz-transcricao').textContent = '';
     estadoVoz('Ouvindo... pode falar.', 'ouvindo');
@@ -565,34 +587,72 @@
         if (t) conversaVoz.silencio = setTimeout(function () { if (conversaVoz.escuta) conversaVoz.escuta.parar(); }, 1300);
       },
       aoErro: function (e) {
-        if (e === 'not-allowed' || e === 'service-not-allowed') { estadoVoz('O navegador bloqueou o microfone. Libere o microfone para este site.', 'parado'); conversaVoz.bloqueado = true; }
+        // Navegador sem o servico (Brave, Opera...): passa a ouvir pelo Gemini sozinho.
+        if ((e === 'network' || e === 'service-not-allowed' || e === 'language-not-supported') && VozJean.temGravador) { conversaVoz.forcarGemini = true; conversaVoz.trocou = true; return; }
+        estadoVoz(erroDeEscuta(e), 'parado'); conversaVoz.bloqueado = true;
       },
       aoFim: function (final) {
         conversaVoz.escuta = null;
         clearTimeout(conversaVoz.silencio);
-        if (!conversaVoz.ativa || conversaVoz.bloqueado) return;
+        if (!conversaVoz.ativa) return;
+        if (conversaVoz.trocou) { conversaVoz.trocou = false; $('voz-motor').textContent = 'O reconhecimento deste navegador não funcionou: agora ouço pelo Gemini.'; escutarConversa(); return; }
+        if (conversaVoz.bloqueado) return;
         var t = (final || conversaVoz.ultimo || '').trim();
-        if (!t) { estadoVoz('Não ouvi nada. Toque em "Falar agora" quando quiser.', 'parado'); return; }
+        if (!t) { estadoVoz('Não ouvi nada. Confira o microfone (botão Microfone) e toque em "Falar agora".', 'parado'); return; }
         enviarFalaDaConversa(t);
       },
     });
     if (!conversaVoz.escuta) estadoVoz('Não foi possível abrir o microfone.', 'parado');
   }
-  async function enviarFalaDaConversa(t) {
-    estadoVoz('Pensando...', 'pensando');
+  async function escutarConversaPeloGemini() {
+    $('voz-transcricao').textContent = '';
+    estadoVoz('Ouvindo... pode falar (o Gemini transcreve quando você parar).', 'ouvindo');
+    var escuta;
+    try {
+      escuta = await VozJean.escutarPeloGemini({
+        aoNivel: function (n) { orbe.style.transform = 'scale(' + (1 + Math.min(n, 1) * 0.25).toFixed(3) + ')'; },
+        aoComecarFala: function () { $('voz-transcricao').textContent = '(ouvindo você...)'; },
+        aoFim: function (blob, segundos) {
+          conversaVoz.escuta = null;
+          orbe.style.transform = '';
+          if (!conversaVoz.ativa) return;
+          if (!blob) { estadoVoz('Não ouvi nada. Confira o microfone (botão Microfone) e toque em "Falar agora".', 'parado'); return; }
+          enviarAudioDaConversa(blob, segundos);
+        },
+      });
+    } catch (e) {
+      estadoVoz(e && e.name === 'NotAllowedError' ? erroDeEscuta('not-allowed') : 'Não foi possível abrir o microfone: ' + ((e && e.message) || 'erro'), 'parado');
+      return;
+    }
+    if (!conversaVoz.ativa) { escuta.abortar(); return; }
+    conversaVoz.escuta = escuta;
+  }
+
+  async function enviarAudioDaConversa(blob, segundos) {
     boasVindas.hidden = true;
-    bolha('usuario', t);
+    var b = bolha('usuario', '🎤 Áudio de ' + minutos(segundos) + ' · a Jean está ouvindo...', null, 'audio');
+    b.classList.add('transcrevendo');
     descer();
+    var r = await esperarResposta(gerar.bind(null, { conversa_id: estado.atual && estado.atual.id, de: projetoDe, pagina: pagina }, { blob: blob, segundos: segundos, bolha: b }));
+    $('voz-transcricao').textContent = b.classList.contains('transcrevendo') ? '' : b.querySelector('.balao').textContent;
+    responderNaConversa(r);
+  }
+
+  // "Pensando... N s" enquanto a resposta nao chega.
+  async function esperarResposta(pedir) {
+    estadoVoz('Pensando...', 'pensando');
     var t0 = Date.now();
     var contador = setInterval(function () {
       if (orbe.classList.contains('pensando')) $('voz-estado').textContent = 'Pensando... ' + Math.round((Date.now() - t0) / 1000) + ' s';
     }, 1000);
-    var r;
-    try { r = await gerar({ texto: t, conversa_id: estado.atual && estado.atual.id, de: projetoDe, pagina: pagina }); }
-    catch (e) { r = { falha: (e && e.message) || 'erro inesperado' }; }
+    try { return await pedir(); }
+    catch (e) { return { falha: (e && e.message) || 'erro inesperado' }; }
     finally { clearInterval(contador); }
+  }
+
+  function responderNaConversa(r) {
     if (!conversaVoz.ativa) return;
-    if (r.falha || !r.bruto) { estadoVoz(r.falha ? 'Algo falhou: ' + r.falha : 'A Jean não respondeu.', 'parado'); return; }
+    if (!r || r.falha || !r.bruto) { estadoVoz(r && r.falha ? 'Algo falhou: ' + r.falha : 'A Jean não respondeu.', 'parado'); return; }
     estadoVoz('Falando...', 'falando');
     falarMensagem(r.el, function (info) {
       if (!conversaVoz.ativa) return;
@@ -600,11 +660,20 @@
       escutarConversa();
     });
   }
+
+  async function enviarFalaDaConversa(t) {
+    boasVindas.hidden = true;
+    bolha('usuario', t);
+    descer();
+    var r = await esperarResposta(gerar.bind(null, { texto: t, conversa_id: estado.atual && estado.atual.id, de: projetoDe, pagina: pagina }));
+    responderNaConversa(r);
+  }
+
   function abrirConversaVoz() {
     VozJean.destravar();
     VozJean.parar();
     if (ditado) ditado.parar();
-    conversaVoz.ativa = true; conversaVoz.bloqueado = false;
+    conversaVoz.ativa = true; conversaVoz.bloqueado = false; conversaVoz.trocou = false;
     $('voz-motor').textContent = '';
     telaVoz.hidden = false;
     escutarConversa();
@@ -620,6 +689,42 @@
   $('abrir-conversa-voz').addEventListener('click', abrirConversaVoz);
   $('voz-encerrar').addEventListener('click', encerrarConversaVoz);
   $('voz-falar-agora').addEventListener('click', function () { conversaVoz.bloqueado = false; escutarConversa(); });
+
+  // ---- Janela "Microfone": escolher, testar o volume e como ouvir
+  var medidor = null, janelaMic = $('janela-microfone');
+  async function abrirJanelaMicrofone() {
+    // Pausa a escuta enquanto a janela esta aberta (os dois brigariam pelo microfone).
+    if (conversaVoz.escuta) { conversaVoz.escuta.abortar(); conversaVoz.escuta = null; }
+    estadoVoz('Pausado enquanto você confere o microfone.', 'parado');
+    janelaMic.querySelectorAll('input[name=escuta]').forEach(function (r) {
+      r.checked = r.value === escutaPreferida;
+      r.disabled = r.value === 'navegador' && !VozJean.temDitado;
+    });
+    janelaMic.showModal();
+    await trocarMedidor(VozJean.microfoneEscolhido());
+    var lista = await VozJean.listarMicrofones().catch(function () { return []; });
+    var sel = $('mic-lista'), atual = VozJean.microfoneEscolhido();
+    sel.innerHTML = '<option value="">Padrão do sistema</option>' + lista.filter(function (m) { return m.id && m.id !== 'default'; })
+      .map(function (m) { return '<option value="' + esc(m.id) + '"' + (m.id === atual ? ' selected' : '') + '>' + esc(m.nome) + '</option>'; }).join('');
+  }
+  async function trocarMedidor(id) {
+    if (medidor) { medidor.parar(); medidor = null; }
+    try {
+      medidor = await VozJean.medirMicrofone(id, function (n) { $('mic-nivel').style.width = Math.round(n * 100) + '%'; });
+      $('mic-dica').textContent = 'Fale alguma coisa: a barra acima deve se mexer. Se não mexer, escolha outro microfone.';
+    } catch (e) {
+      $('mic-dica').textContent = e && e.name === 'NotAllowedError' ? erroDeEscuta('not-allowed') : 'Não foi possível abrir este microfone.';
+    }
+  }
+  $('mic-lista').addEventListener('change', function () { VozJean.escolherMicrofone(this.value); trocarMedidor(this.value); });
+  janelaMic.querySelectorAll('input[name=escuta]').forEach(function (r) {
+    r.addEventListener('change', function () {
+      escutaPreferida = r.value; conversaVoz.forcarGemini = false;
+      try { localStorage.setItem('jean.escuta', escutaPreferida); } catch (e) { /* nada */ }
+    });
+  });
+  janelaMic.addEventListener('close', function () { if (medidor) { medidor.parar(); medidor = null; } $('mic-nivel').style.width = '0'; });
+  $('voz-microfone').addEventListener('click', abrirJanelaMicrofone);
 
   // ---------------------------------------------------------------- propostas (cartões)
   var ROTULO_ESTADO = { confirmada: 'Feito', recusada: 'Recusada' };

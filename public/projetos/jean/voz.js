@@ -255,8 +255,10 @@ var VozJean = (function () {
       atual = juntar(lista);
       if (opcoes.aoTexto) opcoes.aoTexto(textoTodo());
     };
+    // 'no-speech' e 'aborted' nao sao defeito: terminam com texto vazio, e quem chamou
+    // avisa "nao ouvi nada" (antes isso sumia calado - foi o caso do PC em 14/11).
     rec.onerror = function (ev) {
-      if (ev.error === 'no-speech' || ev.error === 'aborted') return; // silencio: so termina
+      if (ev.error === 'no-speech' || ev.error === 'aborted') return;
       if (opcoes.aoErro) opcoes.aoErro(ev.error);
     };
     rec.onend = function () {
@@ -276,9 +278,48 @@ var VozJean = (function () {
   // ------------------------------------------------------------------ gravar (Modo B)
   var FORMATOS = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
 
+  // Microfone escolhido na tela (vale para gravar e para ouvir pelo Gemini). O ditado do
+  // navegador NAO deixa escolher: usa o microfone padrao do proprio navegador.
+  function microfoneEscolhido() { try { return localStorage.getItem('jean.microfone') || ''; } catch (e) { return ''; } }
+  function escolherMicrofone(id) { try { localStorage.setItem('jean.microfone', id || ''); } catch (e) { /* nada */ } }
+
+  async function abrirMicrofone(id) {
+    var base = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+    if (id) {
+      try { return await navigator.mediaDevices.getUserMedia({ audio: Object.assign({ deviceId: { exact: id } }, base) }); }
+      catch (e) { if (e && e.name === 'NotAllowedError') throw e; /* sumiu (desplugado): usa o padrao */ }
+    }
+    return navigator.mediaDevices.getUserMedia({ audio: base });
+  }
+
+  async function listarMicrofones() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return [];
+    var lista = await navigator.mediaDevices.enumerateDevices();
+    return lista.filter(function (d) { return d.kind === 'audioinput'; })
+      .map(function (d, i) { return { id: d.deviceId, nome: d.label || ('Microfone ' + (i + 1)) }; });
+  }
+
+  /** Mede o volume do microfone ao vivo (janela "Microfone"). Devolve { parar }. */
+  async function medirMicrofone(id, aoNivel) {
+    destravar();
+    var stream = await abrirMicrofone(id);
+    var src = ctx.createMediaStreamSource(stream), an = ctx.createAnalyser();
+    an.fftSize = 512; src.connect(an);
+    var d = new Uint8Array(an.fftSize), vivo = true;
+    (function laco() {
+      if (!vivo) return;
+      an.getByteTimeDomainData(d);
+      var soma = 0; for (var i = 0; i < d.length; i++) { var v = (d[i] - 128) / 128; soma += v * v; }
+      aoNivel(Math.min(1, Math.sqrt(soma / d.length) * 4));
+      requestAnimationFrame(laco);
+    })();
+    return { parar: function () { vivo = false; stream.getTracks().forEach(function (t) { t.stop(); }); } };
+  }
+
   async function gravar(opcoes) {
+    opcoes = opcoes || {};
     if (!navigator.mediaDevices || !window.MediaRecorder) throw new Error('Este navegador não grava áudio.');
-    var stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    var stream = await abrirMicrofone(opcoes.microfone !== undefined ? opcoes.microfone : microfoneEscolhido());
     var formato = FORMATOS.find(function (f) { return MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(f); }) || '';
     var rec = new MediaRecorder(stream, formato ? { mimeType: formato, audioBitsPerSecond: 32000 } : undefined);
     var pedacos = [];
@@ -317,7 +358,38 @@ var VozJean = (function () {
     };
   }
 
+  /**
+   * Ouvir pelo GEMINI (conversa por voz em qualquer navegador, com o microfone escolhido):
+   * grava, percebe quando a pessoa comecou e parou de falar (volume) e entrega o audio.
+   * aoNivel(n) para animar; aoFim(blob, segundos) - blob null se ninguem falou.
+   */
+  async function escutarPeloGemini(opcoes) {
+    var g = await gravar({});
+    var inicio = Date.now(), ruido = 0, amostras = 0, falou = false, ultimaVoz = 0, acabou = false;
+    var LIMIAR_MIN = 0.12, SILENCIO_MS = 1300, ESPERA_MAX_MS = 12000, FALA_MAX_MS = 120000;
+    function fim(comAudio) {
+      if (acabou) return; acabou = true;
+      clearInterval(laco);
+      if (!comAudio) { g.cancelar(); opcoes.aoFim(null, 0); return; }
+      var segs = g.segundos();
+      g.terminar().then(function (blob) { opcoes.aoFim(blob, segs); });
+    }
+    var laco = setInterval(function () {
+      var n = g.nivel(), agora = Date.now();
+      if (opcoes.aoNivel) opcoes.aoNivel(n);
+      if (agora - inicio < 400) { ruido += n; amostras++; return; } // mede o ruido do ambiente
+      var limiar = Math.max(LIMIAR_MIN, (ruido / Math.max(1, amostras)) * 2.5);
+      if (n > limiar) { if (!falou && opcoes.aoComecarFala) opcoes.aoComecarFala(); falou = true; ultimaVoz = agora; }
+      if (falou && agora - ultimaVoz > SILENCIO_MS) fim(true);
+      else if (!falou && agora - inicio > ESPERA_MAX_MS) fim(false);
+      else if (agora - inicio > FALA_MAX_MS) fim(true);
+    }, 100);
+    return { parar: function () { fim(falou); }, abortar: function () { fim(false); } };
+  }
+
   return {
+    microfoneEscolhido: microfoneEscolhido, escolherMicrofone: escolherMicrofone,
+    listarMicrofones: listarMicrofones, medirMicrofone: medirMicrofone, escutarPeloGemini: escutarPeloGemini,
     paraVoz: paraVoz, falar: falar, parar: parar, destravar: destravar,
     falando: function () { return !!atual; },
     motor: function () { return ultimoMotor; },

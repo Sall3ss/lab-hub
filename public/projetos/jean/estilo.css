@@ -311,3 +311,16 @@ body.compacto .gravando { width: calc(100% - 1.5rem); margin-bottom: .75rem; }
 .voz-motor { margin: 0; font-size: .75rem; color: var(--suave); min-height: 1rem; }
 .voz-botoes { display: flex; gap: .6rem; flex-wrap: wrap; justify-content: center; }
 @media (prefers-reduced-motion: reduce) { .voz-orbe, .barrinhas i, .gravando-ponto, #ditado.ouvindo { animation: none !important; } }
+
+/* Janela "Microfone" (14/11) */
+.mic-campo { display: grid; gap: .35rem; font-size: .88rem; font-weight: 600; }
+.mic-campo select { font: inherit; font-weight: 400; padding: .6rem .7rem; border-radius: .7rem; border: 1px solid var(--borda); background: var(--fundo); color: var(--texto); width: 100%; }
+.mic-medidor { height: .6rem; border-radius: 999px; background: var(--lateral); border: 1px solid var(--borda); overflow: hidden; }
+.mic-medidor span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #2e9d5b, var(--dourado), var(--destaque)); transition: width .08s linear; }
+.mic-modo { border: 1px solid var(--borda); border-radius: .9rem; padding: .6rem .8rem .7rem; margin: 0; display: grid; gap: .55rem; }
+.mic-modo legend { font-size: .82rem; font-weight: 600; padding: 0 .3rem; }
+.mic-modo label { display: flex; gap: .55rem; align-items: flex-start; font-size: .86rem; line-height: 1.4; cursor: pointer; }
+.mic-modo input { width: auto; padding: 0; flex-shrink: 0; margin: .2rem 0 0; accent-color: var(--destaque); }
+.mic-modo input:disabled + span { opacity: .45; }
+.janela-texto.pequeno { font-size: .8rem; }
+.janela { max-height: calc(100dvh - 2rem); overflow-y: auto; }
