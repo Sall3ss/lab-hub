@@ -204,7 +204,7 @@ projeto a precisar dele.
   respondeu falando com "Voz: Gemini (gemini-3.8-flash-tts)". O streaming de voz do
   Google foi lido certo (não precisou da reserva do navegador).
 
-- 🟡 **14/11 - Ditado duplicando palavras no celular (print do dono):** "Jean dim dim dim
+- 🟢 **14/11 - Ditado duplicando palavras no celular (print do dono):** "Jean dim dim dim
   ... o que que ficou faltando dim o que que ficou faltando no projeto...". Causa: o
   Chrome do Android reenvia a frase inteira a cada pedaço e o código somava os pedaços.
   Corrigido em `voz.js`: o texto é remontado do zero a cada evento; pedaço que repete o
@@ -215,14 +215,15 @@ projeto a precisar dele.
   "Lab Hub". No áudio gravado (Gemini), a transcrição recebe a lista de nomes do hub.
   Testado com a sequência exata do print. Falta o dono repetir no celular.
 
-- 🟡 **14/11 - Conversa por voz ficou "Pensando..." sem fim** (a transcrição já saiu
+- 🟢 **14/11 - Conversa por voz ficou "Pensando..." sem fim** (a transcrição já saiu
   certa). Sem acesso aos registros do servidor (conta Cloudflare do dono), a causa exata
   não foi medida: a conexão ficou aberta sem terminar e nada desistia. Agora há prazo em
   tudo: servidor espera o Gemini começar no máximo 90 s e, no meio da resposta, 60 s sem
   nada (também na transcrição e na voz); a tela desiste com 75 s sem nenhum sinal (o
   servidor manda sinal a cada 15 s) ou 4 min no total, e mostra o motivo. A conversa por
   voz mostra os segundos ("Pensando... 12 s"). Testado: Google mudo no meio → erro em
-  60 s; caminho normal intacto. Falta o dono repetir e, se falhar, contar a mensagem.
+  60 s; caminho normal intacto. **Dono repetiu no celular e deu certo** (transcrição sem
+  repetição e resposta falada).
 
 ## Próximo passo
 
