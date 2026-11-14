@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 14/11/2026 (Jean: visual com a esfera e conversa por voz na mesma tela).**
+**Atualizado em 14/11/2026 (Cortex criado: central de cortes, etapa 1).**
 
 ## Pronto
 
@@ -92,6 +92,13 @@
    conversa por voz deixou de abrir outra tela.
    14/11: voz também confirmada no PC (conversa por voz ouvindo pelo Gemini, menos de
    5 s por etapa). Estado e decisões em `projetos/jean/PROJETO.md`.
+
+10. 🟡 **Cortex (14/11): central de cortes, em `/cortex`.** Sucessor da ideia do ClipStudio, refeito:
+   a nuvem (Cloudflare pessoal) guarda link, transcrição, roteiro e estado; o PC do dono só
+   busca texto/áudio leve e baixa os minutos marcados (yt-dlp) para o Movavi. Etapa 1 pronta
+   (cartão no hub, tabelas `cortex_*` na migration 0006, quadro de 7 colunas, linha do tempo,
+   corte manual, triagem). Faltam agente do PC (etapa 2) e Groq + Claude (etapa 3). Arquitetura,
+   modelo de dados e próximos passos em `projetos/cortex/PROJETO.md`.
 
 ## ClipStudio: arquivado em 15/10/2026
 

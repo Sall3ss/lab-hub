@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0e11" />
+  <title>Cortex</title>
+  <!-- Projeto "cortex" do Lab Hub. Tudo que e deste projeto fica nesta pasta: para
+       migrar, ela sai inteira, sem depender de nada do hub. Visual de editor de video
+       (barra de transporte, faixas, linha do tempo), proprio do projeto.
+       Autoria: Claude (Opus 5.5), 14/11/2026. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" />
+  <link rel="stylesheet" href="./estilo.css" />
+</head>
+<body>
+  <header class="barra">
+    <a class="voltar" href="/" aria-label="Voltar ao Lab Hub">‹ Hub</a>
+    <div class="marca">
+      <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></svg></span>
+      <h1>Cortex</h1>
+      <span class="fase">BETA</span>
+    </div>
+    <div class="transporte" aria-hidden="true">
+      <span class="rec"></span><span class="tc" id="relogio">00:00:00:00</span>
+    </div>
+    <div class="pc" id="pc" title="Agente do PC">
+      <span class="pc-luz"></span><span class="pc-txt">PC offline</span>
+    </div>
+  </header>
+
+  <section class="ingest" aria-label="Importar vídeo">
+    <form id="form-link" class="ingest-form" novalidate>
+      <label class="ingest-rot" for="link">IMPORTAR</label>
+      <div class="ingest-campo">
+        <span class="plat" id="plat" data-p="">LINK</span>
+        <input id="link" name="link" type="url" inputmode="url" autocomplete="off" spellcheck="false"
+               placeholder="Link do YouTube, Twitch ou Kick" />
+      </div>
+      <button class="btn btn-cor" type="submit" id="btn-importar">Importar</button>
+    </form>
+    <p class="ingest-msg" id="msg-link" role="status"></p>
+  </section>
+
+  <main class="mesa">
+    <div class="quadro-topo">
+      <h2 class="sec">Quadro de cortes</h2>
+      <span class="resumo" id="resumo"></span>
+    </div>
+    <nav class="atalhos" id="atalhos" aria-label="Ir para a coluna"></nav>
+    <div class="quadro" id="quadro" aria-live="polite">
+      <p class="carregando" id="carregando">Carregando o quadro…</p>
+    </div>
+
+    <section class="linha" id="linha" aria-label="Linha do tempo">
+      <div class="linha-topo">
+        <h2 class="sec">Linha do tempo</h2>
+        <span class="linha-nome" id="linha-nome">Nenhum vídeo selecionado</span>
+        <button class="btn btn-fino" type="button" id="btn-marcar" hidden>+ Marcar corte</button>
+      </div>
+      <div class="linha-corpo" id="linha-corpo">
+        <p class="linha-vazia">Toque num vídeo do quadro para ver os cortes dele aqui.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Gaveta lateral: detalhe de vídeo ou de corte -->
+  <div class="veu" id="veu" hidden></div>
+  <aside class="gaveta" id="gaveta" hidden aria-modal="true" role="dialog" aria-labelledby="gaveta-titulo">
+    <header class="gaveta-topo">
+      <h2 id="gaveta-titulo">Detalhe</h2>
+      <button class="fechar" type="button" id="gaveta-fechar" aria-label="Fechar">×</button>
+    </header>
+    <div class="gaveta-corpo" id="gaveta-corpo"></div>
+  </aside>
+
+  <!-- Confirmação de ação destrutiva -->
+  <div class="modal" id="modal" hidden role="alertdialog" aria-modal="true" aria-labelledby="modal-txt">
+    <div class="modal-caixa">
+      <p id="modal-txt"></p>
+      <div class="modal-acoes">
+        <button class="btn btn-fino" type="button" id="modal-nao">Cancelar</button>
+        <button class="btn btn-perigo" type="button" id="modal-sim">Excluir</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="aviso" id="aviso" role="status" hidden></div>
+
+  <script src="/navegador.js"></script>
+  <script src="./app.js"></script>
+  <!-- A Jean (assistente do hub) por cima desta tela: botao "J" e Ctrl+K. E da base e
+       opcional: se o projeto migrar e o arquivo nao existir mais, nada quebra. -->
+  <script src="/jean-painel.js" defer></script>
+</body>
+</html>

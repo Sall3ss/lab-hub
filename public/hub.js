@@ -82,6 +82,23 @@
       '<path class="eg" d="M82 96 L100 86 L116 86"/><text class="et" x="102" y="83">VOX</text>' +
       '<path class="eg" d="M30 132 L10 118"/><text class="et" x="2" y="114">BASE</text>' +
       '<path class="eg" d="M20 39 L20 77 M17 39 L23 39 M17 77 L23 77"/><text class="et" x="6" y="60" transform="rotate(-90 14 58)">Ø 38</text>',
+    // Claquete de edição sobre uma tira de filme, com a tesoura marcando o corte.
+    cortex:
+      '<line class="eg" x1="14" y1="140" x2="106" y2="140"/>' +
+      '<path class="el" d="M26 62 L94 62 L94 114 L26 114 Z"/>' +
+      '<path class="el" d="M26 62 L91 44 L94 54 L29 72"/>' +
+      '<path class="el" d="M40 58 L46 48 M56 54 L62 44 M72 49 L78 40" />' +
+      '<path class="eg" d="M26 80 L94 80"/>' +
+      '<rect class="ez" x="32" y="86" width="22" height="3"/><rect class="ez" x="32" y="93" width="14" height="3"/>' +
+      '<text class="et" x="62" y="96">TC 01:12</text>' +
+      '<path class="el" d="M10 124 L110 124 M10 138 L110 138"/>' +
+      '<path class="eg" d="M18 126 V136 M30 126 V136 M42 126 V136 M54 126 V136 M66 126 V136 M78 126 V136 M90 126 V136 M102 126 V136"/>' +
+      '<path class="el" d="M60 118 L60 142" stroke-dasharray="2 2"/>' +
+      '<circle class="el" cx="98" cy="20" r="5"/><circle class="el" cx="110" cy="30" r="5"/>' +
+      '<path class="el" d="M101 24 L80 38 M106 27 L80 38"/><circle class="ez" cx="80" cy="38" r="1.6"/>' +
+      '<path class="eg" d="M26 62 L12 50"/><text class="et" x="2" y="46">SLATE</text>' +
+      '<path class="eg" d="M60 118 L72 112 L110 112"/><text class="et" x="80" y="109">CUT</text>' +
+      '<path class="eg" d="M4 124 L4 138 M1 124 L7 124 M1 138 L7 138"/>',
     // Módulo genérico (cubo em perspectiva) para projeto sem desenho próprio.
     padrao:
       '<line class="eg" x1="14" y1="140" x2="106" y2="140"/>' +

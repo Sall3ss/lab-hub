@@ -15,5 +15,13 @@
     "objetivo": "Validar a ideia de graça (Gemini no plano gratuito, voz do navegador) e só depois decidir se vale pagar por Claude e voz melhor.",
     "fase": "beta",
     "criado_em": "2026-11-13"
+  },
+  {
+    "slug": "cortex",
+    "titulo": "Cortex",
+    "ideia": "Central de cortes de lives e vídeos (YouTube, Twitch, Kick): o painel na nuvem transcreve, a IA marca os cortes longos e os virais com título, descrição e tags, e um agente no PC baixa só os minutos marcados, prontos para o Movavi.",
+    "objetivo": "Ter o fluxo inteiro (link → transcrição → roteiro da IA → trecho baixado no PC) funcionando antes do lançamento do GTA 6, sem nenhuma carga na VPS.",
+    "fase": "beta",
+    "criado_em": "2026-11-14"
   }
 ]
