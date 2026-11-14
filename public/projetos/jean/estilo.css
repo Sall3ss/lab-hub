@@ -66,6 +66,9 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .enviar:disabled { opacity: .35; cursor: not-allowed; }
 
 .so-celular { display: none; }
+.so-embutido { display: none; }
+.embutido .so-embutido { display: inline-grid; }
+.embutido .voltar { visibility: hidden; }
 
 @media (max-width: 760px) {
   .app { grid-template-columns: 1fr; }
@@ -223,3 +226,22 @@ details summary { cursor: pointer; font-size: .82rem; color: var(--suave); paddi
 .copiar-claude { justify-self: start; margin-top: .4rem; font: inherit; font-size: .82rem; font-weight: 600; padding: .45rem .85rem; border-radius: 999px; border: 1px solid var(--dourado); background: none; color: var(--dourado); cursor: pointer; }
 .copiar-claude:hover { background: color-mix(in srgb, var(--dourado) 12%, transparent); }
 .copiar-area { font: .82rem/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; width: 100%; padding: .7rem; border-radius: .75rem; border: 1px solid var(--borda); background: var(--fundo); color: var(--texto); resize: vertical; }
+
+/* Etapa 5: dentro do painel global a Jean tem ~30rem de largura. Mesmo arranjo do
+   celular (lista de conversas em gaveta), mesmo no PC. */
+body.compacto .app { grid-template-columns: 1fr; }
+body.compacto .so-celular { display: inline-grid; }
+body.compacto .veu.so-celular { display: block; }
+body.compacto .lateral { position: fixed; inset: 0 auto 0 0; width: min(19rem, 85vw); z-index: 20; transform: translateX(-100%); transition: transform .2s ease; }
+body.compacto .app.lateral-aberta .lateral { transform: none; box-shadow: 0 0 40px rgb(0 0 0 / .3); }
+body.compacto .veu { position: fixed; inset: 0; background: rgb(0 0 0 / .35); z-index: 10; }
+body.compacto .barra { padding: .5rem .75rem; gap: .5rem; }
+body.compacto .boas-vindas { margin-top: 4vh; }
+body.compacto .boas-vindas h2 { font-size: 1.6rem; }
+body.compacto .entrada { width: calc(100% - 1.5rem); margin-bottom: .75rem; }
+body.compacto .conversa { padding: 1.25rem .9rem; }
+body.compacto .pulso-botao span { display: none; }
+body.compacto .pulso-botao { padding: .5rem; }
+body.compacto .msg-usuario { max-width: 92%; }
+/* No painel global a etiqueta "em <projeto>" e justamente o que importa: sempre visivel. */
+body.embutido .contexto-chip { display: inline-block; flex-shrink: 0; max-width: 8rem; overflow: hidden; text-overflow: ellipsis; }

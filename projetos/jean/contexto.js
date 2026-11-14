@@ -40,7 +40,7 @@ export async function dadosDoPainel(env, usuarioId) {
 }
 
 /** Texto que vai junto da instrucao de sistema. */
-export async function contextoParaJean(env, usuarioId, projetoAtual) {
+export async function contextoParaJean(env, usuarioId, projetoAtual, pagina) {
   const { projetos, memorias } = await dadosDoPainel(env, usuarioId);
   const blocos = projetos.map((p) => {
     const g = projetoPorSlug(p.slug);
@@ -69,9 +69,10 @@ export async function contextoParaJean(env, usuarioId, projetoAtual) {
   const onde = atual
     ? `O dono abriu você de dentro do projeto "${atual.titulo}" (slug "${atual.slug}"). Quando ele disser "este projeto", "aqui" ou "esse módulo", é desse que ele fala.`
     : 'O dono está na página da própria Jean (não dentro de um projeto específico).';
+  const ondeTela = pagina ? `\nEle chamou você pelo atalho, por cima desta página: ${pagina}` : '';
 
   return `## Onde o dono está agora
-${onde}
+${onde}${ondeTela}
 
 ## Projetos do Lab Hub (retrato atual)
 ${blocos.join('\n\n')}

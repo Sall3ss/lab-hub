@@ -16,7 +16,8 @@ Cada projeto tem título, ideia e objetivo próprios, e vive em pastas só dele:
 
 - O **hub** (`public/index.html`, `hub.css`, `hub.js`) só lista e leva até o projeto.
 - A tela do projeto **não carrega nada do hub** (nem o CSS). Só usa o que é da base:
-  `/navegador.js`, `/campos.js` e, no servidor, `lib/`.
+  `/navegador.js`, `/campos.js`, `/jean-painel.js` (a Jean por cima da tela, opcional) e,
+  no servidor, `lib/`.
 - Um projeto **nunca** lê tabela ou arquivo de outro.
 - Projeto pode ter **endereço próprio** ainda em beta (campo `endereco` no `projetos.json`;
   o cartão abre lá). Ex.: Cyberidle, publicado de `projetos/cyberidle/site/` no projeto

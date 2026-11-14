@@ -158,7 +158,21 @@ projeto a precisar dele.
   lista tarefas abertas e notas e pede para registrar na ficha. O dono cola na conversa do
   projeto no Claude Code. Se o navegador não deixar copiar, abre uma janela com o texto.
 
+- 🟢 **14/11 - Etapa 5 (antes da 4, a pedido do dono): a Jean em qualquer tela.**
+  `public/jean-painel.js` (base, como `navegador.js`): botão "J" flutuante + **Ctrl+K**
+  (Cmd+K no Mac) abrem a Jean num painel lateral por cima da página; Esc, X ou Ctrl+K
+  fecham; a conversa continua ao reabrir. A Jean é a própria página
+  `/projetos/jean/?embutido=1&de=<projeto>&pagina=<caminho - título>` num iframe (modo
+  `compacto`: lista de conversas em gaveta, etiqueta "em ..." visível). Ela recebe de
+  qual projeto e de qual página foi chamada. Carregado no hub (`public/index.html`) e no
+  modelo de projeto novo (`scripts/modelo-projeto/tela/index.html`). Não aparece na
+  própria Jean. Conferido em print no PC e no celular.
+  - ⏳ **Pendente: botão da Jean no Cyberidle** (outro domínio, `cyberidle-game.pages.dev`:
+    lá o painel não serve, seria um botão abrindo `/jean?de=cyberidle`). O dono pediu para
+    **não mexer no Cyberidle agora** (14/11).
+
 ## Próximo passo
 
-4. Áudio: gravar, enviar arquivo de áudio, transcrição pelo Gemini, voz da resposta.
-5. Painel global (Ctrl+K) no hub e botão no Cyberidle.
+4. Áudio: **o dono vai trazer uma ideia nova** para esta etapa (14/11). Perguntar antes de
+   começar (o plano antigo era: gravar, enviar arquivo de áudio, transcrição pelo Gemini,
+   voz da resposta).

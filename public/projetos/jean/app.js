@@ -15,7 +15,16 @@
 
   var estado = { conversas: [], atual: null, gerando: null, menuDe: null };
   // De qual projeto a Jean foi chamada (?de=<slug>), para ela saber o que e "este projeto".
-  var projetoDe = new URL(location.href).searchParams.get('de') || null;
+  var parametros = new URL(location.href).searchParams;
+  var projetoDe = parametros.get('de') || null;
+  // Etapa 5: aberta dentro do painel global (/jean-painel.js), num iframe.
+  var embutido = parametros.get('embutido') === '1' && window.parent !== window;
+  var pagina = (parametros.get('pagina') || '').slice(0, 200) || null;
+  if (embutido) {
+    document.body.classList.add('compacto', 'embutido');
+    document.getElementById('fechar-embutido').hidden = false;
+  }
+  function pedirFechar() { if (embutido) window.parent.postMessage({ jean: 'fechar' }, location.origin); }
 
   // ---------------------------------------------------------------- utilidades
   function irParaEntrar() {
@@ -257,7 +266,7 @@
     var b;
     if ((b = ev.target.closest('[data-repetir]'))) {
       b.closest('.msg').remove();
-      return gerar({ repetir: true, conversa_id: estado.atual && estado.atual.id, de: projetoDe });
+      return gerar({ repetir: true, conversa_id: estado.atual && estado.atual.id, de: projetoDe, pagina: pagina });
     }
     if ((b = ev.target.closest('[data-copiar]'))) return copiar(b.closest('.msg').dataset.bruto, b);
     if ((b = ev.target.closest('.copiar-codigo'))) return copiar(b.closest('.codigo').querySelector('code').textContent, b);
@@ -288,7 +297,7 @@
     boasVindas.hidden = true;
     bolha('usuario', texto);
     descer();
-    gerar({ texto: texto, conversa_id: estado.atual && estado.atual.id, de: projetoDe });
+    gerar({ texto: texto, conversa_id: estado.atual && estado.atual.id, de: projetoDe, pagina: pagina });
   });
 
   campo.addEventListener('input', ajustarCampo);
@@ -554,8 +563,23 @@
   document.querySelectorAll('[data-fechar-lateral]').forEach(function (el) {
     el.addEventListener('click', function () { lateral(false); });
   });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { lateral(false); fecharMenu(); if (!painel.hidden) abrirPainel(false); } });
-  if (projetoDe) { var chip = $('contexto-chip'); chip.textContent = 'em ' + projetoDe; chip.hidden = false; }
+  document.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === 'k' || e.key === 'K')) {
+      // Ctrl+K: dentro do painel global fecha; na pagina da Jean, vai para a caixa de texto.
+      e.preventDefault();
+      if (embutido) pedirFechar(); else campo.focus();
+      return;
+    }
+    if (e.key !== 'Escape') return;
+    var algoAberto = app.classList.contains('lateral-aberta') || !menu.hidden || !painel.hidden || document.querySelector('dialog[open]');
+    lateral(false); fecharMenu(); if (!painel.hidden) abrirPainel(false);
+    if (!algoAberto) pedirFechar();
+  });
+  document.getElementById('fechar-embutido').addEventListener('click', pedirFechar);
+  window.addEventListener('message', function (e) {
+    if (e.origin === location.origin && e.data && e.data.jean === 'focar' && !app.hidden) campo.focus();
+  });
+  if (projetoDe) { var chip = $('contexto-chip'); chip.textContent = 'em ' + (projetoDe === 'hub' ? 'Lab Hub' : projetoDe); chip.hidden = false; }
 
   $('sair').addEventListener('click', async function () {
     try { await fetch('/api/sessao/sair', { method: 'POST', credentials: 'same-origin' }); } catch (e) { /* sai mesmo assim */ }

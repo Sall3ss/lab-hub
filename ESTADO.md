@@ -66,7 +66,11 @@
    gravada pelo dono no Pages. O deploy agora roda `scripts/jean-contexto.mjs`.
    14/11: tarefas da Jean chegam ao Claude Code pelo botão "Copiar para o Claude" no Pulso
    (opção A). A opção B (Jean gravar tarefas no repositório, com token do GitHub) ficou
-   guardada na ficha da Jean como alternativa futura, a pedido do dono. Estado e decisões em `projetos/jean/PROJETO.md`.
+   guardada na ficha da Jean como alternativa futura, a pedido do dono.
+   14/11: etapa 5 no ar antes da 4 - `public/jean-painel.js` (base) põe a Jean em qualquer
+   tela do domínio (botão "J" e Ctrl+K); carregado no hub e no modelo de projeto novo.
+   Botão no Cyberidle pendente (dono não quer mexer nele agora). Etapa 4 (áudio) espera
+   uma ideia nova do dono. Estado e decisões em `projetos/jean/PROJETO.md`.
 
 ## ClipStudio: arquivado em 15/10/2026
 

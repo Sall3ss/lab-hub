@@ -137,7 +137,8 @@ async function mensagem({ request, env, u, json, waitUntil }) {
   const texto = String(corpo.texto || '').trim();
   // "Tentar de novo" depois de um erro: a fala do usuario ja esta gravada, so falta a resposta.
   const de = corpo.de && projetoPorSlug(String(corpo.de)) ? String(corpo.de) : null;
-  if (corpo.repetir && corpo.conversa_id) return await repetir({ env, u, json, conversaId: Number(corpo.conversa_id), waitUntil, de });
+  const pagina = corpo.pagina ? String(corpo.pagina).replace(/[\r\n]+/g, ' ').slice(0, 200) : null;
+  if (corpo.repetir && corpo.conversa_id) return await repetir({ env, u, json, conversaId: Number(corpo.conversa_id), waitUntil, de, pagina });
   if (!texto) return json({ erro: 'Escreva uma mensagem.' }, 400);
   if (texto.length > MAX_TEXTO) return json({ erro: `Mensagem longa demais (máximo ${MAX_TEXTO} caracteres).` }, 400);
 
@@ -159,18 +160,18 @@ async function mensagem({ request, env, u, json, waitUntil }) {
     conversa.id, texto, agora(),
   );
   await db(env).run('UPDATE jean_conversas SET atualizada_em = ? WHERE id = ?', agora(), conversa.id);
-  return responderEmStreaming({ env, u, conversa, waitUntil, de });
+  return responderEmStreaming({ env, u, conversa, waitUntil, de, pagina });
 }
 
-async function repetir({ env, u, json, conversaId, waitUntil, de }) {
+async function repetir({ env, u, json, conversaId, waitUntil, de, pagina }) {
   const conversa = await db(env).first('SELECT id, titulo FROM jean_conversas WHERE id = ? AND usuario_id = ?', conversaId, u.id);
   if (!conversa) return json({ erro: 'conversa não encontrada' }, 404);
   const ultima = await db(env).first('SELECT papel FROM jean_mensagens WHERE conversa_id = ? ORDER BY id DESC LIMIT 1', conversa.id);
   if (!ultima || ultima.papel !== 'usuario') return json({ erro: 'Não há pergunta sem resposta nesta conversa.' }, 409);
-  return responderEmStreaming({ env, u, conversa, waitUntil, de });
+  return responderEmStreaming({ env, u, conversa, waitUntil, de, pagina });
 }
 
-function responderEmStreaming({ env, u, conversa, waitUntil, de }) {
+function responderEmStreaming({ env, u, conversa, waitUntil, de, pagina }) {
   const agora = () => new Date().toISOString();
   const sistemaBase = instrucaoDeSistema({
     nomeDono: nomeBonito(u.nome),
@@ -205,7 +206,7 @@ function responderEmStreaming({ env, u, conversa, waitUntil, de }) {
         conversa.id, MAX_HISTORICO,
       )).reverse();
       while (falas.length && falas[0].papel !== 'usuario') falas.shift();
-      const sistema = sistemaBase + '\n\n' + await contextoParaJean(env, u.id, de);
+      const sistema = sistemaBase + '\n\n' + await contextoParaJean(env, u.id, de, pagina);
       const exec = (nome, args) => executar(env, u, conversa.id, nome, args);
       for await (const p of responder(env, { sistema, historico: falas, ferramentas: declaracoes(), executar: exec, propostas: PROPOSTAS })) {
         if (p.fim) { fim = p; break; }
