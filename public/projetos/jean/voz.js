@@ -47,6 +47,27 @@ var VozJean = (function () {
     } catch (e) { /* sem WebAudio: a reserva do navegador ainda funciona */ }
   }
 
+  // Medidor do som que sai (14/11): a esfera da Jean pulsa com o volume real da fala.
+  var analisador = null, amostrasNivel = null;
+  function saida() {
+    if (!analisador) {
+      analisador = ctx.createAnalyser();
+      analisador.fftSize = 512;
+      analisador.connect(ctx.destination);
+      amostrasNivel = new Float32Array(analisador.fftSize);
+    }
+    return analisador;
+  }
+  // Volume da fala agora, de 0 a 1. -1 = falando sem dar para medir (voz do navegador).
+  function nivel() {
+    if (!atual) return 0;
+    if (!analisador || !atual.fontes.length) return -1;
+    analisador.getFloatTimeDomainData(amostrasNivel);
+    var soma = 0;
+    for (var i = 0; i < amostrasNivel.length; i++) soma += amostrasNivel[i] * amostrasNivel[i];
+    return Math.min(1, Math.sqrt(soma / amostrasNivel.length) * 3.5);
+  }
+
   var atual = null; // fala em andamento
   var ultimoMotor = null;
 
@@ -168,7 +189,7 @@ var VozJean = (function () {
     if (a.parado) return sobra;
     var fonte = ctx.createBufferSource();
     fonte.buffer = buffer;
-    fonte.connect(ctx.destination);
+    fonte.connect(saida());
     var inicio = Math.max(ctx.currentTime + 0.03, a.fim);
     fonte.start(inicio);
     a.fim = inicio + buffer.duration;
@@ -412,6 +433,7 @@ var VozJean = (function () {
     listarMicrofones: listarMicrofones, medirMicrofone: medirMicrofone, escutarPeloGemini: escutarPeloGemini,
     paraVoz: paraVoz, falar: falar, parar: parar, destravar: destravar,
     falando: function () { return !!atual; },
+    nivel: nivel,
     motor: function () { return ultimoMotor; },
     temDitado: !!Reconhecedor, ouvir: ouvir,
     temGravador: !!(navigator.mediaDevices && window.MediaRecorder), gravar: gravar,

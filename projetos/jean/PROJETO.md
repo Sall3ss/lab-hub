@@ -271,6 +271,26 @@ projeto a precisar dele.
   - Lição: encurtar a espera de silêncio quebra a pausa natural depois do nome. Medir
     com a frase real ("Jean, ... pergunta") antes de mexer nesse número.
 
+- 🟢 **14/11 - Visual novo com a esfera (print de referência do dono).** Tema único
+  escuro com laranja/dourado (Fênix) e ciano, fontes Chakra Petch e JetBrains Mono (as do
+  hub, carregadas pela própria página). No centro, **a esfera é a Jean**: núcleo de fogo
+  em redemoinho com dois anéis ciano, desenhada por código num canvas (`esfera.js`, sem
+  imagem). Ela tem estados, mostrados também na etiqueta "JEAN ...": Em repouso, Ouvindo
+  (pulsa com o volume do microfone), Pensando (gira rápido) e **Falando: pulsa e solta
+  ondas no ritmo do volume real da voz** (medidor no `voz.js`, `VozJean.nivel()`; com a
+  voz do navegador, que não deixa medir o som, ela imita o ritmo). Tela inicial: esfera
+  grande; com mensagens ela encolhe para o alto; na conversa por voz cresce de novo.
+  - **Conversa por voz agora na mesma tela** (pedido do dono): saiu a tela cheia separada;
+    a esfera fica no alto, as falas aparecem na conversa e uma faixa embaixo mostra o
+    estado, a transcrição, os tempos e os botões Microfone / Falar agora / Encerrar
+    (Esc também encerra). A caixa de texto volta ao encerrar.
+  - Aviso da fase beta virou uma faixa acima da caixa de texto, com X (lembrado no
+    aparelho). Desenhos e textos de "painel" em volta da esfera são decorativos; o
+    "SINAL DE VOZ" mostra o volume de verdade.
+  - Conferido em print no PC (1280) e no celular (390): início, conversa, Jean falando
+    (voz imitada, volume medido) e conversa por voz com microfone falso. Falta o dono
+    ver no ar com a voz de verdade.
+
 ## Próximo passo
 
 - MVP completo (etapas 1 a 5). Próximo passo é decisão do dono.

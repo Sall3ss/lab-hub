@@ -289,6 +289,8 @@
   // ---------------------------------------------------------------- enviar e receber
   function modoGerando(sim) {
     form.classList.toggle('gerando', sim);
+    // A esfera "pensa" enquanto a resposta vem (na conversa por voz quem manda e o laco dela).
+    if (!conversaVoz.ativa && !VozJean.falando()) Esfera.modo(sim ? 'pensando' : 'repouso');
     $('gravar').disabled = sim;
     botao.setAttribute('aria-label', sim ? 'Parar resposta' : 'Enviar');
     ajustarCampo();
@@ -436,10 +438,11 @@
       aoComecar: function (motor) {
         $('voz-motor').textContent = motor ? 'Voz: ' + motor : '';
         if (el.__resposta) { el.__resposta.vozComecou = Date.now() - el.__resposta.t0 - el.__resposta.esperou; mostrarTempos(el.__resposta); }
-        if (conversaVoz.ativa) estadoVoz('Falando...', 'falando');
+        if (conversaVoz.ativa) estadoVoz('Falando...', 'falando'); else Esfera.modo('falando');
       },
       aoTerminar: function (info) {
         el.classList.remove('falando');
+        if (!conversaVoz.ativa) Esfera.modo(estado.gerando ? 'pensando' : 'repouso');
         rotulo.textContent = 'Ouvir';
         if (aoTerminar) aoTerminar(info || {});
       },
@@ -568,7 +571,7 @@
 
   // ---- Conversa por voz (Modo A, maos livres): ouve -> envia na pausa -> fala -> ouve
   var conversaVoz = { ativa: false, escuta: null, silencio: null, ultimo: '' };
-  var telaVoz = $('voz-conversa'), orbe = $('voz-orbe');
+  var telaVoz = $('voz-conversa'), estadoDaVoz = '';
   // Como ouvir na conversa por voz: 'navegador' (texto ao vivo) ou 'gemini' (grava e o
   // Gemini transcreve; qualquer navegador, microfone escolhido). Lembrado no aparelho.
   var escutaPreferida = VozJean.temDitado ? 'navegador' : 'gemini';
@@ -578,19 +581,20 @@
   $('abrir-conversa-voz').hidden = !(VozJean.temDitado || VozJean.temGravador);
   function estadoVoz(texto, classe) {
     $('voz-estado').textContent = texto;
-    orbe.className = 'voz-orbe ' + (classe || '');
+    estadoDaVoz = classe || '';
+    if (!(classe === 'pensando' && VozJean.falando())) Esfera.modo(classe || 'repouso');
     $('voz-falar-agora').hidden = classe !== 'parado';
   }
   function escutarConversa() {
     if (!conversaVoz.ativa) return;
-    orbe.style.transform = '';
+    Esfera.nivelEntrada(0);
     if (ouvirPeloGemini()) return escutarConversaPeloGemini();
     conversaVoz.ultimo = '';
     // Vigia (14/11, PC do dono): o reconhecimento do navegador pode ficar "ouvindo" sem
     // receber som nenhum, sem dar erro. Mede o microfone em paralelo: se ha voz e o
     // navegador nao escreve nada em 2,5 s, troca para o Gemini (e lembra a escolha).
     var vigia = { voz: 0, texto: false, inicio: Date.now(), medidor: null, vivo: true };
-    VozJean.medirMicrofone(VozJean.microfoneEscolhido(), function (n) { if (n > 0.15 && !vigia.voz) vigia.voz = Date.now(); })
+    VozJean.medirMicrofone(VozJean.microfoneEscolhido(), function (n) { Esfera.nivelEntrada(n); if (n > 0.15 && !vigia.voz) vigia.voz = Date.now(); })
       .then(function (m) { if (vigia.vivo) vigia.medidor = m; else m.parar(); }).catch(function () { /* sem medidor: segue sem vigia */ });
     function encerrarVigia() { vigia.vivo = false; clearInterval(vigia.laco); if (vigia.medidor) vigia.medidor.parar(); }
     vigia.laco = setInterval(function () {
@@ -644,12 +648,12 @@
     var escuta;
     try {
       escuta = await VozJean.escutarPeloGemini({
-        aoNivel: function (n) { orbe.style.transform = 'scale(' + (1 + Math.min(n, 1) * 0.25).toFixed(3) + ')'; },
+        aoNivel: function (n) { Esfera.nivelEntrada(n); },
         aoComecarFala: function () { $('voz-transcricao').textContent = '(ouvindo você...)'; },
-        aoParar: function () { orbe.style.transform = ''; etapaVoz('Transcrevendo'); estadoVoz('Transcrevendo...', 'pensando'); },
+        aoParar: function () { Esfera.nivelEntrada(0); etapaVoz('Transcrevendo'); estadoVoz('Transcrevendo...', 'pensando'); },
         aoFim: function (blob, segundos) {
           conversaVoz.escuta = null;
-          orbe.style.transform = '';
+          Esfera.nivelEntrada(0);
           if (!conversaVoz.ativa) return;
           if (!blob) { estadoVoz('Não ouvi nada. Confira o microfone (botão Microfone) e toque em "Falar agora".', 'parado'); return; }
           enviarAudioDaConversa(blob, segundos);
@@ -678,7 +682,7 @@
     estadoVoz((conversaVoz.etapa || 'Pensando') + '...', 'pensando');
     var t0 = Date.now();
     var contador = setInterval(function () {
-      if (orbe.classList.contains('pensando')) $('voz-estado').textContent = (conversaVoz.etapa || 'Pensando') + '... ' + Math.round((Date.now() - (conversaVoz.etapaDesde || t0)) / 1000) + ' s';
+      if (estadoDaVoz === 'pensando') $('voz-estado').textContent = (conversaVoz.etapa || 'Pensando') + '... ' + Math.round((Date.now() - (conversaVoz.etapaDesde || t0)) / 1000) + ' s';
     }, 500);
     $('voz-tempos').textContent = '';
     var r;
@@ -696,7 +700,7 @@
     estadoVoz('Preparando a voz...', 'pensando');
     var tVoz = Date.now();
     var contaVoz = setInterval(function () {
-      if (!conversaVoz.ativa || !orbe.classList.contains('pensando')) { clearInterval(contaVoz); return; }
+      if (!conversaVoz.ativa || estadoDaVoz !== 'pensando') { clearInterval(contaVoz); return; }
       $('voz-estado').textContent = 'Preparando a voz... ' + Math.round((Date.now() - tVoz) / 1000) + ' s';
     }, 500);
     r.el.__resposta = r;
@@ -736,6 +740,9 @@
     conversaVoz.ativa = true; conversaVoz.bloqueado = false; conversaVoz.trocou = false;
     $('voz-motor').textContent = '';
     telaVoz.hidden = false;
+    $('principal').classList.add('em-voz');
+    form.hidden = true;
+    descer();
     escutarConversa();
   }
   function encerrarConversaVoz() {
@@ -745,6 +752,11 @@
     if (conversaVoz.escuta) { conversaVoz.escuta.abortar(); conversaVoz.escuta = null; }
     VozJean.parar();
     telaVoz.hidden = true;
+    $('principal').classList.remove('em-voz');
+    form.hidden = false;
+    Esfera.nivelEntrada(0);
+    Esfera.modo(estado.gerando ? 'pensando' : 'repouso');
+    descer();
   }
   $('abrir-conversa-voz').addEventListener('click', abrirConversaVoz);
   $('voz-encerrar').addEventListener('click', encerrarConversaVoz);
@@ -993,6 +1005,14 @@
     if (e.origin === location.origin && e.data && e.data.jean === 'focar' && !app.hidden) campo.focus();
   });
   if (projetoDe) { var chip = $('contexto-chip'); chip.textContent = 'em ' + (projetoDe === 'hub' ? 'Lab Hub' : projetoDe); chip.hidden = false; }
+
+  // Esfera da Jean e aviso da fase beta (escondido, fica lembrado no aparelho).
+  Esfera.iniciar($('esfera'));
+  try { if (localStorage.getItem('jean.avisoBeta') === 'oculto') $('aviso-beta').hidden = true; } catch (e) { /* nada */ }
+  $('fechar-aviso').addEventListener('click', function () {
+    $('aviso-beta').hidden = true;
+    try { localStorage.setItem('jean.avisoBeta', 'oculto'); } catch (e) { /* nada */ }
+  });
 
   $('sair').addEventListener('click', async function () {
     try { await fetch('/api/sessao/sair', { method: 'POST', credentials: 'same-origin' }); } catch (e) { /* sai mesmo assim */ }

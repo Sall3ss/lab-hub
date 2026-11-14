@@ -6,9 +6,53 @@
   <title>Jean</title>
   <!-- Projeto "jean" do Lab Hub. Tudo que e deste projeto fica nesta pasta: para
        migrar, ela sai inteira, sem depender de nada do hub. -->
+  <meta name="theme-color" content="#06090c" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" />
   <link rel="stylesheet" href="./estilo.css" />
 </head>
 <body>
+  <div class="fundo-codigo" aria-hidden="true">
+    <pre class="fc-esq">SYS.BOOT  jean.core ........ ok
+  mem.alloc    0x7F3A  128k
+  voz.tts      kore     pronta
+  escuta.stt   gemini   pronta
+  ctx.hub      fichas   sinc
+
+[cfg]
+  pensamento   LOW
+  reserva      flash-lite
+  modo         beta
+
+[diag]
+  latencia     0.42 s
+  sinal        estavel
+  fenix        ativo
+
+04:12:07  canal aberto
+04:12:08  handshake ok
+04:12:09  contexto carregado
+04:12:11  aguardando fala</pre>
+    <pre class="fc-dir">NODE  LAB-HUB/JEAN
+  build   14.11
+  orbita  2 aneis
+  nucleo  fenix
+
+[fluxo]
+  entrada  >> transcricao
+  modelo   >> resposta
+  saida    >> voz
+
+[seg]
+  login    obrigatorio
+  acoes    com confirmacao
+  segredo  nunca aqui
+
+checksum  9F-2C-77-01
+integridade  100%
+uplink    ok</pre>
+  </div>
   <div class="app" id="app" hidden>
     <aside class="lateral" id="lateral" aria-label="Conversas">
       <div class="lateral-topo">
@@ -19,7 +63,7 @@
       </div>
       <button type="button" class="nova" id="nova">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-        Nova conversa
+        Iniciar nova conversa
       </button>
       <input class="busca" id="busca" type="search" placeholder="Buscar conversas" aria-label="Buscar conversas" autocomplete="off" />
       <nav class="conversas" id="conversas" aria-live="polite"></nav>
@@ -30,7 +74,7 @@
     </aside>
     <div class="veu so-celular" data-fechar-lateral hidden></div>
 
-    <main class="principal">
+    <main class="principal" id="principal">
       <header class="barra">
         <button type="button" class="icone so-celular" id="abrir-lateral" aria-label="Abrir lista de conversas">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
@@ -52,18 +96,50 @@
         </button>
       </header>
 
-      <section class="conversa" id="rolagem">
+      <!-- Palco: a Jean em pessoa (esfera). Grande na tela inicial e na conversa por voz;
+           pequena no alto quando há mensagens. 14/11, pedido do dono. -->
+      <section class="palco" id="palco">
         <div class="boas-vindas" id="boas-vindas">
           <div class="emblema" aria-hidden="true">J</div>
           <h2 id="saudacao">Olá.</h2>
           <p>Sou a Jean, a sua assistente aqui no Lab Hub. Pergunte, peça um texto, organize uma ideia.</p>
-          <p class="obra">Fase beta, no plano grátis do Gemini: não mande senha nem dado sensível.</p>
         </div>
+        <div class="esfera-area">
+          <canvas class="esfera" id="esfera" aria-hidden="true"></canvas>
+          <div class="hud hud-1" aria-hidden="true"><i class="hud-anel"></i><span>NÚCLEO<br><b>FÊNIX</b></span></div>
+          <div class="hud hud-2" aria-hidden="true"><span>SINAL DE VOZ<br><b data-hud="sinal">000</b></span><i class="hud-anel hud-anel-b"></i></div>
+          <div class="hud hud-3" aria-hidden="true"><i class="hud-anel hud-anel-c"></i><span>MOTOR<br><b>GEMINI</b></span></div>
+          <div class="hud hud-4" aria-hidden="true"><span>CONTEXTO<br><b>LAB HUB</b></span></div>
+          <div class="esfera-estado" role="status"><span class="esfera-luz" aria-hidden="true"></span>JEAN <b data-hud="modo">Em repouso</b></div>
+        </div>
+      </section>
+
+      <section class="conversa" id="rolagem">
         <div class="mensagens" id="mensagens" aria-live="polite"></div>
       </section>
 
+      <!-- Conversa por voz (Modo A, mãos livres): agora na mesma tela, abaixo da esfera -->
+      <div class="voz-conversa" id="voz-conversa" role="region" aria-label="Conversa por voz com a Jean" hidden>
+        <p class="voz-estado" id="voz-estado">Ouvindo...</p>
+        <p class="voz-transcricao" id="voz-transcricao"></p>
+        <p class="voz-motor" id="voz-motor"></p>
+        <p class="voz-motor" id="voz-tempos"></p>
+        <div class="voz-botoes">
+          <button type="button" class="secundario" id="voz-microfone">Microfone</button>
+          <button type="button" class="secundario" id="voz-falar-agora" hidden>Falar agora</button>
+          <button type="button" class="primario" id="voz-encerrar">Encerrar conversa por voz</button>
+        </div>
+      </div>
+
+      <div class="aviso-beta" id="aviso-beta">
+        <span>MODO BETA <i>|</i> GEMINI GRÁTIS <i>|</i> NÃO MANDE SENHAS OU DADOS SENSÍVEIS</span>
+        <button type="button" class="icone pequeno" id="fechar-aviso" aria-label="Esconder este aviso">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+
       <form class="entrada" id="entrada">
-        <textarea id="texto" rows="1" placeholder="Pergunte à Jean" aria-label="Mensagem para a Jean" enterkeyhint="send"></textarea>
+        <textarea id="texto" rows="1" placeholder="Pergunte à Jean..." aria-label="Mensagem para a Jean" enterkeyhint="send"></textarea>
         <button type="button" class="icone entrada-botao" id="ditado" aria-label="Ditar (falar e o texto aparece)" title="Ditar: fale e o texto aparece" hidden>
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
         </button>
@@ -94,19 +170,6 @@
       </div>
     </main>
 
-    <!-- Conversa por voz (Modo A, maos livres) -->
-    <div class="voz-conversa" id="voz-conversa" role="dialog" aria-label="Conversa por voz com a Jean" hidden>
-      <div class="voz-orbe" id="voz-orbe" aria-hidden="true"><span>J</span></div>
-      <p class="voz-estado" id="voz-estado">Ouvindo...</p>
-      <p class="voz-transcricao" id="voz-transcricao"></p>
-      <p class="voz-motor" id="voz-motor"></p>
-      <p class="voz-motor" id="voz-tempos"></p>
-      <div class="voz-botoes">
-        <button type="button" class="secundario" id="voz-microfone">Microfone</button>
-        <button type="button" class="secundario" id="voz-falar-agora" hidden>Falar agora</button>
-        <button type="button" class="primario" id="voz-encerrar">Encerrar</button>
-      </div>
-    </div>
   </div>
 
   <p class="carregando" id="carregando">Abrindo a Jean...</p>
@@ -204,6 +267,7 @@
   <script src="/navegador.js"></script>
   <script src="./texto.js"></script>
   <script src="./voz.js"></script>
+  <script src="./esfera.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

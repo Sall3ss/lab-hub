@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 13/11/2026 (Jean: etapa 3, contexto dos projetos, memórias e ações com confirmação).**
+**Atualizado em 14/11/2026 (Jean: visual com a esfera e conversa por voz na mesma tela).**
 
 ## Pronto
 
@@ -87,6 +87,9 @@
    em 14/11 (conversa por voz no celular, voz do Gemini): ditado e conversa por voz (navegador), áudio gravado (o Gemini ouve), Jean
    falando (TTS oficial do Gemini, reserva voz do navegador). edge-tts recusado (não
    oficial, AGPL, exige Node); motivo na ficha da Jean.
+   14/11: visual novo (pedido do dono, print de referência): tema escuro com a esfera de
+   fogo no centro representando a Jean, que pulsa com o volume da voz quando ela fala; a
+   conversa por voz deixou de abrir outra tela.
    14/11: voz também confirmada no PC (conversa por voz ouvindo pelo Gemini, menos de
    5 s por etapa). Estado e decisões em `projetos/jean/PROJETO.md`.
 
