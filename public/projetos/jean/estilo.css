@@ -212,3 +212,9 @@ details summary { cursor: pointer; font-size: .82rem; color: var(--suave); paddi
   .pulso-botao { padding: .5rem; }
   .contexto-chip { display: none; }
 }
+
+/* 14/11: botao "Concluir / Reabrir" no lugar da caixinha */
+.tarefa { cursor: default; }
+.mini { flex-shrink: 0; align-self: center; font: inherit; font-size: .78rem; font-weight: 600; padding: .3rem .65rem; border-radius: 999px; border: 1px solid var(--borda); background: var(--painel); color: var(--texto); cursor: pointer; }
+.mini:hover { border-color: var(--destaque); color: var(--destaque); }
+.mini:disabled { opacity: .5; cursor: wait; }

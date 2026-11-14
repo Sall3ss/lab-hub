@@ -137,6 +137,16 @@ projeto a precisar dele.
   chamar uma das propostas) e o cartão aparece; se mesmo assim falhar, avisa na própria
   resposta para pedir de novo. Testado com Google de mentira (4 cenários).
 
+- 🟢 **14/11 - Cartão funcionou no ar** (dono confirmou a tarefa do Cyberidle).
+- 🟢 **14/11 - Pulso:** a caixinha de tarefa virou botão "Concluir / Reabrir" (o dono marcou
+  a caixinha achando que era "aprovar" e a tarefa foi dada como feita) e os links "Abrir
+  ..." abrem em outra aba (pedido do dono).
+- 🔴 **Aberto: as tarefas da Jean não chegam sozinhas ao Claude Code.** Moram só no banco
+  (D1); quem trabalha num projeto no Claude Code lê a ficha no repositório. Caminhos
+  propostos ao dono em 14/11: (A) botão "Copiar para o Claude" no Pulso (grátis, já); (B)
+  ao confirmar, a Jean grava as tarefas num arquivo do projeto no repositório (automático,
+  grátis, mas exige um token do GitHub criado pelo dono e guardado como secret).
+
 ## Próximo passo
 
 4. Áudio: gravar, enviar arquivo de áudio, transcrição pelo Gemini, voz da resposta.

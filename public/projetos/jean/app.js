@@ -451,8 +451,13 @@
       var feitas = p.tarefas.filter(function (t) { return t.estado === 'feita'; });
       var link = p.slug === 'hub' ? '/' : (p.endereco || '/projetos/' + encodeURIComponent(p.slug) + '/');
       var tarefa = function (t) {
-        return '<div class="linha"><label class="tarefa' + (t.estado === 'feita' ? ' feita' : '') + '"><input type="checkbox" data-tarefa="' + t.id + '"' +
-          (t.estado === 'feita' ? ' checked' : '') + '><span>' + esc(t.titulo) + (t.detalhe ? '<small>' + esc(t.detalhe) + '</small>' : '') + '</span></label>' +
+        // Botao com nome, e nao caixinha: em 14/11 o dono marcou a caixinha achando que era
+        // "aprovar" e a tarefa foi dada como feita.
+        var feita = t.estado === 'feita';
+        return '<div class="linha"><div class="tarefa' + (feita ? ' feita' : '') + '"><span>' + esc(t.titulo) +
+          (t.detalhe ? '<small>' + esc(t.detalhe) + '</small>' : '') + '</span></div>' +
+          '<button type="button" class="mini" data-tarefa="' + t.id + '" data-estado="' + (feita ? 'aberta' : 'feita') + '">' +
+          (feita ? 'Reabrir' : 'Concluir') + '</button>' +
           '<button type="button" class="icone pequeno" data-apagar="tarefas" data-id="' + t.id + '" aria-label="Excluir tarefa">' + lixeira + '</button></div>';
       };
       return '<section class="projeto">' +
@@ -465,17 +470,17 @@
           return '<div class="linha"><div class="linha-texto"><span class="data">' + data(n.criada_em) + '</span> ' + esc(n.texto) + '</div>' +
             '<button type="button" class="icone pequeno" data-apagar="notas" data-id="' + n.id + '" aria-label="Excluir nota">' + lixeira + '</button></div>';
         }).join('') : '') +
-        '<a class="projeto-abrir" href="' + esc(link) + '">Abrir ' + esc(p.slug === 'hub' ? 'o hub' : p.titulo) + ' →</a>' +
+        '<a class="projeto-abrir" href="' + esc(link) + '" target="_blank" rel="noopener">Abrir ' + esc(p.slug === 'hub' ? 'o hub' : p.titulo) + ' →</a>' +
         '</section>';
     }).join('');
   }
 
-  corpoPainel.addEventListener('change', async function (ev) {
-    var cb = ev.target.closest('[data-tarefa]');
-    if (!cb) return;
-    cb.disabled = true;
-    try { await api('/tarefas/' + cb.dataset.tarefa, { method: 'PATCH', body: JSON.stringify({ estado: cb.checked ? 'feita' : 'aberta' }) }); await carregarPainel(); }
-    catch (e) { cb.checked = !cb.checked; cb.disabled = false; alertaPainel(erroDeRede(e)); }
+  corpoPainel.addEventListener('click', async function (ev) {
+    var b = ev.target.closest('[data-tarefa]');
+    if (!b) return;
+    b.disabled = true;
+    try { await api('/tarefas/' + b.dataset.tarefa, { method: 'PATCH', body: JSON.stringify({ estado: b.dataset.estado }) }); await carregarPainel(); }
+    catch (e) { b.disabled = false; alertaPainel(erroDeRede(e)); }
   });
 
   var apagarPendente = null;
