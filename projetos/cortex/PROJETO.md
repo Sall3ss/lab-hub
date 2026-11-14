@@ -143,7 +143,7 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
    3 tentativas, "tentar de novo", legenda nativa, áudio → Groq (pronto, falta a chave), download
    cirúrgico com .txt de metadados. Testado local de ponta a ponta com yt-dlp/ffmpeg simulados
    (nada baixado na VPS). Falta o teste real no PC do dono.
-3. ⬜ Roteiro com o Claude (e gravar `GROQ_API_KEY` para vídeos sem legenda).
+3. ⬜ Roteiro com o Claude (`GROQ_API_KEY` gravada em 14/11; falta `ANTHROPIC_API_KEY`).
 4. ⬜ Acabamento: tentar de novo em falha, filtro por vídeo/plataforma, copiar metadados.
 
 ## Estado
