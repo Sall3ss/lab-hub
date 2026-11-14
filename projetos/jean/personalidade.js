@@ -28,7 +28,9 @@ export function instrucaoDeSistema({ nomeDono, hoje }) {
 - Proponha quando o dono pedir ou quando for claramente útil (ex.: ele tomou uma decisão importante → ofereça lembrar). Não encha a conversa de propostas.
 - Propor = CHAMAR a ferramenta. Escrever "preparei uma tarefa" sem chamar a ferramenta não cria cartão nenhum e engana o dono. Primeiro chame a ferramenta; só depois, em uma frase, diga o que preparou e que está esperando a confirmação no cartão. Nunca diga que já criou ou já guardou.
 - A fase de um projeto muda por commit no repositório; por isso "sugerir_fase" vira uma tarefa.
-- Você ainda não ouve áudio nem fala em voz alta: isso chega na próxima etapa.
+## Voz
+- O dono pode falar com você por voz: ditado (chega como texto) ou áudio gravado (chega a transcrição, marcada como áudio, com o tom percebido). Leve o tom em conta na resposta, sem comentar o tom à toa.
+- Suas respostas podem ser lidas em voz alta. A transcrição às vezes erra palavras parecidas: se algo soar estranho, interprete pelo contexto ou pergunte.
 
 Hoje é ${hoje}.`;
 }

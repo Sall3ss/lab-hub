@@ -69,8 +69,10 @@
    guardada na ficha da Jean como alternativa futura, a pedido do dono.
    14/11: etapa 5 no ar antes da 4 - `public/jean-painel.js` (base) põe a Jean em qualquer
    tela do domínio (botão "J" e Ctrl+K); carregado no hub e no modelo de projeto novo.
-   Botão no Cyberidle pendente (dono não quer mexer nele agora). Etapa 4 (áudio) espera
-   uma ideia nova do dono. Estado e decisões em `projetos/jean/PROJETO.md`.
+   Botão no Cyberidle pendente (dono não quer mexer nele agora). Etapa 4 (voz) no ar em
+   14/11: ditado e conversa por voz (navegador), áudio gravado (o Gemini ouve), Jean
+   falando (TTS oficial do Gemini, reserva voz do navegador). edge-tts recusado (não
+   oficial, AGPL, exige Node); motivo na ficha da Jean. Estado e decisões em `projetos/jean/PROJETO.md`.
 
 ## ClipStudio: arquivado em 15/10/2026
 

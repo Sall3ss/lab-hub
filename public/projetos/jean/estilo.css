@@ -245,3 +245,69 @@ body.compacto .pulso-botao { padding: .5rem; }
 body.compacto .msg-usuario { max-width: 92%; }
 /* No painel global a etiqueta "em <projeto>" e justamente o que importa: sempre visivel. */
 body.embutido .contexto-chip { display: inline-block; flex-shrink: 0; max-width: 8rem; overflow: hidden; text-overflow: ellipsis; }
+
+/* ======================= etapa 4: voz ======================= */
+.entrada-botao { width: 2.6rem; height: 2.6rem; flex-shrink: 0; color: var(--suave); }
+.entrada-botao:hover { color: var(--texto); }
+.entrada-botao .cheio, .gravando .cheio { fill: currentColor; stroke: none; }
+.entrada-botao#gravar { color: var(--destaque); }
+.entrada-botao:disabled { opacity: .35; cursor: not-allowed; }
+#ditado.ouvindo { color: #fff; background: var(--destaque); animation: pulsar 1.2s infinite; }
+@keyframes pulsar { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--destaque) 45%, transparent); } 50% { box-shadow: 0 0 0 .5rem transparent; } }
+.voz-botao { color: var(--suave); }
+.voz-botao .ondas { opacity: .35; }
+.voz-botao.ligado { color: var(--destaque); background: color-mix(in srgb, var(--destaque) 12%, transparent); }
+.voz-botao.ligado .ondas { opacity: 1; }
+
+/* barra de gravacao (Modo B) */
+.gravando {
+  display: flex; align-items: center; gap: .5rem; max-width: 48rem; width: calc(100% - 2rem); margin: 0 auto 1rem;
+  padding: .45rem .5rem; border: 1px solid var(--destaque); border-radius: 1.75rem; background: var(--painel); box-shadow: 0 6px 24px rgb(0 0 0 / .08);
+}
+.gravando-ponto { width: .7rem; height: .7rem; border-radius: 50%; background: var(--destaque); animation: piscar 1s infinite; flex-shrink: 0; }
+.gravando.pausado .gravando-ponto { animation: none; opacity: .35; }
+@keyframes piscar { 50% { opacity: .2; } }
+.gravando-tempo { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 2.6rem; }
+.gravando-onda { flex: 1; min-width: 0; height: 2.5rem; }
+.gravando .i-continuar { display: none; }
+.gravando.pausado .i-pausa { display: none; }
+.gravando.pausado .i-continuar { display: block; color: var(--destaque); }
+body.compacto .gravando { width: calc(100% - 1.5rem); margin-bottom: .75rem; }
+
+/* fala do dono por audio */
+.por-audio { display: block; text-align: right; font-size: .72rem; color: var(--suave); margin-bottom: .2rem; }
+.msg-usuario.transcrevendo .balao { color: var(--suave); font-style: italic; }
+.msg-usuario.nao-enviado .balao { border-color: var(--destaque); color: var(--destaque); }
+
+/* "Ouvir" em cada resposta */
+.ouvir { display: inline-flex; align-items: center; gap: .35rem; }
+.barrinhas { display: none; align-items: flex-end; gap: 2px; height: .8rem; }
+.barrinhas i { width: 3px; background: var(--destaque); border-radius: 2px; animation: barra .8s infinite ease-in-out; }
+.barrinhas i:nth-child(2) { animation-delay: .15s; } .barrinhas i:nth-child(3) { animation-delay: .3s; }
+@keyframes barra { 0%, 100% { height: 25%; } 50% { height: 100%; } }
+.msg.falando .barrinhas { display: inline-flex; }
+.msg.falando .ouvir { color: var(--destaque); }
+
+/* conversa por voz (maos livres) */
+.voz-conversa {
+  position: fixed; inset: 0; z-index: 45; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem;
+  padding: 2rem 1.25rem calc(2rem + env(safe-area-inset-bottom)); text-align: center;
+  background: color-mix(in srgb, var(--fundo) 94%, transparent); backdrop-filter: blur(6px);
+}
+.voz-orbe {
+  width: 8.5rem; height: 8.5rem; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 2.6rem; font-weight: 700;
+  background: radial-gradient(circle at 35% 30%, var(--dourado), var(--destaque) 70%); box-shadow: 0 0 0 0 color-mix(in srgb, var(--destaque) 40%, transparent);
+}
+.voz-orbe.ouvindo { animation: ouvir 1.6s infinite ease-in-out; }
+.voz-orbe.pensando { animation: girar 1.4s infinite linear; background: conic-gradient(var(--destaque), var(--dourado), var(--destaque)); }
+.voz-orbe.pensando span { animation: girar 1.4s infinite linear reverse; }
+.voz-orbe.falando { animation: falar .5s infinite alternate ease-in-out; }
+.voz-orbe.parado { opacity: .6; }
+@keyframes ouvir { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--destaque) 45%, transparent); } 50% { box-shadow: 0 0 0 1.6rem transparent; } }
+@keyframes girar { to { transform: rotate(360deg); } }
+@keyframes falar { from { transform: scale(1); } to { transform: scale(1.08); } }
+.voz-estado { margin: .5rem 0 0; font-size: 1.15rem; font-weight: 600; }
+.voz-transcricao { margin: 0; max-width: 34rem; min-height: 3rem; color: var(--suave); line-height: 1.5; overflow-wrap: anywhere; }
+.voz-motor { margin: 0; font-size: .75rem; color: var(--suave); min-height: 1rem; }
+.voz-botoes { display: flex; gap: .6rem; flex-wrap: wrap; justify-content: center; }
+@media (prefers-reduced-motion: reduce) { .voz-orbe, .barrinhas i, .gravando-ponto, #ditado.ouvindo { animation: none !important; } }

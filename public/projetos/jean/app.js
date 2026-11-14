@@ -186,15 +186,16 @@
   });
 
   // ---------------------------------------------------------------- mensagens
-  function bolha(papel, conteudo, acoes) {
+  function bolha(papel, conteudo, acoes, entrada) {
     var el = document.createElement('div');
     el.className = 'msg msg-' + papel;
     if (papel === 'usuario') {
-      el.innerHTML = '<div class="balao"></div>';
-      el.firstChild.textContent = conteudo;
+      el.innerHTML = (entrada === 'audio' ? '<span class="por-audio">🎤 por áudio</span>' : '') + '<div class="balao"></div>';
+      el.querySelector('.balao').textContent = conteudo;
     } else {
       el.innerHTML = '<div class="avatar" aria-hidden="true">J</div><div class="corpo"><div class="md"></div>' +
-        '<div class="acoes"><button type="button" class="acao" data-copiar>Copiar</button></div></div>';
+        '<div class="acoes"><button type="button" class="acao" data-copiar>Copiar</button>' +
+        '<button type="button" class="acao ouvir" data-ouvir><span class="barrinhas" aria-hidden="true"><i></i><i></i><i></i></span><span class="ouvir-rotulo">Ouvir</span></button></div></div>';
       el.querySelector('.md').innerHTML = TextoJean.paraHtml(conteudo);
       el.dataset.bruto = conteudo;
     }
@@ -206,7 +207,7 @@
   function mostrarConversa(lista) {
     msgs.innerHTML = '';
     boasVindas.hidden = lista.length > 0;
-    lista.forEach(function (m) { bolha(m.papel, m.conteudo === '(proposta abaixo)' ? '' : m.conteudo, m.acoes); });
+    lista.forEach(function (m) { bolha(m.papel, m.conteudo === '(proposta abaixo)' ? '' : m.conteudo, m.acoes, m.entrada); });
     descer();
   }
 
@@ -268,6 +269,11 @@
       b.closest('.msg').remove();
       return gerar({ repetir: true, conversa_id: estado.atual && estado.atual.id, de: projetoDe, pagina: pagina });
     }
+    if ((b = ev.target.closest('[data-ouvir]'))) {
+      var m = b.closest('.msg');
+      if (m.classList.contains('falando')) VozJean.parar(); else falarMensagem(m);
+      return;
+    }
     if ((b = ev.target.closest('[data-copiar]'))) return copiar(b.closest('.msg').dataset.bruto, b);
     if ((b = ev.target.closest('.copiar-codigo'))) return copiar(b.closest('.codigo').querySelector('code').textContent, b);
   });
@@ -283,6 +289,7 @@
   // ---------------------------------------------------------------- enviar e receber
   function modoGerando(sim) {
     form.classList.toggle('gerando', sim);
+    $('gravar').disabled = sim;
     botao.setAttribute('aria-label', sim ? 'Parar resposta' : 'Enviar');
     ajustarCampo();
   }
@@ -306,7 +313,9 @@
     if (ev.key === 'Enter' && !ev.shiftKey && !toque && !ev.isComposing) { ev.preventDefault(); form.requestSubmit(); }
   });
 
-  async function gerar(corpo) {
+  // audio (Modo B): { blob, segundos, bolha } -> vai para /audio, cru no corpo.
+  async function gerar(corpo, audio) {
+    corpo.voz = vozAutomatica || conversaVoz.ativa;
     var controle = new AbortController();
     estado.gerando = controle;
     modoGerando(true);
@@ -316,12 +325,29 @@
     descer();
 
     try {
-      var r = await fetch(API + '/mensagem', {
-        method: 'POST', credentials: 'same-origin', signal: controle.signal,
-        headers: { 'content-type': 'application/json' }, body: JSON.stringify(corpo),
-      });
-      if (r.status === 401) return irParaEntrar();
-      if (!r.ok) { var d = await r.json().catch(function () { return {}; }); throw new Error(d.erro || 'Não foi possível enviar.'); }
+      var r;
+      if (audio) {
+        var q = new URLSearchParams({ segundos: String(audio.segundos || 0) });
+        if (corpo.conversa_id) q.set('conversa_id', corpo.conversa_id);
+        if (corpo.de) q.set('de', corpo.de);
+        if (corpo.pagina) q.set('pagina', corpo.pagina);
+        if (corpo.voz) q.set('voz', '1');
+        r = await fetch(API + '/audio?' + q.toString(), {
+          method: 'POST', credentials: 'same-origin', signal: controle.signal,
+          headers: { 'content-type': (audio.blob.type || 'audio/webm').split(';')[0] }, body: audio.blob,
+        });
+      } else {
+        r = await fetch(API + '/mensagem', {
+          method: 'POST', credentials: 'same-origin', signal: controle.signal,
+          headers: { 'content-type': 'application/json' }, body: JSON.stringify(corpo),
+        });
+      }
+      if (r.status === 401) { irParaEntrar(); return { falha: 'sessão expirada' }; }
+      if (!r.ok) {
+        var d = await r.json().catch(function () { return {}; });
+        if (audio && audio.bolha) { audio.bolha.classList.add('nao-enviado'); audio.bolha.querySelector('.balao').textContent = '🎤 Áudio não enviado'; }
+        throw new Error(d.erro || 'Não foi possível enviar.');
+      }
       var leitor = r.body.getReader(), dec = new TextDecoder(), resto = '';
       for (;;) {
         var parte = await leitor.read();
@@ -340,6 +366,8 @@
               marcarUrl(ev.id);
             }
             if (ev.nova) carregarLista();
+          } else if (ev.tipo === 'transcricao') {
+            if (audio && audio.bolha) { audio.bolha.querySelector('.balao').textContent = ev.texto; audio.bolha.classList.remove('transcrevendo'); }
           } else if (ev.tipo === 'texto') {
             var acompanhar = noFim();
             bruto += ev.t;
@@ -359,6 +387,7 @@
       }
       if (!terminou && !falha) falha = 'A resposta foi interrompida no meio.';
     } catch (e) {
+      var parou = e.name === 'AbortError';
       if (e.name === 'AbortError') {
         if (bruto) md.insertAdjacentHTML('beforeend', '<p class="parou">(você parou a resposta)</p>');
         else mostrarFalhaSimples('Você parou a resposta.');
@@ -373,7 +402,204 @@
       modoGerando(false);
       carregarLista();
     }
+    // Voz automatica: le a resposta assim que chega (na conversa por voz quem le e o laco dela).
+    if (!falha && !parou && bruto && vozAutomatica && !conversaVoz.ativa) falarMensagem(el);
+    return { bruto: bruto, falha: falha, parou: !!parou, el: el };
   }
+
+  // ---------------------------------------------------------------- voz (etapa 4)
+  function falarMensagem(el, aoTerminar) {
+    document.querySelectorAll('.msg.falando').forEach(function (x) { x.classList.remove('falando'); x.querySelector('.ouvir-rotulo').textContent = 'Ouvir'; });
+    var rotulo = el.querySelector('.ouvir-rotulo');
+    if (!rotulo || !el.dataset.bruto) { if (aoTerminar) aoTerminar({}); return; }
+    el.classList.add('falando');
+    rotulo.textContent = 'Parar';
+    VozJean.falar(el.dataset.bruto, {
+      aoComecar: function (motor) { $('voz-motor').textContent = motor ? 'Voz: ' + motor : ''; },
+      aoTerminar: function (info) {
+        el.classList.remove('falando');
+        rotulo.textContent = 'Ouvir';
+        if (aoTerminar) aoTerminar(info || {});
+      },
+    });
+  }
+
+  // Interruptor "Voz da Jean": lembrado neste aparelho (preferencia, nao dado).
+  var vozAutomatica = false;
+  try { vozAutomatica = localStorage.getItem('jean.vozAutomatica') === '1'; } catch (e) { /* sem armazenamento */ }
+  function marcarVozAutomatica() {
+    var b = $('voz-auto');
+    b.setAttribute('aria-pressed', vozAutomatica ? 'true' : 'false');
+    b.classList.toggle('ligado', vozAutomatica);
+    b.title = vozAutomatica ? 'Voz da Jean ligada: respostas são lidas em voz alta' : 'Voz da Jean desligada';
+  }
+  $('voz-auto').addEventListener('click', function () {
+    vozAutomatica = !vozAutomatica;
+    try { localStorage.setItem('jean.vozAutomatica', vozAutomatica ? '1' : '0'); } catch (e) { /* nada */ }
+    if (!vozAutomatica) VozJean.parar();
+    VozJean.destravar();
+    marcarVozAutomatica();
+  });
+  marcarVozAutomatica();
+  document.addEventListener('pointerdown', function () { VozJean.destravar(); });
+
+  // ---- Modo A: ditado (o texto aparece na caixa enquanto fala)
+  var ditado = null;
+  var botaoDitado = $('ditado');
+  botaoDitado.hidden = !VozJean.temDitado;
+  botaoDitado.addEventListener('click', function () {
+    if (ditado) { ditado.parar(); return; }
+    VozJean.parar();
+    var antes = campo.value.trim() ? campo.value.trim() + ' ' : '';
+    ditado = VozJean.ouvir({
+      aoTexto: function (t) { campo.value = antes + t; ajustarCampo(); },
+      aoErro: function (e) { if (e === 'not-allowed' || e === 'service-not-allowed') aviso('O navegador bloqueou o microfone. Libere o microfone para este site e tente de novo.'); },
+      aoFim: function () { ditado = null; botaoDitado.classList.remove('ouvindo'); botaoDitado.setAttribute('aria-label', 'Ditar (falar e o texto aparece)'); campo.focus(); },
+    });
+    if (ditado) { botaoDitado.classList.add('ouvindo'); botaoDitado.setAttribute('aria-label', 'Parar o ditado'); }
+  });
+
+  // ---- Modo B: gravar audio (como nota de voz)
+  var gravacao = null, lacoOnda = null, niveis = [];
+  var LIMITE_GRAVACAO = 600; // 10 minutos
+  var botaoGravar = $('gravar'), barraGravando = $('gravando'), onda = $('gravar-onda');
+  botaoGravar.hidden = !VozJean.temGravador;
+  function minutos(s) { return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+  function mostrarGravando(sim) { barraGravando.hidden = !sim; form.hidden = sim; }
+
+  botaoGravar.addEventListener('click', async function () {
+    if (gravacao || estado.gerando) return;
+    VozJean.parar();
+    if (ditado) ditado.parar();
+    try { gravacao = await VozJean.gravar(); }
+    catch (e) {
+      aviso(e && e.name === 'NotAllowedError' ? 'O navegador bloqueou o microfone. Libere o microfone para este site e tente de novo.' : 'Não foi possível gravar: ' + ((e && e.message) || 'erro desconhecido'));
+      return;
+    }
+    niveis = [];
+    barraGravando.classList.remove('pausado');
+    mostrarGravando(true);
+    desenharOnda();
+  });
+
+  function desenharOnda() {
+    if (!gravacao) return;
+    var s = gravacao.segundos();
+    $('gravar-tempo').textContent = minutos(s);
+    if (s >= LIMITE_GRAVACAO) { enviarGravacao(); return; }
+    var dpr = window.devicePixelRatio || 1, w = onda.clientWidth, h = onda.clientHeight;
+    if (onda.width !== Math.round(w * dpr)) { onda.width = Math.round(w * dpr); onda.height = Math.round(h * dpr); }
+    var g = onda.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, w, h);
+    if (!gravacao.pausado()) { niveis.push(gravacao.nivel()); if (niveis.length > Math.floor(w / 4)) niveis.shift(); }
+    g.fillStyle = getComputedStyle(document.body).getPropertyValue('--destaque') || '#c8322b';
+    for (var i = 0; i < niveis.length; i++) {
+      var alt = Math.max(2, niveis[i] * h);
+      g.fillRect(w - (niveis.length - i) * 4, (h - alt) / 2, 2, alt);
+    }
+    lacoOnda = requestAnimationFrame(desenharOnda);
+  }
+
+  function pararGravacaoTela() { cancelAnimationFrame(lacoOnda); mostrarGravando(false); }
+
+  $('gravar-cancelar').addEventListener('click', function () {
+    if (!gravacao) return;
+    gravacao.cancelar(); gravacao = null; pararGravacaoTela(); campo.focus();
+  });
+  $('gravar-pausar').addEventListener('click', function () {
+    if (!gravacao) return;
+    if (gravacao.pausado()) gravacao.continuar(); else gravacao.pausar();
+    barraGravando.classList.toggle('pausado', gravacao.pausado());
+    $('gravar-pausar').setAttribute('aria-label', gravacao.pausado() ? 'Continuar gravação' : 'Pausar gravação');
+  });
+  $('gravar-enviar').addEventListener('click', enviarGravacao);
+
+  async function enviarGravacao() {
+    if (!gravacao) return;
+    var g = gravacao; gravacao = null;
+    var segundos = g.segundos();
+    pararGravacaoTela();
+    var blob = await g.terminar();
+    if (segundos < 1 || blob.size < 800) { aviso('O áudio ficou curto demais. Segure um pouco mais e fale.'); return; }
+    boasVindas.hidden = true;
+    var b = bolha('usuario', '🎤 Áudio de ' + minutos(segundos) + ' · a Jean está ouvindo...', null, 'audio');
+    b.classList.add('transcrevendo');
+    descer();
+    gerar({ conversa_id: estado.atual && estado.atual.id, de: projetoDe, pagina: pagina }, { blob: blob, segundos: segundos, bolha: b });
+  }
+
+  // ---- Conversa por voz (Modo A, maos livres): ouve -> envia na pausa -> fala -> ouve
+  var conversaVoz = { ativa: false, escuta: null, silencio: null, ultimo: '' };
+  var telaVoz = $('voz-conversa'), orbe = $('voz-orbe');
+  $('abrir-conversa-voz').hidden = !VozJean.temDitado;
+  function estadoVoz(texto, classe) {
+    $('voz-estado').textContent = texto;
+    orbe.className = 'voz-orbe ' + (classe || '');
+    $('voz-falar-agora').hidden = classe !== 'parado';
+  }
+  function escutarConversa() {
+    if (!conversaVoz.ativa) return;
+    conversaVoz.ultimo = '';
+    $('voz-transcricao').textContent = '';
+    estadoVoz('Ouvindo... pode falar.', 'ouvindo');
+    conversaVoz.escuta = VozJean.ouvir({
+      aoTexto: function (t) {
+        conversaVoz.ultimo = t;
+        $('voz-transcricao').textContent = t;
+        clearTimeout(conversaVoz.silencio);
+        // Pausa de 1,3 s depois da ultima palavra = terminou de falar.
+        if (t) conversaVoz.silencio = setTimeout(function () { if (conversaVoz.escuta) conversaVoz.escuta.parar(); }, 1300);
+      },
+      aoErro: function (e) {
+        if (e === 'not-allowed' || e === 'service-not-allowed') { estadoVoz('O navegador bloqueou o microfone. Libere o microfone para este site.', 'parado'); conversaVoz.bloqueado = true; }
+      },
+      aoFim: function (final) {
+        conversaVoz.escuta = null;
+        clearTimeout(conversaVoz.silencio);
+        if (!conversaVoz.ativa || conversaVoz.bloqueado) return;
+        var t = (final || conversaVoz.ultimo || '').trim();
+        if (!t) { estadoVoz('Não ouvi nada. Toque em "Falar agora" quando quiser.', 'parado'); return; }
+        enviarFalaDaConversa(t);
+      },
+    });
+    if (!conversaVoz.escuta) estadoVoz('Não foi possível abrir o microfone.', 'parado');
+  }
+  async function enviarFalaDaConversa(t) {
+    estadoVoz('Pensando...', 'pensando');
+    boasVindas.hidden = true;
+    bolha('usuario', t);
+    descer();
+    var r = await gerar({ texto: t, conversa_id: estado.atual && estado.atual.id, de: projetoDe, pagina: pagina });
+    if (!conversaVoz.ativa) return;
+    if (r.falha || !r.bruto) { estadoVoz(r.falha ? 'Algo falhou: ' + r.falha : 'A Jean não respondeu.', 'parado'); return; }
+    estadoVoz('Falando...', 'falando');
+    falarMensagem(r.el, function (info) {
+      if (!conversaVoz.ativa) return;
+      if (info && info.erro) { estadoVoz('Sem voz neste navegador. A resposta está na tela.', 'parado'); return; }
+      escutarConversa();
+    });
+  }
+  function abrirConversaVoz() {
+    VozJean.destravar();
+    VozJean.parar();
+    if (ditado) ditado.parar();
+    conversaVoz.ativa = true; conversaVoz.bloqueado = false;
+    $('voz-motor').textContent = '';
+    telaVoz.hidden = false;
+    escutarConversa();
+  }
+  function encerrarConversaVoz() {
+    if (!conversaVoz.ativa) return;
+    conversaVoz.ativa = false;
+    clearTimeout(conversaVoz.silencio);
+    if (conversaVoz.escuta) { conversaVoz.escuta.abortar(); conversaVoz.escuta = null; }
+    VozJean.parar();
+    telaVoz.hidden = true;
+  }
+  $('abrir-conversa-voz').addEventListener('click', abrirConversaVoz);
+  $('voz-encerrar').addEventListener('click', encerrarConversaVoz);
+  $('voz-falar-agora').addEventListener('click', function () { conversaVoz.bloqueado = false; escutarConversa(); });
 
   // ---------------------------------------------------------------- propostas (cartões)
   var ROTULO_ESTADO = { confirmada: 'Feito', recusada: 'Recusada' };
@@ -571,6 +797,8 @@
       return;
     }
     if (e.key !== 'Escape') return;
+    if (conversaVoz.ativa) { encerrarConversaVoz(); return; }
+    if (gravacao) { $('gravar-cancelar').click(); return; }
     var algoAberto = app.classList.contains('lateral-aberta') || !menu.hidden || !painel.hidden || document.querySelector('dialog[open]');
     lateral(false); fecharMenu(); if (!painel.hidden) abrirPainel(false);
     if (!algoAberto) pedirFechar();

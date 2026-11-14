@@ -171,8 +171,36 @@ projeto a precisar dele.
     lá o painel não serve, seria um botão abrindo `/jean?de=cyberidle`). O dono pediu para
     **não mexer no Cyberidle agora** (14/11).
 
+- 🟡 **14/11 - Etapa 4: voz (pedido do dono, "100% gratuito").** Três modos:
+  - **A - Ditado e conversa por voz:** reconhecimento de fala do próprio navegador
+    (Chrome, Edge, Safari; o Firefox não tem, e os botões somem lá). Microfone ao lado da
+    caixa de texto preenche enquanto fala. Botão de ondas no topo = **conversa por voz
+    (mãos livres)**: ouve, envia sozinho após 1,3 s de silêncio, a Jean responde falando e
+    volta a ouvir; Esc ou "Encerrar" param. "Djin/Gin/Jim" no começo da fala vira "Jean".
+  - **B - Áudio gravado:** botão vermelho grava (tempo, onda, pausar, cancelar, enviar;
+    até 10 min). O áudio vai **cru** para `POST /api/p/jean/audio` (dados na URL); o Gemini
+    ouve, transcreve e percebe o tom; a transcrição entra na conversa marcada "🎤 por
+    áudio" e o tom vai para a Jean só naquele turno. **O áudio não é guardado.**
+  - **C - Jean falando:** botão de alto-falante no topo = voz automática (lembrada no
+    aparelho); "Ouvir/Parar" em cada resposta. A tela limpa o Markdown (código longo →
+    "Enviei o código na tela", links → "o link está na tela") e o servidor troca "Jean"
+    por "Djin" **só no que é falado**. Voz: **TTS oficial do Gemini** (`gemini-3.8-flash-tts`,
+    reserva `gemini-3.8-flash-lite-tts`, voz `Kore`; trocáveis por `JEAN_MODELO_VOZ`,
+    `JEAN_MODELO_VOZ_RESERVA`, `JEAN_VOZ`), pela API Interactions em streaming; o servidor
+    repassa o fluxo do Google sem abrir e a tela toca os pedaços (PCM 24 kHz). Se falhar
+    (limite do plano grátis, por exemplo), cai sozinha na **voz do navegador**. Quando a
+    resposta vai ser falada, a Jean é instruída a responder curto.
+  - **Por que não edge-tts (pedido original do dono):** não é API oficial (imita o Edge e
+    contorna a trava Sec-MS-GEC que a Microsoft criou contra esse uso), quebra quando ela
+    muda a trava, a biblioteca é AGPL e exige Node, que o Pages não tem (e a regra do dono
+    é nada na VPS). O TTS do Gemini é oficial, grátis e usa a mesma chave.
+  - Conferido aqui com modo simulado, microfone falso, reconhecimento de fala imitado e
+    voz do Google imitada (ciclo completo da conversa por voz, gravação, Ouvir/Parar,
+    recarregar). **Falta o teste real no ar**, principalmente: o formato exato do
+    streaming de voz do Google (a tela procura o áudio em qualquer lugar do evento) e o
+    limite diário do TTS grátis (não publicado na página de preços).
+
 ## Próximo passo
 
-4. Áudio: **o dono vai trazer uma ideia nova** para esta etapa (14/11). Perguntar antes de
-   começar (o plano antigo era: gravar, enviar arquivo de áudio, transcrição pelo Gemini,
-   voz da resposta).
+- Dono testar a voz no ar (PC e celular).
+- Pendente: botão da Jean no Cyberidle (dono pediu para não mexer agora).

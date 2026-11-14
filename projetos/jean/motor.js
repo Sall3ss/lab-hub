@@ -239,3 +239,93 @@ async function* simulado(historico, executar) {
   }
   yield { fim: true, motor: 'simulado', entrada: 0, saida: 0, ferramentas: usadas };
 }
+
+// ======================================================================= VOZ (etapa 4)
+// Decidido em 14/11/2026. O dono pediu edge-tts (voz do "Ler em voz alta" do Edge). Nao
+// foi usado: nao e API oficial (imita o navegador Edge e contorna a trava Sec-MS-GEC que
+// a Microsoft criou para barrar esse uso), quebra quando a Microsoft muda a trava, a
+// biblioteca e AGPL e exige Node (nao roda no Pages). No lugar: a voz OFICIAL do Gemini,
+// mesma chave, plano gratis. Reserva: a voz do proprio navegador (na tela).
+
+/**
+ * Modo B: o Gemini OUVE o audio gravado e devolve { transcricao, tom }. O audio nao fica
+ * guardado em lugar nenhum: so a transcricao vai para a conversa.
+ */
+export async function transcrever(env, bytes, mime) {
+  if (env.JEAN_SIMULADO === '1') return { transcricao: 'Mensagem de voz simulada: crie uma tarefa de teste', tom: 'calmo (simulado)' };
+  if (!env.GEMINI_API_KEY) throw new ErroMotor('A chave do Gemini (GEMINI_API_KEY) não está configurada no Pages.', 503);
+  const corpo = JSON.stringify({
+    contents: [{ role: 'user', parts: [
+      { inlineData: { mimeType: mime, data: paraBase64(bytes) } },
+      { text: 'Transcreva fielmente este áudio em português do Brasil, com pontuação. A assistente se chama Jean, pronunciado em inglês "Djin" (/dʒiːn/): quando ouvir "Djin", "Gin", "Jin" ou "Jim" chamando a assistente, escreva "Jean". Em "tom", descreva em poucas palavras o tom de voz e a intenção (ex.: "animado, com pressa"). Se não houver fala compreensível, devolva transcricao vazia.' },
+    ] }],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: { type: 'object', properties: { transcricao: { type: 'string' }, tom: { type: 'string' } }, required: ['transcricao'] },
+    },
+  });
+  const modelos = [env.JEAN_MODELO || 'gemini-3.8-flash', env.JEAN_MODELO_RESERVA || 'gemini-3.5-flash-lite'];
+  let ultimoErro = null;
+  for (const modelo of modelos) {
+    const inicio = Date.now();
+    const r = await fetch(`${URL_BASE}${encodeURIComponent(modelo)}:generateContent`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: corpo,
+    });
+    if (r.ok) {
+      const j = await r.json();
+      const texto = (j.candidates?.[0]?.content?.parts || []).filter((p) => p.text && !p.thought).map((p) => p.text).join('');
+      let saida = {};
+      try { saida = JSON.parse(texto); } catch { saida = { transcricao: texto }; }
+      return { transcricao: String(saida.transcricao || '').trim(), tom: String(saida.tom || '').trim(), motor: modelo };
+    }
+    ultimoErro = await erroDoGoogle(r, modelo, Math.round((Date.now() - inicio) / 1000), 1);
+    if (![404, 429, 500, 502, 503, 504, 524].includes(r.status)) break;
+  }
+  throw ultimoErro;
+}
+
+// Base64 em pedacos (String.fromCharCode com lista grande estoura a pilha).
+function paraBase64(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+/**
+ * Modo C: pede ao Gemini a voz da Jean (TTS oficial, plano gratis) EM STREAMING e devolve
+ * a resposta do Google como veio, sem abrir no servidor: quem le o audio e a tela
+ * (public/projetos/jean/voz.js). Assim o servidor quase nao gasta processamento.
+ * O texto ja chega limpo da tela; aqui so a pronuncia ("Jean" -> "Djin") e o tamanho.
+ */
+export async function vozDoGemini(env, texto) {
+  if (!env.GEMINI_API_KEY) throw new ErroMotor('A chave do Gemini (GEMINI_API_KEY) não está configurada no Pages.', 503);
+  const fala = pronunciaDaJean(texto).slice(0, 5000);
+  const modelos = [env.JEAN_MODELO_VOZ || 'gemini-3.8-flash-tts', env.JEAN_MODELO_VOZ_RESERVA || 'gemini-3.8-flash-lite-tts'];
+  let ultimoErro = null;
+  for (const modelo of modelos) {
+    const inicio = Date.now();
+    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions?alt=sse', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY, 'Api-Revision': '2026-05-20' },
+      body: JSON.stringify({
+        model: modelo,
+        stream: true,
+        input: [{ type: 'user_input', content: [{
+          type: 'text', text: fala,
+          annotations: [{ type: 'speech_metadata', style: 'Português do Brasil. Voz feminina, calma, inteligente e acolhedora; ritmo natural de conversa, sem pressa.' }],
+        }] }],
+        response_format: { type: 'audio' },
+        generation_config: { speech_config: [{ voice: env.JEAN_VOZ || 'Kore' }] },
+      }),
+    });
+    if (r.ok) return { resposta: r, modelo };
+    ultimoErro = await erroDoGoogle(r, modelo, Math.round((Date.now() - inicio) / 1000), 1);
+    if (![404, 429, 500, 502, 503, 504, 524].includes(r.status)) break;
+  }
+  throw ultimoErro;
+}
+
+/** "Jean" vira "Djin" SO no que vai ser falado; na tela continua "Jean". */
+export function pronunciaDaJean(texto) {
+  return String(texto || '').replace(/\bJean\b/g, 'Djin').replace(/\bJEAN\b/g, 'DJIN');
+}

@@ -9,6 +9,8 @@
 //   DELETE /conversas/:id          apaga a conversa e as falas
 //   POST   /mensagem               { conversa_id?, texto, de? } -> resposta em streaming (SSE)
 //                                  de = slug do projeto de onde a Jean foi chamada
+//   POST   /audio?conversa_id&de&pagina&voz&segundos   corpo = audio cru (Modo B, etapa 4)
+//   POST   /falar                  { texto } -> voz da Jean em streaming (Modo C, etapa 4)
 //   POST   /acoes/:id              { decisao: 'confirmar'|'recusar' } (cartao da proposta)
 //   GET    /painel                 projetos (cartao, tarefas, notas) + memorias
 //   PATCH  /tarefas/:id            { estado: 'aberta'|'feita' }
@@ -21,7 +23,7 @@
 
 import { db } from '../../lib/db.js';
 import { auditar } from '../../lib/audit.js';
-import { responder, ErroMotor } from './motor.js';
+import { responder, ErroMotor, transcrever, vozDoGemini } from './motor.js';
 import { instrucaoDeSistema } from './personalidade.js';
 import { contextoParaJean, dadosDoPainel, projetoPorSlug } from './contexto.js';
 import { declaracoes, executar, decidirAcao, publica, PROPOSTAS } from './ferramentas.js';
@@ -92,6 +94,8 @@ export async function rotas({ request, env, data, u, partes, metodo, json, waitU
   }
 
   if (rota === 'mensagem' && metodo === 'POST') return await mensagem({ request, env, u, json, waitUntil });
+  if (rota === 'audio' && metodo === 'POST') return await mensagemDeAudio({ request, env, u, json, waitUntil });
+  if (rota === 'falar' && metodo === 'POST') return await falar({ request, env, json });
 
   if (rota === 'acoes' && id && metodo === 'POST') {
     const corpo = await request.json().catch(() => ({}));
@@ -135,18 +139,32 @@ function tituloDe(texto) {
 async function mensagem({ request, env, u, json, waitUntil }) {
   const corpo = await request.json().catch(() => ({}));
   const texto = String(corpo.texto || '').trim();
+  const op = opcoesDaFala(corpo);
   // "Tentar de novo" depois de um erro: a fala do usuario ja esta gravada, so falta a resposta.
-  const de = corpo.de && projetoPorSlug(String(corpo.de)) ? String(corpo.de) : null;
-  const pagina = corpo.pagina ? String(corpo.pagina).replace(/[\r\n]+/g, ' ').slice(0, 200) : null;
-  if (corpo.repetir && corpo.conversa_id) return await repetir({ env, u, json, conversaId: Number(corpo.conversa_id), waitUntil, de, pagina });
+  if (corpo.repetir && corpo.conversa_id) return await repetir({ env, u, json, conversaId: Number(corpo.conversa_id), waitUntil, ...op });
   if (!texto) return json({ erro: 'Escreva uma mensagem.' }, 400);
   if (texto.length > MAX_TEXTO) return json({ erro: `Mensagem longa demais (máximo ${MAX_TEXTO} caracteres).` }, 400);
+  const conversa = await registrarFala(env, u, Number(corpo.conversa_id) || null, op.de, texto, 'texto', null);
+  if (!conversa) return json({ erro: 'conversa não encontrada' }, 404);
+  return responderEmStreaming({ env, u, conversa, waitUntil, ...op });
+}
 
+// de: projeto de onde a Jean foi chamada; pagina: tela aberta; voz: a resposta vai ser
+// falada em voz alta (a Jean responde mais curto e sem lista/codigo).
+function opcoesDaFala(o) {
+  return {
+    de: o.de && projetoPorSlug(String(o.de)) ? String(o.de) : null,
+    pagina: o.pagina ? String(o.pagina).replace(/[\r\n]+/g, ' ').slice(0, 200) : null,
+    voz: o.voz === true || o.voz === '1',
+  };
+}
+
+async function registrarFala(env, u, conversaId, de, texto, entrada, extras) {
   const agora = () => new Date().toISOString();
   let conversa;
-  if (corpo.conversa_id) {
-    conversa = await db(env).first('SELECT id, titulo FROM jean_conversas WHERE id = ? AND usuario_id = ?', Number(corpo.conversa_id), u.id);
-    if (!conversa) return json({ erro: 'conversa não encontrada' }, 404);
+  if (conversaId) {
+    conversa = await db(env).first('SELECT id, titulo FROM jean_conversas WHERE id = ? AND usuario_id = ?', conversaId, u.id);
+    if (!conversa) return null;
   } else {
     const r = await db(env).run(
       'INSERT INTO jean_conversas (usuario_id, titulo, projeto_slug, criada_em, atualizada_em) VALUES (?, ?, ?, ?, ?)',
@@ -154,24 +172,77 @@ async function mensagem({ request, env, u, json, waitUntil }) {
     );
     conversa = { id: r.meta.last_row_id, titulo: tituloDe(texto), nova: true };
   }
-
   await db(env).run(
-    "INSERT INTO jean_mensagens (conversa_id, papel, conteudo, entrada, criada_em) VALUES (?, 'usuario', ?, 'texto', ?)",
-    conversa.id, texto, agora(),
+    "INSERT INTO jean_mensagens (conversa_id, papel, conteudo, entrada, extras, criada_em) VALUES (?, 'usuario', ?, ?, ?, ?)",
+    conversa.id, texto, entrada, extras ? JSON.stringify(extras) : null, agora(),
   );
   await db(env).run('UPDATE jean_conversas SET atualizada_em = ? WHERE id = ?', agora(), conversa.id);
-  return responderEmStreaming({ env, u, conversa, waitUntil, de, pagina });
+  return conversa;
 }
 
-async function repetir({ env, u, json, conversaId, waitUntil, de, pagina }) {
+// Modo B (etapa 4): audio gravado. O arquivo vem CRU no corpo (regra da casa: nada de
+// base64 em JSON) e os dados na URL. O Gemini ouve, transcreve e percebe o tom; a
+// transcricao entra na conversa como fala do dono e o audio NAO e guardado.
+const MAX_AUDIO = 8 * 1024 * 1024;
+const MIMES_AUDIO = { 'audio/webm': 'audio/webm', 'audio/ogg': 'audio/ogg', 'audio/mp4': 'audio/m4a', 'audio/m4a': 'audio/m4a', 'audio/x-m4a': 'audio/m4a', 'audio/aac': 'audio/aac', 'audio/mpeg': 'audio/mpeg', 'audio/mp3': 'audio/mp3', 'audio/wav': 'audio/wav', 'audio/x-wav': 'audio/wav', 'audio/flac': 'audio/flac', 'audio/opus': 'audio/opus' };
+
+async function mensagemDeAudio({ request, env, u, json, waitUntil }) {
+  const url = new URL(request.url);
+  const op = opcoesDaFala(Object.fromEntries(url.searchParams));
+  const tipo = (request.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+  const mime = MIMES_AUDIO[tipo];
+  if (!mime) return json({ erro: `Formato de áudio não aceito (${tipo || 'desconhecido'}).` }, 415);
+  const bytes = new Uint8Array(await request.arrayBuffer());
+  if (!bytes.length) return json({ erro: 'O áudio chegou vazio. Grave de novo.' }, 400);
+  if (bytes.length > MAX_AUDIO) return json({ erro: 'Áudio grande demais (máximo de uns 8 MB, perto de 10 minutos).' }, 413);
+
+  let ouvido;
+  try { ouvido = await transcrever(env, bytes, mime); }
+  catch (e) { return json({ erro: e instanceof ErroMotor ? e.message : 'Não foi possível ouvir o áudio agora. Tente de novo.' }, 502); }
+  if (!ouvido.transcricao) return json({ erro: 'Não consegui entender o áudio. Fale mais perto do microfone e tente de novo.' }, 422);
+
+  const conversa = await registrarFala(env, u, Number(url.searchParams.get('conversa_id')) || null, op.de,
+    ouvido.transcricao.slice(0, MAX_TEXTO), 'audio', { tom: ouvido.tom || null, segundos: Number(url.searchParams.get('segundos')) || null });
+  if (!conversa) return json({ erro: 'conversa não encontrada' }, 404);
+  return responderEmStreaming({ env, u, conversa, waitUntil, ...op, ouvido });
+}
+
+// Modo C: a voz da Jean. Repassa o streaming do Google direto para a tela.
+async function falar({ request, env, json }) {
+  const corpo = await request.json().catch(() => ({}));
+  const texto = limparParaVoz(String(corpo.texto || ''));
+  if (!texto) return json({ erro: 'nada para falar' }, 400);
+  if (env.JEAN_SIMULADO === '1') return json({ erro: 'modo simulado: use a voz do navegador', reserva: true }, 503);
+  try {
+    const { resposta, modelo } = await vozDoGemini(env, texto);
+    return new Response(resposta.body, {
+      headers: { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache, no-transform', 'x-jean-voz': modelo },
+    });
+  } catch (e) {
+    return json({ erro: e instanceof ErroMotor ? e.message : 'A voz do Gemini não respondeu.', reserva: true }, e && e.status === 429 ? 429 : 502);
+  }
+}
+
+// Segunda limpeza (a tela ja limpa): nada de simbolo de Markdown ou endereco sendo lido.
+function limparParaVoz(t) {
+  return t
+    .replace(/```[\s\S]*?```/g, ' Enviei o código na tela. ')
+    .replace(/https?:\/\/\S+/g, 'o link na tela')
+    .replace(/[*_#`>|~]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 5000);
+}
+
+async function repetir({ env, u, json, conversaId, waitUntil, de, pagina, voz }) {
   const conversa = await db(env).first('SELECT id, titulo FROM jean_conversas WHERE id = ? AND usuario_id = ?', conversaId, u.id);
   if (!conversa) return json({ erro: 'conversa não encontrada' }, 404);
   const ultima = await db(env).first('SELECT papel FROM jean_mensagens WHERE conversa_id = ? ORDER BY id DESC LIMIT 1', conversa.id);
   if (!ultima || ultima.papel !== 'usuario') return json({ erro: 'Não há pergunta sem resposta nesta conversa.' }, 409);
-  return responderEmStreaming({ env, u, conversa, waitUntil, de, pagina });
+  return responderEmStreaming({ env, u, conversa, waitUntil, de, pagina, voz });
 }
 
-function responderEmStreaming({ env, u, conversa, waitUntil, de, pagina }) {
+function responderEmStreaming({ env, u, conversa, waitUntil, de, pagina, voz, ouvido }) {
   const agora = () => new Date().toISOString();
   const sistemaBase = instrucaoDeSistema({
     nomeDono: nomeBonito(u.nome),
@@ -199,6 +270,7 @@ function responderEmStreaming({ env, u, conversa, waitUntil, de, pagina }) {
     let resposta = '', fim = null, erro = null;
     const acoes = [];
     await enviar({ tipo: 'conversa', id: conversa.id, titulo: conversa.titulo, nova: !!conversa.nova });
+    if (ouvido) await enviar({ tipo: 'transcricao', texto: ouvido.transcricao, tom: ouvido.tom || null });
     try {
       // Ultimas falas, em ordem. O modelo exige comecar pelo usuario.
       const falas = (await db(env).all(
@@ -206,7 +278,13 @@ function responderEmStreaming({ env, u, conversa, waitUntil, de, pagina }) {
         conversa.id, MAX_HISTORICO,
       )).reverse();
       while (falas.length && falas[0].papel !== 'usuario') falas.shift();
-      const sistema = sistemaBase + '\n\n' + await contextoParaJean(env, u.id, de, pagina);
+      // Fala que veio por audio: a Jean sabe disso e do tom percebido (so neste turno).
+      if (ouvido && falas.length) {
+        const ult = falas[falas.length - 1];
+        ult.conteudo += `\n\n[Mensagem enviada por áudio${ouvido.tom ? '. Tom percebido na voz: ' + ouvido.tom : ''}.]`;
+      }
+      let sistema = sistemaBase + '\n\n' + await contextoParaJean(env, u.id, de, pagina);
+      if (voz) sistema += '\n\n## Esta resposta vai ser FALADA em voz alta\nResponda como numa conversa falada: curto (até umas 4 frases), sem listas longas, sem tabela e sem código, a menos que o dono peça. Se precisar de código ou lista longa, diga que deixou na tela.';
       const exec = (nome, args) => executar(env, u, conversa.id, nome, args);
       for await (const p of responder(env, { sistema, historico: falas, ferramentas: declaracoes(), executar: exec, propostas: PROPOSTAS })) {
         if (p.fim) { fim = p; break; }
