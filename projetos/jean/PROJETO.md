@@ -252,6 +252,23 @@ projeto a precisar dele.
   se os tempos mostrarem que vale: começar a falar a primeira frase antes da resposta
   terminar.
 
+- 🟡 **14/11 - Voz no PC, 3 problemas no teste do dono:** (a) modo **Navegador** parado
+  em "Ouvindo..." sem transcrever nada nem dar erro; (b) modo **Gemini** cortou "Jean,
+  [pausa] que horas são?" no "Jean" (a Jean respondeu "Oi Matheus, tô por aqui...") -
+  causado pelo ajuste de 0,75 s de silêncio feito minutos antes; (c) mais de 80 s até
+  responder. Feito: (a) vigia no modo Navegador mede o microfone em paralelo; se há voz e
+  o navegador não escreve nada em 2,5 s, troca para o Gemini e guarda a escolha; 10 s sem
+  nada → avisa; (b) silêncio exigido depende do que já foi falado: até 1,5 s de voz (tipo
+  só o nome) espera 1,8 s; depois, 1,1 s; histerese a 60%; limiar 0,10-0,22; (c) a
+  conversa mostra a etapa ao vivo ("Transcrevendo... N s", "Pensando... N s",
+  "Preparando a voz... N s"); a voz do Gemini tem 12 s para começar na tela (20 s no
+  servidor), senão a voz do navegador assume. A causa dos 80 s não foi medida (sem
+  registros do Pages aqui): suspeita principal é a voz do Gemini demorando (antes
+  esperava até 45 s por modelo, 2 modelos). Testado com microfone sintético: pausa após o
+  nome não corta; navegador mudo troca; voz travada cai na reserva.
+  - Lição: encurtar a espera de silêncio quebra a pausa natural depois do nome. Medir
+    com a frase real ("Jean, ... pergunta") antes de mexer nesse número.
+
 ## Próximo passo
 
 - MVP completo (etapas 1 a 5). Próximo passo é decisão do dono.

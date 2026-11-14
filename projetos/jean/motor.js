@@ -340,7 +340,7 @@ export async function vozDoGemini(env, texto) {
     const inicio = Date.now();
     let r;
     try { r = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions?alt=sse', {
-      signal: AbortSignal.timeout(45000),
+      signal: AbortSignal.timeout(20000),
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY, 'Api-Revision': '2026-05-20' },
       body: JSON.stringify({
@@ -354,7 +354,7 @@ export async function vozDoGemini(env, texto) {
         generation_config: { speech_config: [{ voice: env.JEAN_VOZ || 'Kore' }] },
       }),
     }); } catch (e) {
-      ultimoErro = new ErroMotor(`A voz do Gemini não respondeu em 45 s (${modelo}).`, 504);
+      ultimoErro = new ErroMotor(`A voz do Gemini não respondeu em 20 s (${modelo}).`, 504);
       continue;
     }
     if (r.ok) return { resposta: r, modelo };

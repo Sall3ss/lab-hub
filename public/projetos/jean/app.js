@@ -313,8 +313,12 @@
     if (ev.key === 'Enter' && !ev.shiftKey && !toque && !ev.isComposing) { ev.preventDefault(); form.requestSubmit(); }
   });
 
+  // Etapa atual, mostrada ao vivo na conversa por voz ("Transcrevendo... 2 s").
+  function etapaVoz(nome) { conversaVoz.etapa = nome; conversaVoz.etapaDesde = Date.now(); }
+
   // audio (Modo B): { blob, segundos, bolha } -> vai para /audio, cru no corpo.
   async function gerar(corpo, audio) {
+    etapaVoz(audio ? 'Transcrevendo' : 'Pensando');
     corpo.voz = vozAutomatica || conversaVoz.ativa;
     var controle = new AbortController();
     estado.gerando = controle;
@@ -377,6 +381,7 @@
             }
             if (ev.nova) carregarLista();
           } else if (ev.tipo === 'transcricao') {
+            etapaVoz('Pensando');
             if (audio && audio.bolha) { audio.bolha.querySelector('.balao').textContent = ev.texto; audio.bolha.classList.remove('transcrevendo'); }
           } else if (ev.tipo === 'texto') {
             var acompanhar = noFim();
@@ -431,6 +436,7 @@
       aoComecar: function (motor) {
         $('voz-motor').textContent = motor ? 'Voz: ' + motor : '';
         if (el.__resposta) { el.__resposta.vozComecou = Date.now() - el.__resposta.t0 - el.__resposta.esperou; mostrarTempos(el.__resposta); }
+        if (conversaVoz.ativa) estadoVoz('Falando...', 'falando');
       },
       aoTerminar: function (info) {
         el.classList.remove('falando');
@@ -580,10 +586,32 @@
     orbe.style.transform = '';
     if (ouvirPeloGemini()) return escutarConversaPeloGemini();
     conversaVoz.ultimo = '';
+    // Vigia (14/11, PC do dono): o reconhecimento do navegador pode ficar "ouvindo" sem
+    // receber som nenhum, sem dar erro. Mede o microfone em paralelo: se ha voz e o
+    // navegador nao escreve nada em 2,5 s, troca para o Gemini (e lembra a escolha).
+    var vigia = { voz: 0, texto: false, inicio: Date.now(), medidor: null, vivo: true };
+    VozJean.medirMicrofone(VozJean.microfoneEscolhido(), function (n) { if (n > 0.15 && !vigia.voz) vigia.voz = Date.now(); })
+      .then(function (m) { if (vigia.vivo) vigia.medidor = m; else m.parar(); }).catch(function () { /* sem medidor: segue sem vigia */ });
+    function encerrarVigia() { vigia.vivo = false; clearInterval(vigia.laco); if (vigia.medidor) vigia.medidor.parar(); }
+    vigia.laco = setInterval(function () {
+      if (vigia.texto || !conversaVoz.escuta) return;
+      if (vigia.voz && Date.now() - vigia.voz > 2500 && VozJean.temGravador) {
+        encerrarVigia();
+        escutaPreferida = 'gemini';
+        try { localStorage.setItem('jean.escuta', 'gemini'); } catch (e) { /* nada */ }
+        conversaVoz.trocou = true;
+        conversaVoz.escuta.abortar();
+      } else if (Date.now() - vigia.inicio > 10000) {
+        encerrarVigia();
+        conversaVoz.semNada = true;
+        conversaVoz.escuta.abortar();
+      }
+    }, 300);
     $('voz-transcricao').textContent = '';
     estadoVoz('Ouvindo... pode falar.', 'ouvindo');
     conversaVoz.escuta = VozJean.ouvir({
       aoTexto: function (t) {
+        if (t) vigia.texto = true;
         conversaVoz.ultimo = t;
         $('voz-transcricao').textContent = t;
         clearTimeout(conversaVoz.silencio);
@@ -596,10 +624,12 @@
         estadoVoz(erroDeEscuta(e), 'parado'); conversaVoz.bloqueado = true;
       },
       aoFim: function (final) {
+        encerrarVigia();
         conversaVoz.escuta = null;
         clearTimeout(conversaVoz.silencio);
         if (!conversaVoz.ativa) return;
-        if (conversaVoz.trocou) { conversaVoz.trocou = false; $('voz-motor').textContent = 'O reconhecimento deste navegador não funcionou: agora ouço pelo Gemini.'; escutarConversa(); return; }
+        if (conversaVoz.trocou) { conversaVoz.trocou = false; $('voz-motor').textContent = 'O navegador não estava transcrevendo o seu microfone: agora ouço pelo Gemini (dá para mudar em Microfone).'; escutarConversa(); return; }
+        if (conversaVoz.semNada) { conversaVoz.semNada = false; estadoVoz('O navegador não ouviu nada em 10 s. Toque em Microfone, confira a barra e escolha "Gemini".', 'parado'); return; }
         if (conversaVoz.bloqueado) return;
         var t = (final || conversaVoz.ultimo || '').trim();
         if (!t) { estadoVoz('Não ouvi nada. Confira o microfone (botão Microfone) e toque em "Falar agora".', 'parado'); return; }
@@ -616,7 +646,7 @@
       escuta = await VozJean.escutarPeloGemini({
         aoNivel: function (n) { orbe.style.transform = 'scale(' + (1 + Math.min(n, 1) * 0.25).toFixed(3) + ')'; },
         aoComecarFala: function () { $('voz-transcricao').textContent = '(ouvindo você...)'; },
-        aoParar: function () { orbe.style.transform = ''; estadoVoz('Pensando...', 'pensando'); },
+        aoParar: function () { orbe.style.transform = ''; etapaVoz('Transcrevendo'); estadoVoz('Transcrevendo...', 'pensando'); },
         aoFim: function (blob, segundos) {
           conversaVoz.escuta = null;
           orbe.style.transform = '';
@@ -645,11 +675,11 @@
 
   // "Pensando... N s" enquanto a resposta nao chega.
   async function esperarResposta(pedir) {
-    estadoVoz('Pensando...', 'pensando');
+    estadoVoz((conversaVoz.etapa || 'Pensando') + '...', 'pensando');
     var t0 = Date.now();
     var contador = setInterval(function () {
-      if (orbe.classList.contains('pensando')) $('voz-estado').textContent = 'Pensando... ' + Math.round((Date.now() - t0) / 1000) + ' s';
-    }, 1000);
+      if (orbe.classList.contains('pensando')) $('voz-estado').textContent = (conversaVoz.etapa || 'Pensando') + '... ' + Math.round((Date.now() - (conversaVoz.etapaDesde || t0)) / 1000) + ' s';
+    }, 500);
     $('voz-tempos').textContent = '';
     var r;
     try { r = await pedir(); }
@@ -662,7 +692,13 @@
   function responderNaConversa(r) {
     if (!conversaVoz.ativa) return;
     if (!r || r.falha || !r.bruto) { estadoVoz(r && r.falha ? 'Algo falhou: ' + r.falha : 'A Jean não respondeu.', 'parado'); return; }
-    estadoVoz('Falando...', 'falando');
+    // A voz demora um pouco para chegar: "Preparando a voz" ate o primeiro som.
+    estadoVoz('Preparando a voz...', 'pensando');
+    var tVoz = Date.now();
+    var contaVoz = setInterval(function () {
+      if (!conversaVoz.ativa || !orbe.classList.contains('pensando')) { clearInterval(contaVoz); return; }
+      $('voz-estado').textContent = 'Preparando a voz... ' + Math.round((Date.now() - tVoz) / 1000) + ' s';
+    }, 500);
     r.el.__resposta = r;
     mostrarTempos(r);
     falarMensagem(r.el, function (info) {

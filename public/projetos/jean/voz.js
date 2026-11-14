@@ -88,6 +88,13 @@ var VozJean = (function () {
 
   async function pelaVozDoGemini(a, texto, opcoes) {
     if (!ctx) throw new Error('sem WebAudio');
+    // Na conversa nao da para esperar: 12 s sem o primeiro pedaco de voz, desiste e a voz
+    // do navegador assume (14/11: houve espera de mais de 80 s no PC).
+    var semVoz = setTimeout(function () { if (!a.fontes.length) a.controle.abort(); }, 12000);
+    try { return await pelaVozDoGeminiDeFato(a, texto, opcoes); } finally { clearTimeout(semVoz); }
+  }
+
+  async function pelaVozDoGeminiDeFato(a, texto, opcoes) {
     var r = await fetch(API + '/falar', {
       method: 'POST', credentials: 'same-origin', signal: a.controle.signal,
       headers: { 'content-type': 'application/json' }, body: JSON.stringify({ texto: texto }),
@@ -365,12 +372,16 @@ var VozJean = (function () {
    */
   async function escutarPeloGemini(opcoes) {
     var g = await gravar({});
-    var inicio = Date.now(), recentes = [], falou = false, ultimaVoz = 0, acabou = false;
-    // 14/11: 1300 ms de silencio parecia lento no PC; 750 ms com histerese (silencio =
-    // abaixo de 70% do limiar de fala) termina rapido sem cortar pausas curtas de respiracao.
-    // O ruido do ambiente e o MENOR volume do ultimo 1,5 s (medir so no comeco errava quando
-    // a pessoa ja comecava falando ou a voz da Jean ainda saia da caixa de som), com teto.
-    var LIMIAR_MIN = 0.12, LIMIAR_MAX = 0.3, SILENCIO_MS = 750, ESPERA_MAX_MS = 12000, FALA_MAX_MS = 120000;
+    var inicio = Date.now(), recentes = [], falou = false, ultimaVoz = 0, acabou = false, tempoDeVoz = 0;
+    // Quando a pessoa terminou de falar (14/11, ajustado no ar):
+    //  - 1,3 s de silencio parecia lento; 0,75 s CORTOU "Jean, [pausa] que horas sao?" no
+    //    "Jean" (a pausa depois do nome e natural). Agora o silencio exigido depende de
+    //    quanto ja foi falado: fala curta (ate 1,5 s de voz, tipo so o nome) espera 1,8 s;
+    //    depois disso, 1,1 s.
+    //  - Histerese: depois que a fala comecou, so conta silencio abaixo de 60% do limiar.
+    //  - Ruido do ambiente = MENOR volume do ultimo 1,5 s (medir so no comeco errava quando a
+    //    pessoa ja comecava falando ou a voz da Jean ainda saia da caixa de som), com teto.
+    var LIMIAR_MIN = 0.1, LIMIAR_MAX = 0.22, SILENCIO_CURTO_MS = 1800, SILENCIO_MS = 1100, VOZ_CURTA_MS = 1500, ESPERA_MAX_MS = 12000, FALA_MAX_MS = 120000;
     function fim(comAudio) {
       if (acabou) return; acabou = true;
       clearInterval(laco);
@@ -386,9 +397,10 @@ var VozJean = (function () {
       recentes.push(n); if (recentes.length > 15) recentes.shift();
       var ruido = Math.min.apply(null, recentes);
       var limiar = Math.min(LIMIAR_MAX, Math.max(LIMIAR_MIN, ruido * 2.5));
-      if (n > limiar) { if (!falou && opcoes.aoComecarFala) opcoes.aoComecarFala(); falou = true; ultimaVoz = agora; }
-      else if (falou && n > limiar * 0.7) ultimaVoz = agora; // ainda falando baixinho
-      if (falou && agora - ultimaVoz > SILENCIO_MS) fim(true);
+      if (n > limiar) { if (!falou && opcoes.aoComecarFala) opcoes.aoComecarFala(); falou = true; ultimaVoz = agora; tempoDeVoz += 100; }
+      else if (falou && n > limiar * 0.6) ultimaVoz = agora; // ainda falando baixinho
+      var silencioPedido = tempoDeVoz < VOZ_CURTA_MS ? SILENCIO_CURTO_MS : SILENCIO_MS;
+      if (falou && agora - ultimaVoz > silencioPedido) fim(true);
       else if (!falou && agora - inicio > ESPERA_MAX_MS) fim(false);
       else if (agora - inicio > FALA_MAX_MS) fim(true);
     }, 100);
