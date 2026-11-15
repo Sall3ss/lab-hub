@@ -21,7 +21,7 @@
 //
 // As rotas do proprio PC (sem sessao, com a chave dele) ficam em maquina.js.
 //
-// Etapa 2 (agente do PC) e etapa 3 (Groq + Claude) entram aqui; ver a ficha.
+// Etapa 2 (agente do PC) e etapa 3 (roteiro com o Gemini gratis, roteiro.js); ver a ficha.
 // Autoria: Claude (Opus 5.5), Lab Hub, 14/11/2026.
 
 import { db } from '../../lib/db.js';
@@ -53,7 +53,7 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
       db(env).all(
         `SELECT v.id, v.url, v.plataforma, v.titulo, v.canal, v.duracao_s, v.etapa, v.erro, v.criado_em, v.atualizado_em,
                 (SELECT COUNT(*) FROM cortex_cortes c WHERE c.video_id = v.id AND c.estado <> 'descartado') AS cortes,
-                ${TAREFA_SQL('t.video_id = v.id AND t.tipo = \'texto\'')}
+                ${TAREFA_SQL('t.video_id = v.id AND t.tipo IN (\'texto\', \'roteiro\')')}
            FROM cortex_videos v WHERE v.usuario_id = ? AND v.arquivado = 0
           ORDER BY v.atualizado_em DESC LIMIT 300`, u.id),
       db(env).all(
@@ -99,7 +99,7 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
     const tabela = rota === 'videos' ? 'cortex_videos' : 'cortex_cortes';
     const dono = await db(env).first(`SELECT id FROM ${tabela} WHERE id = ? AND usuario_id = ?`, Number(id), u.id);
     if (!dono) return json({ erro: 'não encontrado' }, 404);
-    const filtroTipo = rota === 'videos' ? " AND tipo = 'texto'" : '';
+    const filtroTipo = rota === 'videos' ? " AND tipo IN ('texto', 'roteiro')" : '';
     const r = await db(env).run(
       `UPDATE cortex_tarefas SET estado = 'pendente', tentativas = 0, erro = NULL, atualizada_em = ?
         WHERE ${campo} = ? AND estado = 'falhou'${filtroTipo}`, agora, dono.id);

@@ -184,7 +184,7 @@
   }
 
   function cartaoVideo(v) {
-    var st = situacao(v, v.etapa === 'entrada' ? 'buscando o texto…' : 'transcrevendo…');
+    var st = situacao(v, v.etapa === 'entrada' ? 'buscando o texto…' : v.etapa === 'roteiro' ? 'IA começando a ler…' : 'transcrevendo…');
     if (!st && v.etapa === 'roteiro') st = '<div class="c-estado espera"><span class="ponto"></span>Texto pronto: aguardando a IA (etapa 3)</div>';
     return '<button type="button" class="cartao' + (v.id === selVideo ? ' sel' : '') + '" data-video="' + v.id + '">' +
       '<div class="c-linha"><span class="tag-plat ' + v.plataforma + '">' + PLAT[v.plataforma] + '</span>' +

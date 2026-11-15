@@ -9,6 +9,7 @@
 //   POST /tarefas/:id/meta                { titulo, canal, duracao_s }
 //   POST /tarefas/:id/texto?parte&total&fonte=legenda   { segmentos: [{ i, f, t }] }
 //   POST /tarefas/:id/audio?parte&total&inicio          corpo = audio cru (ogg/opus) -> Groq
+//   POST /tarefas/:id/roteiro            um passo do roteiro com a IA (etapa 3); resposta chega aos poucos
 //   POST /tarefas/:id/concluir            { arquivo_local? }
 //   POST /tarefas/:id/falhar              { erro, definitivo? }
 //   POST /tarefas/:id/devolver            o dono desligou o PC no meio: volta para a fila sem contar falha
@@ -18,9 +19,11 @@
 // Autoria: Claude (Opus 5.5), Lab Hub, 14/11/2026.
 
 import { db } from '../../lib/db.js';
+import { passoRoteiro } from './roteiro.js';
 
-export const AGENTE_VERSAO = '1.2.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
-const PRAZO_MIN = { texto: 30, baixar_corte: 60 };
+export const AGENTE_VERSAO = '1.3.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+const PRAZO_MIN = { texto: 30, baixar_corte: 60, roteiro: 20 };
+const VERSAO_ROTEIRO = [1, 3, 0];       // agente mais velho nao sabe fazer 'roteiro': nao recebe
 const MAX_TENTATIVAS = 3;
 const VISTO_A_CADA_MS = 60 * 1000;      // grava "visto_em" no maximo 1x por minuto (poupa escrita no D1)
 const GROQ_MODELO = 'whisper-large-v3-turbo';
@@ -31,12 +34,12 @@ export async function hashChave(chave) {
   return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-export async function maquina({ request, env, partes, metodo, json }) {
+export async function maquina({ request, env, partes, metodo, json, waitUntil }) {
   const auth = request.headers.get('authorization') || '';
   const chave = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
   if (!/^cx_[A-Za-z0-9_-]{30,80}$/.test(chave)) return json({ erro: 'chave do agente ausente ou inválida' }, 401);
   const ag = await db(env).first(
-    'SELECT id, usuario_id, nome, baixa_cortes, visto_em FROM cortex_agentes WHERE chave_hash = ? AND revogado_em IS NULL',
+    'SELECT id, usuario_id, nome, baixa_cortes, visto_em, versao FROM cortex_agentes WHERE chave_hash = ? AND revogado_em IS NULL',
     await hashChave(chave));
   if (!ag) return json({ erro: 'Este PC foi desconectado ou a chave não existe. Gere uma nova na tela "PCs".', revogado: true }, 401);
   if (metodo !== 'POST') return json({ erro: 'use POST' }, 405);
@@ -67,7 +70,10 @@ export async function maquina({ request, env, partes, metodo, json }) {
     await db(env).run(
       "UPDATE cortex_tarefas SET estado = 'pendente', agente_id = NULL, pega_ate = NULL, progresso = NULL WHERE usuario_id = ? AND estado = 'pega' AND pega_ate < ?",
       ag.usuario_id, iso);
-    const tipos = ag.baixa_cortes ? "('texto', 'baixar_corte')" : "('texto')";
+    const lista = ['texto'];
+    if (ag.baixa_cortes) lista.push('baixar_corte');
+    if (versaoMin(ag.versao, VERSAO_ROTEIRO)) lista.push('roteiro');
+    const tipos = '(' + lista.map((x) => `'${x}'`).join(', ') + ')';
     // Duas tentativas: se outro PC pegar a mesma tarefa no mesmo instante, tenta a seguinte.
     for (let i = 0; i < 2; i++) {
       const t = await db(env).first(
@@ -94,7 +100,7 @@ export async function maquina({ request, env, partes, metodo, json }) {
           corte.numero = (n ? n.n : 0) + 1;
         }
       }
-      if (t.tipo === 'texto') {
+      if (t.tipo !== 'baixar_corte') {
         await db(env).run("UPDATE cortex_videos SET erro = NULL, atualizado_em = ? WHERE id = ?", iso, t.video_id);
       }
       return json({ tarefa: { id: t.id, tipo: t.tipo, tentativa: t.tentativas + 1, prazo, video, corte } });
@@ -168,6 +174,11 @@ export async function maquina({ request, env, partes, metodo, json }) {
     const ultima = parte >= total - 1;
     if (ultima) {
       lotes.push(["UPDATE cortex_videos SET etapa = 'roteiro', fonte_texto = ?, erro = NULL, atualizado_em = ? WHERE id = ?", [fonte, iso, tarefa.video_id]]);
+      // Texto pronto: o roteiro com a IA entra na fila (refeito do zero se o texto foi refeito).
+      lotes.push(['DELETE FROM cortex_roteiro_partes WHERE video_id = ?', [tarefa.video_id]]);
+      lotes.push(["DELETE FROM cortex_tarefas WHERE video_id = ? AND tipo = 'roteiro' AND estado <> 'pega'", [tarefa.video_id]]);
+      lotes.push(["INSERT INTO cortex_tarefas (usuario_id, tipo, video_id, criada_em, atualizada_em) VALUES (?, 'roteiro', ?, ?, ?)",
+        [tarefa.usuario_id, tarefa.video_id, iso, iso]]);
       lotes.push(["UPDATE cortex_tarefas SET estado = 'feita', progresso = NULL, atualizada_em = ? WHERE id = ?", [iso, tarefa.id]]);
     } else {
       const prazo = new Date(agora.getTime() + PRAZO_MIN.texto * 60000).toISOString();
@@ -176,6 +187,26 @@ export async function maquina({ request, env, partes, metodo, json }) {
     }
     await db(env).batch(lotes);
     return json({ ok: true, blocos: blocos.length, concluido: ultima });
+  }
+
+  if (acao === 'roteiro') {
+    if (tarefa.tipo !== 'roteiro') return json({ erro: 'tarefa não é de roteiro' }, 400);
+    // O Gemini pode levar mais de um minuto num trecho grande; a Cloudflare corta conexao
+    // muda por 100 s (lição da Jean, erro 524). Entao a resposta sai na hora e manda um
+    // espaco a cada 15 s ate o JSON final (o agente le o texto todo e interpreta no fim).
+    const { readable, writable } = new TransformStream();
+    const w = writable.getWriter();
+    const enc = new TextEncoder();
+    const bate = setInterval(() => { w.write(enc.encode(' ')).catch(() => {}); }, 15000);
+    const trabalho = (async () => {
+      let res;
+      try { res = { ok: true, ...(await passoRoteiro(env, tarefa)) }; }
+      catch (e) { res = { erro: String(e.message || e).slice(0, 300), esperar_s: e.esperar_s, definitivo: !!e.definitivo }; }
+      clearInterval(bate);
+      try { await w.write(enc.encode(JSON.stringify(res))); await w.close(); } catch { /* o PC desligou no meio */ }
+    })();
+    if (waitUntil) waitUntil(trabalho);
+    return new Response(readable, { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
   }
 
   if (acao === 'concluir') {
@@ -207,7 +238,7 @@ export async function maquina({ request, env, partes, metodo, json }) {
       [fim ? 'falhou' : 'pendente', tentativas, erro, iso, tarefa.id]]];
     if (fim) {
       const msg = `${ag.nome}: ${erro}`;
-      if (tarefa.tipo === 'texto') lotes.push(['UPDATE cortex_videos SET erro = ?, atualizado_em = ? WHERE id = ?', [msg, iso, tarefa.video_id]]);
+      if (tarefa.tipo !== 'baixar_corte') lotes.push(['UPDATE cortex_videos SET erro = ?, atualizado_em = ? WHERE id = ?', [msg, iso, tarefa.video_id]]);
       else if (tarefa.corte_id) lotes.push(['UPDATE cortex_cortes SET erro = ?, atualizado_em = ? WHERE id = ?', [msg, iso, tarefa.corte_id]]);
     }
     await db(env).batch(lotes);
@@ -215,6 +246,12 @@ export async function maquina({ request, env, partes, metodo, json }) {
   }
 
   return json({ erro: 'rota nao encontrada' }, 404);
+}
+
+function versaoMin(v, min) {
+  const p = String(v || '0').split('.').map((x) => Number(x) || 0);
+  for (let i = 0; i < 3; i++) { if ((p[i] || 0) !== min[i]) return (p[i] || 0) > min[i]; }
+  return true;
 }
 
 // Junta frases curtas em blocos de ~30 s: menos linhas no banco e o roteiro da IA continua

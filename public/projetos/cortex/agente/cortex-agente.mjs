@@ -29,7 +29,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '1.2.0';
+const VERSAO = '1.3.0';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -90,13 +90,13 @@ class ErroPainel extends Error {
   constructor(msg, status, dados) { super(msg); this.status = status; this.dados = dados || {}; }
 }
 
-async function painel(cfg, caminho, { corpo, bruto, tipo } = {}) {
+async function painel(cfg, caminho, { corpo, bruto, tipo, prazo } = {}) {
   const headers = { authorization: 'Bearer ' + cfg.chave, 'user-agent': 'cortex-agente/' + VERSAO };
   let body;
   if (bruto) { body = bruto; headers['content-type'] = tipo || 'application/octet-stream'; }
   else { body = JSON.stringify(corpo || {}); headers['content-type'] = 'application/json'; }
   const r = await fetch(cfg.painel.replace(/\/$/, '') + '/api/p/cortex/maquina' + caminho, {
-    method: 'POST', headers, body, signal: AbortSignal.timeout(bruto ? 5 * 60000 : 60000),
+    method: 'POST', headers, body, signal: AbortSignal.timeout(prazo || (bruto ? 5 * 60000 : 60000)),
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new ErroPainel(j.erro || `painel respondeu ${r.status}`, r.status, j);
@@ -267,6 +267,40 @@ function progresso(cfg, t, rotulo) {
   };
 }
 
+// ---------------------------------------------------------------- tarefa "roteiro"
+// A IA (Gemini, na nuvem) lê a transcrição e marca os cortes. O PC só pede "próximo passo"
+// até acabar; cada passo é um trecho de ~45 min. Nada pesado roda aqui.
+async function tarefaRoteiro(cfg, t) {
+  log(`Roteiro com a IA: ${t.video.titulo || t.video.url}`);
+  let esperado = 0, falhasSeguidas = 0;
+  while (!parando) {
+    let r;
+    try {
+      r = await painel(cfg, `/tarefas/${t.id}/roteiro`, { corpo: {}, prazo: 5 * 60000 });
+    } catch (e) {
+      if (e instanceof ErroPainel && (e.dados.perdida || e.status < 500)) throw e;
+      if (++falhasSeguidas > 3) throw e;    // rede caiu: tenta mais 3 vezes antes de contar falha
+      log('Painel não respondeu, tento de novo em 30 s:', e.message);
+      await dorme(30000); continue;
+    }
+    falhasSeguidas = 0;
+    if (r.erro) {
+      if (r.esperar_s && esperado < 8 * 3600) {
+        const s = Math.min(Math.max(Number(r.esperar_s) || 60, 20), 1800);
+        esperado += s;
+        const aviso = `limite do Gemini grátis: retoma em ${s < 120 ? s + ' s' : Math.ceil(s / 60) + ' min'}`;
+        log(aviso[0].toUpperCase() + aviso.slice(1) + '.');
+        await painel(cfg, `/tarefas/${t.id}/prorrogar`, { corpo: { progresso: aviso } }).catch(() => {});
+        await dorme(s * 1000);
+        continue;
+      }
+      const e = new Error(r.erro); e.definitivo = !!r.definitivo; throw e;
+    }
+    log(r.concluido ? `Roteiro pronto: ${r.cortes} cortes na Triagem.` : r.progresso);
+    if (r.concluido) return;
+  }
+}
+
 // ---------------------------------------------------------------- laço principal
 async function executar(cfg, t) {
   const pasta = join(tmpdir(), 'cortex-' + t.id + '-' + Date.now());
@@ -276,6 +310,7 @@ async function executar(cfg, t) {
   const vivo = setInterval(() => painel(cfg, `/tarefas/${t.id}/prorrogar`, { corpo: {} }).catch(() => {}), 5 * 60000);
   try {
     if (t.tipo === 'texto') await tarefaTexto(cfg, t, pasta);
+    else if (t.tipo === 'roteiro') await tarefaRoteiro(cfg, t);
     else {
       const caminho = await tarefaCorte(cfg, t);
       await painel(cfg, `/tarefas/${t.id}/concluir`, { corpo: { arquivo_local: caminho } });

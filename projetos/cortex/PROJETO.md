@@ -45,7 +45,8 @@ pedido é o mesmo, só que mais forte: a VPS fica com carga zero, e não "carga 
                                  ◄── legenda (texto, KB) ─────────────── sim: manda a legenda
                                  ◄── áudio leve em partes (opus 24k) ─── não: extrai áudio comprimido
                                  Function → Groq Whisper → texto
-                                 Function → Claude API → roteiro JSON
+                                 tarefa "roteiro" ◄──────────────────── agente pede "próximo passo"
+                                 Function → Gemini (grátis) → cortes JSON
  triagem: aprova/descarta ◄────► cortex_cortes (estado)
                                  tarefa "baixar_corte" na fila ────────► yt-dlp --download-sections
                                                                          "*início-fim" → pasta do Movavi
@@ -74,7 +75,8 @@ Por que esse desenho:
 | `cortex_videos` | link colado: plataforma, id na plataforma (único por dono), título, canal, duração, `etapa` (entrada → transcricao → roteiro → cortado), erro, arquivado |
 | `cortex_transcricao` | o texto em pedaços com `inicio_s`/`fim_s` (live de 6 h passa de 400 KB; em pedaços cabe no D1 e a IA aponta o minuto) |
 | `cortex_cortes` | o corte: `tipo` longo/curto, `origem` ia/manual, início/fim, título, descrição, tags (JSON), gancho, motivo e nota da IA, `estado` (triagem → download → edicao → publicado, ou descartado), caminho do arquivo no PC |
-| `cortex_tarefas` | fila do PC: `texto` (buscar legenda/áudio) ou `baixar_corte`; pendente → pega (com prazo) → feita/falhou, tentativas |
+| `cortex_tarefas` | fila do PC: `texto` (buscar legenda/áudio), `baixar_corte` ou `roteiro` (0008: o PC só puxa os passos da IA); pendente → pega (com prazo) → feita/falhou, tentativas |
+| `cortex_roteiro_partes` | (0008) um passo do roteiro já feito: trecho, resumo dos assuntos (JSON), quantos cortes criou, qual modelo respondeu. Permite retomar de onde parou |
 | `cortex_agentes` | o PC (ou PCs) do dono: chave guardada só como hash, `visto_em` (mostra "PC online"), revogação, `baixa_cortes` (0007), versão do agente e das ferramentas |
 
 O **Kanban não tem tabela**: as colunas saem do estado. V1 Entrada, V2 Transcrição, V3 Roteiro
@@ -82,19 +84,30 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
 (cartão = corte). Transições que o dono pode fazer estão em `TRANSICOES` no `api.js`; o resto
 é do agente.
 
-## O roteiro da IA (etapa 3)
+## O roteiro da IA (etapa 3, 14/11)
 
-- Chamada da Function à **Claude API** (SDK oficial `@anthropic-ai/sdk`, modelo
-  `claude-opus-5-5`, em streaming, saída estruturada por JSON Schema em `output_config.format`,
-  com `fallbacks` ligado para recusa).
-- Entrada: a transcrição como linhas `[hh:mm:ss] texto` + o pedido (foco GTA 6, público BR).
-- Saída: `{ longos: [...], curtos: [...] }`, cada um com `inicio_s`, `fim_s`, `titulo`,
-  `descricao`, `tags`, `gancho`, `motivo`, `nota`. Longos de 30-40 min, curtos de 45-90 s; o
-  servidor valida limites e tempos antes de gravar (o `validarCorte` já existe).
-- Custo estimado com os preços de hoje: live de 6 h ≈ 90 mil tokens de entrada e ~8 mil de
-  saída ≈ **US$ 0,50 por live** no Claude; a Groq (Whisper) cobra centavos por hora de áudio e
-  tem plano grátis com limite diário. Com legenda nativa do YouTube, a Groq nem é chamada.
-- Segredos (o dono grava no Pages, nunca nesta máquina): `ANTHROPIC_API_KEY`, `GROQ_API_KEY`.
+- **Grátis na beta (pedido do dono, 14/11):** Gemini no plano gratuito, com a MESMA chave da
+  Jean (`GEMINI_API_KEY`), em `roteiro.js`. Modelos `gemini-3.8-flash`, reserva
+  `gemini-3.5-flash-lite` (trocáveis por `CORTEX_MODELO` / `CORTEX_MODELO_RESERVA` no Pages).
+  Trocar para o Claude depois = trocar só a função `perguntar` (a ideia original: Claude API,
+  SDK oficial, ≈ US$ 0,50 por live de 6 h).
+- **Em passos, puxados pelo agente do PC** (tarefa `roteiro`, agente 1.3.0+; agente mais velho
+  não recebe): passos 0..n-1 = trechos de ~45 min da transcrição → até 4 cortes CURTOS (45-90 s)
+  por trecho + mapa de assuntos com tempos e "força"; passo n (só vídeo com 35 min ou mais) =
+  lê o mapa de assuntos inteiro e escolhe de 1 a 6 cortes LONGOS (30-40 min). Cada passo cabe
+  numa chamada; a resposta da Function manda um espaço a cada 15 s até o JSON (evita o 524 da
+  Cloudflare, lição da Jean). Os cortes vão aparecendo na Triagem enquanto anda; o cartão do
+  vídeo mostra "IA lendo trecho 2 de 8 · 5 cortes até agora".
+- O servidor valida tudo antes de gravar: tempo dentro do trecho, curto 15-180 s, longo 5-90
+  min, título obrigatório, tags minúsculas sem #, nota 0-100, sem repetir corte sobreposto.
+- Limite do plano grátis (429): tenta o modelo reserva; se os dois estiverem no limite, o PC
+  espera o tempo que o Google pede e repete o MESMO passo. A cota é dividida com a Jean.
+- ⚠️ No plano grátis o Google pode usar o conteúdo para melhorar os produtos dele (a
+  transcrição de live pública não é sensível).
+- Precisão: a transcrição está em blocos de ~30 s, então o início/fim dos curtos sai nessa
+  precisão; ajuste fino na Triagem (os tempos são editáveis).
+- Segredos (o dono grava no Pages, nunca nesta máquina): `GEMINI_API_KEY` (já existia, da
+  Jean), `GROQ_API_KEY` (gravada em 14/11). `ANTHROPIC_API_KEY` só se um dia trocar para o Claude.
 
 ## O agente do PC (etapa 2, no ar em 14/11)
 
@@ -143,7 +156,9 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
    3 tentativas, "tentar de novo", legenda nativa, áudio → Groq (pronto, falta a chave), download
    cirúrgico com .txt de metadados. Testado local de ponta a ponta com yt-dlp/ffmpeg simulados
    (nada baixado na VPS). Falta o teste real no PC do dono.
-3. ⬜ Roteiro com o Claude (`GROQ_API_KEY` gravada em 14/11; falta `ANTHROPIC_API_KEY`).
+3. 🟢 **Roteiro com IA grátis (14/11):** Gemini plano gratuito, em passos puxados pelo agente
+   1.3.0, migration 0008. Testado local com Google de mentira (recusa de config, limite em um
+   modelo e nos dois, passos, longos, validação). Falta o teste real no ar.
 4. ⬜ Acabamento: tentar de novo em falha, filtro por vídeo/plataforma, copiar metadados.
 
 ## Estado
@@ -161,8 +176,20 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
 - 14/11: primeiro vídeo da Kick parou em "Falta a chave GROQ_API_KEY" (esperado: Kick e Twitch
   não têm legenda). Pendente: o dono criar a chave na Groq e gravar no Pages; depois, um deploy
   para a Function enxergar a chave e "Tentar de novo" no vídeo.
+- 14/11: dono gravou `GROQ_API_KEY` no Pages (produção); deploy feito para a Function enxergar.
+  O vídeo da Kick transcreveu pela Groq e chegou à V3.
+- 14/11: logo do dono: sem fundo como ícone da aba (`_arquivos/Cortex/logo-sem-fundo.py`) e em
+  planta (só traço ciano, com cotas) no cartão do hub (`logo-planta.py` →
+  `public/hub-cartoes/cortex.webp`).
+- 14/11: o vídeo parou na V3 "aguardando a IA (etapa 3)": a etapa ainda não existia. O dono
+  pediu para fazer GRÁTIS para testar: etapa 3 feita com o Gemini gratuito (chave da Jean). A
+  migration 0008 coloca na fila do roteiro os vídeos que já estavam na V3.
 
 ## Decisões
+
+- 14/11: **IA do roteiro grátis na beta** (pedido do dono: "primeiro quero entender o
+  funcionamento, se der certo mais pra frente utilizo apis pagas"). Gemini gratuito com a chave
+  da Jean, no lugar do Claude (que não tem plano grátis). Voltar ao Claude = trocar `perguntar`.
 
 - 14/11: PC do trabalho liberado pelo dono ("posso utilizar normalmente com essas liberdades").
   Cada PC escolhe se recebe download de corte.
