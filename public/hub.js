@@ -38,44 +38,6 @@
   // Projeto sem desenho proprio usa o 'padrao'. Para dar desenho a um projeto novo, basta
   // acrescentar a chave com o slug dele.
   var ESQUEMAS = {
-    // Planta da logo do Cyberidle (dono, 14/11/2026): robô blindado de olho-mira sobre
-    // um piso isométrico em grade, com a skyline da megacidade atrás.
-    cyberidle:
-      // skyline (atrás)
-      '<path class="eg" d="M12 124 V62 H20 V124 M22 124 V80 H29 V124 M16 62 V52 M91 124 V48 H99 V124 M101 124 V74 H107 V124 M95 48 V36"/>' +
-      '<circle class="ez" cx="16" cy="51" r="1.1"/><circle class="ez" cx="95" cy="35" r="1.1"/>' +
-      // piso isométrico 4x4
-      '<path class="el" d="M10 132 L60 118 L110 132 L60 146 Z"/>' +
-      '<path class="eg" d="M22.5 135.5 L72.5 121.5 M35 139 L85 125 M47.5 142.5 L97.5 128.5 M22.5 128.5 L72.5 142.5 M35 125 L85 139 M47.5 121.5 L97.5 135.5"/>' +
-      // capacete, olho-mira e módulo lateral
-      '<path class="el" d="M48 34 Q48 16 60 16 Q72 16 72 34 L69 41 L51 41 Z"/>' +
-      '<path class="el" d="M51 27 L69 27 L69 33 L51 33 Z"/>' +
-      '<circle class="el" cx="64" cy="30" r="4"/><circle class="ez" cx="64" cy="30" r="1.8"/>' +
-      '<circle class="eg" cx="64" cy="30" r="6.5"/><path class="eg" d="M56 30 H72 M64 22 V38"/>' +
-      '<rect class="el" x="72" y="25" width="3.5" height="9" rx="1"/>' +
-      '<path class="el" d="M55 41 V45 M65 41 V45"/>' +
-      // tronco, núcleo e placas
-      '<path class="el" d="M46 45 L74 45 L77 58 L72 80 L48 80 L43 58 Z"/>' +
-      '<path class="el" d="M50 49 L56 54 M70 49 L64 54 M54 68 H66 M55 73 H65"/>' +
-      '<circle class="el" cx="60" cy="59" r="4.5"/><circle class="ez" cx="60" cy="59" r="1.8"/>' +
-      // ombreiras e braços (espelhados)
-      '<path class="el" d="M46 45 Q36 43 34 54 L44 56 Z M74 45 Q84 43 86 54 L76 56 Z"/>' +
-      '<path class="el" d="M36 56 L44 57 L42 73 L34 72 Z M84 56 L76 57 L78 73 L86 72 Z"/>' +
-      '<circle class="el" cx="38" cy="76" r="3"/><circle class="el" cx="82" cy="76" r="3"/>' +
-      '<path class="el" d="M33 79 L42 80 L41 95 L33 94 Z M87 79 L78 80 L79 95 L87 94 Z"/>' +
-      '<path class="el" d="M33 96 L41 97 L40 103 L34 102 Z M87 96 L79 97 L80 103 L86 102 Z"/>' +
-      // cinto e pernas
-      '<path class="el" d="M48 80 L72 80 L72 85 L48 85 Z"/><rect class="ez" x="57" y="81" width="6" height="3"/>' +
-      '<path class="el" d="M49 85 L59 85 L58 104 L49 104 Z M71 85 L61 85 L62 104 L71 104 Z"/>' +
-      '<path class="el" d="M48 104 L58 104 L57 111 L49 111 Z M72 104 L62 104 L63 111 L71 111 Z"/>' +
-      '<path class="el" d="M49 111 L57 111 L57 126 L48 126 Z M71 111 L63 111 L63 126 L72 126 Z"/>' +
-      '<path class="el" d="M46 126 L58 126 L59 132 L44 132 Z M74 126 L62 126 L61 132 L76 132 Z"/>' +
-      // cotas
-      '<path class="eg" d="M70 26 L84 14 L112 14"/><text class="et" x="85" y="11">OPT-EYE</text>' +
-      '<path class="eg" d="M64.5 59 L100 30 L116 30"/><text class="et" x="100" y="27">CORE</text>' +
-      '<path class="eg" d="M49 95 L8 95"/><text class="et" x="4" y="92">ARMOR</text>' +
-      '<path class="eg" d="M116 16 V118 M113 16 H119 M113 118 H119"/><text class="et" x="104" y="70" transform="rotate(-90 112 70)">2.10 m</text>' +
-      '<text class="et" x="52" y="150">ISO-GRID</text>',
     // Núcleo de voz holográfico sobre um pedestal, com onda sonora.
     jean:
       '<line class="eg" x1="60" y1="4" x2="60" y2="146"/>' +
@@ -126,10 +88,17 @@
   // esquema no canto. Jean: escudo com a esfera de fogo, enviado pelo dono em 14/11/2026.
   var EMBLEMAS = {
     jean: '/hub-cartoes/jean.webp',
+    // Cyberidle: a logo do dono (14/11/2026) convertida em planta (traço ciano, cotas).
+    // Gerada por _arquivos/Cyberidle/logo-planta.py a partir da logo original.
+    cyberidle: '/hub-cartoes/cyberidle.webp',
   };
+  var EMBLEMA_TAM = { cyberidle: [440, 400] };
 
   function esquema(slug) {
-    if (EMBLEMAS[slug]) return '<img class="emblema" src="' + EMBLEMAS[slug] + '" alt="" width="160" height="160" loading="lazy" decoding="async">';
+    if (EMBLEMAS[slug]) {
+      var t = EMBLEMA_TAM[slug] || [160, 160];
+      return '<img class="emblema emblema-' + slug + '" src="' + EMBLEMAS[slug] + '" alt="" width="' + t[0] + '" height="' + t[1] + '" loading="lazy" decoding="async">';
+    }
     return '<svg class="esquema" viewBox="0 0 120 150" aria-hidden="true" focusable="false">' +
       (ESQUEMAS[slug] || ESQUEMAS.padrao) + '</svg>';
   }

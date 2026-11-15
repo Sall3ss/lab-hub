@@ -72,6 +72,17 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
 
 ## Estado
 
+**14/11/2026 - logo do Cyberidle (enviada pelo dono).** Robô blindado de olho-mira sobre
+piso isométrico. Virou o ícone do jogo no navegador (`site/favicon.ico` e
+`site/assets/icone/`: 32, 64, 192 e apple-touch 180; `<link>` em `jogo/apps/web/index.html`
+e no `site/index.html` já compilado; o `publicar` não apaga, `emptyOutDir: false`). No hub,
+o cartão mostra **a própria logo convertida em planta** (traço ciano, fundo transparente,
+cotas OPT-EYE/CORE/ARMOR/2.10 m, marcas de canto): `public/hub-cartoes/cyberidle.webp`,
+via `EMBLEMAS` no `public/hub.js` (o desenho à mão `ESQUEMAS.cyberidle` saiu, a pedido do
+dono: "igual uma planta, mas sendo essa logo"). Gerada por
+`../_arquivos/Cyberidle/logo-planta.py <logo> <saida.webp>` (Pillow). Original em
+`../_arquivos/Cyberidle/logo-original.png`. Conferido em print no PC (1280) e no celular (390).
+
 **28/10/2026 - personagens com arte feita em IA pelo dono (spritelab.dev, plano grátis).**
 Padrão combinado: **uma imagem por classe, de frente/3/4, corpo inteiro, fundo transparente,
 PNG** - não precisa de 4 direções nem de quadros de caminhada: o jogo espelha para os lados e

@@ -149,6 +149,10 @@ body {
   opacity: calc(.82 + var(--prox) * .18); transition: all .3s ease; transform: scale(calc(1 + var(--prox) * .05)); transform-origin: 80% 80%;
   filter: drop-shadow(0 0 calc(4px + var(--prox) * 10px) rgb(255 120 70 / .45)) drop-shadow(0 0 calc(var(--prox) * 8px) rgb(0 240 255 / .35)); }
 
+
+/* Planta da logo do Cyberidle: maior (tem cotas) e brilho ciano em vez do laranja da Jean. */
+.emblema-cyberidle { width: 10rem; right: .35rem; bottom: .35rem;
+  filter: drop-shadow(0 0 calc(3px + var(--prox) * 9px) rgb(0 240 255 / .45)); }
 /* Status de fase como luz de painel. */
 .fase { display: inline-flex; align-items: center; gap: .4rem; flex-shrink: 0; font-family: var(--mono); font-size: .66rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--beta); }
 .fase i { width: .45rem; height: .45rem; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; }
@@ -223,6 +227,7 @@ body {
   .cartao h2 { font-size: 1.75rem; }
   .esquema { width: 7.5rem; }
   .emblema { width: 7.25rem; }
+  .emblema-cyberidle { width: 8.75rem; }
   .filtros button { padding: .6rem .8rem; }
   .sobre-caixa { padding: 1.25rem; }
   .sobre h2 { font-size: 1.6rem; }

@@ -63,6 +63,7 @@
    gerada por código (27/10). 28/10: personagens e monstros com arte feita em IA pelo dono
    (spritelab), ícones de itens, sala de treino e decorações com arte própria, monstros
    cercando o tank. O dono quer mexer no mapa depois.
+   14/11: logo do dono como ícone do jogo no navegador e, em planta, no cartão do hub.
    Estado e próximos passos na ficha dele.
 8. Regra do dono (26/10): nenhum projeto do hub pode rodar na VPS ou pesar nela - tudo no
    navegador ou na Cloudflare.
