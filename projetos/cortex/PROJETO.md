@@ -188,6 +188,20 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   16 curtos) e marcas na linha do tempo. Com muitos cartões a coluna espremia os cartões (só a
   1ª linha aparecia): corrigido (`.col-lista > * { flex-shrink: 0 }`), conferido em print no
   PC e no celular com 23 cartões.
+- 15/11: três problemas no uso real (dono), resolvidos no agente 1.4.0:
+  - **Corte longo horas sem terminar e sem %:** no download de trecho quem trabalha é o
+    ffmpeg, e o agente só lia o "%" do yt-dlp. Agora lê o `time=`/`speed=` do ffmpeg e o cartão
+    mostra "baixando 42% · 4.2x · faltam ~8 min". E o longo baixa SEM `--force-keyframes-at-cuts`
+    (que recodificava os 35 min no PC, a causa provável das horas); o curto continua exato.
+    Vigia: 10 min sem avançar (nem % nem tamanho do arquivo) = derruba e tenta de novo (até 3).
+  - **Tempo editado não valia no download:** "Aprovar e baixar" mandava só o estado; o tempo
+    editado sem "Salvar" se perdia. Agora aprovar leva junto tudo o que está no formulário.
+    Botões −5 s/+5 s no início e no fim. "Baixar de novo" (edição) também aceita tempo novo.
+  - **"PC offline" com o Cortex ligado:** era só visual. Durante uma tarefa o agente dava sinal
+    a cada 5 min e a tela considera offline depois de 2. Agora sinal a cada 1 min; e se uma
+    tarefa ficar 3 min sem notícia, o cartão avisa "sem notícia há N min" (aí sim caiu).
+  Testado local: tempo editado gravado na aprovação, % e tempo restante chegando ao painel,
+  download travado derrubado e repetido, gaveta no PC e no celular.
 
 ## Decisões
 

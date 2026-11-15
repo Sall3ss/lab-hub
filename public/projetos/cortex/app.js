@@ -153,7 +153,13 @@
   // O que o PC está fazendo com este cartão, em uma linha.
   function situacao(x, esperaTxt) {
     if (x.erro) return '<div class="c-estado falha"><span class="ponto"></span>' + esc(x.erro) + '</div>';
-    if (x.tarefa_estado === 'pega') return '<div class="c-estado espera"><span class="ponto"></span>' + esc((x.tarefa_pc ? x.tarefa_pc + ': ' : '') + (x.tarefa_progresso || esperaTxt)) + '</div>';
+    if (x.tarefa_estado === 'pega') {
+      // O PC manda sinal a cada 1 min enquanto trabalha (agente 1.4.0). Sem sinal há 3 min =
+      // ele caiu (internet, PC desligado sem o atalho); a tarefa volta sozinha para a fila no prazo.
+      var mudo = x.tarefa_atualizada ? Math.floor((Date.now() - Date.parse(x.tarefa_atualizada)) / 60000) : 0;
+      if (mudo >= 3) return '<div class="c-estado falha"><span class="ponto"></span>' + esc((x.tarefa_pc ? x.tarefa_pc + ': ' : '') + 'sem notícia há ' + mudo + ' min (' + (x.tarefa_progresso || 'trabalhando') + ')') + '</div>';
+      return '<div class="c-estado espera"><span class="ponto"></span>' + esc((x.tarefa_pc ? x.tarefa_pc + ': ' : '') + (x.tarefa_progresso || esperaTxt)) + '</div>';
+    }
     if (x.tarefa_estado === 'pendente') {
       var pc = estado.pc || {};
       var txt = !pc.total ? 'Conecte um PC para começar' : !pc.online ? 'Esperando um PC ligar' : 'Na fila do PC';
@@ -199,7 +205,7 @@
     else if (c.estado === 'download' && c.erro) acoes = '<button type="button" class="mini sim" data-tentar-corte="' + c.id + '">↻ Tentar de novo</button><button type="button" class="mini nao" data-acao="triagem" data-corte="' + c.id + '">Cancelar</button>';
     else if (c.estado === 'download' && c.tarefa_estado !== 'pega') acoes = '<button type="button" class="mini nao" data-acao="triagem" data-corte="' + c.id + '">Cancelar</button>';
     else if (c.estado === 'edicao') acoes = '<button type="button" class="mini sim" data-acao="publicado" data-corte="' + c.id + '">✓ Publicado</button>';
-    var st = c.estado === 'download' || c.erro ? situacao({ erro: c.erro, tarefa_estado: c.tarefa_estado, tarefa_pc: c.tarefa_pc, tarefa_progresso: c.tarefa_progresso, corte_fila: true }, 'baixando…') : '';
+    var st = c.estado === 'download' || c.erro ? situacao({ erro: c.erro, tarefa_estado: c.tarefa_estado, tarefa_pc: c.tarefa_pc, tarefa_progresso: c.tarefa_progresso, tarefa_atualizada: c.tarefa_atualizada, corte_fila: true }, 'baixando…') : '';
     return '<div role="button" tabindex="0" class="cartao ' + c.tipo + '" data-corte-abrir="' + c.id + '">' +
       '<div class="c-linha"><span class="tipo ' + c.tipo + '">' + (c.tipo === 'longo' ? 'LONGO' : 'CURTO') + '</span>' +
       '<span class="c-tc">' + tc(c.inicio_s) + '</span><span>' + duracao(c.fim_s - c.inicio_s) + '</span>' +
@@ -241,12 +247,17 @@
       .catch(function (e) { aviso(e.message, true); if (botao) botao.disabled = false; });
   }
 
-  function mudarEstado(id, novo, botao) {
+  // extra: campos editados na gaveta (tempo, título...) que vão JUNTO com a mudança de estado.
+  // 15/11: "Aprovar e baixar" mandava só o estado e o tempo editado sem "Salvar" se perdia.
+  // Resolve true se deu certo, false se falhou (o aviso já mostrou o motivo).
+  function mudarEstado(id, novo, botao, extra) {
     if (botao) botao.disabled = true;
-    return api('/cortes/' + id, { metodo: 'PATCH', corpo: { estado: novo } }).then(function () {
+    var corpo = Object.assign({}, extra || {}, { estado: novo });
+    return api('/cortes/' + id, { metodo: 'PATCH', corpo: corpo }).then(function () {
       aviso({ download: 'Aprovado: foi para a fila do PC.', descartado: 'Descartado.', triagem: 'Voltou para a triagem.', publicado: 'Marcado como publicado.', edicao: 'Voltou para a edição.' }[novo] || 'Feito.');
-      return carregar();
-    }).catch(function (e) { aviso(e.message, true); if (botao) botao.disabled = false; });
+      carregar();
+      return true;
+    }).catch(function (e) { aviso(e.message, true); if (botao) botao.disabled = false; return false; });
   }
 
   // ---------- linha do tempo ----------
@@ -408,11 +419,19 @@
     });
   }
 
+  function ajustes(campo, livre) {
+    if (!livre) return '';
+    return '<span class="ajustes">' + [-5, 5].map(function (d) {
+      return '<button type="button" class="mini" data-campo="' + campo + '" data-ajuste="' + d + '">' + (d > 0 ? '+' : '−') + Math.abs(d) + ' s</button>';
+    }).join('') + '</span>';
+  }
+
   // Formulário de corte: novo (c = null) ou existente.
   function formCorte(c) {
     var v = detalhe.video, novo = !c;
     c = c || { tipo: 'curto', inicio_s: '', fim_s: '', titulo: '', descricao: '', tags: [], gancho: '', estado: 'triagem', origem: 'manual' };
-    var tempoLivre = ['triagem', 'descartado'].indexOf(c.estado) >= 0;
+    // Tempo muda na triagem e no 'Baixar de novo' (edição): o PC baixa com o tempo novo.
+    var tempoLivre = ['triagem', 'descartado', 'edicao'].indexOf(c.estado) >= 0;
     var nomes = { triagem: 'Triagem', download: 'Na fila do PC', edicao: 'Pronto para o Movavi', publicado: 'Publicado', descartado: 'Descartado' };
     var acoesEstado = '';
     if (!novo) {
@@ -433,8 +452,9 @@
       (acoesEstado ? '<div class="acoes">' + acoesEstado + '</div>' : '') +
       '<form class="bloco" id="f-corte" novalidate>' +
       '<div class="campo"><span>Tipo</span><div class="escolha" id="esc-tipo"><button type="button" data-v="curto">Curto · 45-90 s</button><button type="button" data-v="longo">Longo · 30-40 min</button></div></div>' +
-      '<div class="dupla"><label class="campo"><span>Início</span><input class="tc-campo" name="inicio" inputmode="numeric" placeholder="00:00:00" value="' + (c.inicio_s === '' ? '' : tc(c.inicio_s)) + '"' + (tempoLivre ? '' : ' disabled') + '></label>' +
-      '<label class="campo"><span>Fim</span><input class="tc-campo" name="fim" inputmode="numeric" placeholder="00:00:00" value="' + (c.fim_s === '' ? '' : tc(c.fim_s)) + '"' + (tempoLivre ? '' : ' disabled') + '></label></div>' +
+      '<div class="dupla"><label class="campo"><span>Início</span><input class="tc-campo" name="inicio" inputmode="numeric" placeholder="00:00:00" value="' + (c.inicio_s === '' ? '' : tc(c.inicio_s)) + '"' + (tempoLivre ? '' : ' disabled') + '>' + ajustes('inicio', tempoLivre) + '</label>' +
+      '<label class="campo"><span>Fim</span><input class="tc-campo" name="fim" inputmode="numeric" placeholder="00:00:00" value="' + (c.fim_s === '' ? '' : tc(c.fim_s)) + '"' + (tempoLivre ? '' : ' disabled') + '>' + ajustes('fim', tempoLivre) + '</label></div>' +
+      (c.estado === 'edicao' ? '<p style="margin:-.2rem 0 0;font-size:.78rem;color:var(--suave)">Mudou o tempo? Use <b>Baixar de novo</b>: o PC baixa com o tempo novo.</p>' : '') +
       '<p style="margin:-.2rem 0 0;font:.74rem var(--mono);color:var(--suave)" id="dur-corte"></p>' +
       '<label class="campo"><span>Título</span><input name="titulo" maxlength="150" value="' + esc(c.titulo) + '" placeholder="Título de alto clique"></label>' +
       '<label class="campo"><span>Gancho (primeiros segundos)</span><input name="gancho" maxlength="300" value="' + esc(c.gancho || '') + '" placeholder="A frase que segura quem está rolando o feed"></label>' +
@@ -459,8 +479,26 @@
         }
         mostrarDur();
         box.querySelector('#c-cancelar').onclick = fecharGaveta;
+        // botões −5 s / +5 s ao lado do início e do fim
+        box.querySelectorAll('[data-ajuste]').forEach(function (b) {
+          b.onclick = function () {
+            var el = f[b.dataset.campo], s = lerTC(el.value);
+            if (s == null) return;
+            el.value = tc(Math.max(0, s + Number(b.dataset.ajuste))); mostrarDur();
+          };
+        });
         box.querySelectorAll('[data-ir]').forEach(function (b) {
-          b.onclick = function () { mudarEstado(c.id, b.dataset.ir, b).then(function () { fecharGaveta(); }); };
+          b.onclick = function () {
+            var extra = null, msg = box.querySelector('#msg-corte');
+            if (b.dataset.ir === 'download') {
+              // Aprovar / baixar de novo leva junto o que foi editado no formulário.
+              var ini = lerTC(f.inicio.value), fim = lerTC(f.fim.value);
+              if (ini == null || fim == null) { msg.textContent = 'Preencha início e fim no formato 00:00:00.'; return; }
+              extra = { tipo: tipo, inicio_s: ini, fim_s: fim, titulo: f.titulo.value.trim(), gancho: f.gancho.value.trim(),
+                descricao: f.descricao.value.trim(), tags: f.tags.value };
+            }
+            mudarEstado(c.id, b.dataset.ir, b, extra).then(function (ok) { if (ok) fecharGaveta(); });
+          };
         });
         var ex = box.querySelector('#c-excluir');
         if (ex) ex.onclick = function () {

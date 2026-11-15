@@ -173,6 +173,8 @@ button, input, textarea { font: inherit; color: inherit; }
 .campo input:focus, .campo textarea:focus { border-color: var(--cor); }
 .campo .tc-campo { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .dupla { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+.ajustes { display: flex; gap: .35rem; margin-top: .3rem; }
+.ajustes .mini { flex: 1; }
 .escolha { display: flex; gap: .4rem; }
 .escolha button { flex: 1; border: 1px solid var(--fio-2); background: transparent; border-radius: 6px; padding: .5rem; font-weight: 600; cursor: pointer; color: var(--metal); }
 .escolha button.on[data-v="longo"] { border-color: var(--longo); color: var(--longo); background: rgb(78 161 255 / .1); }

@@ -29,7 +29,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '1.3.0';
+const VERSAO = '1.4.0';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -132,7 +132,7 @@ async function tarefaTexto(cfg, t, pasta) {
   // Áudio: baixa a menor faixa de áudio e corta em partes de 30 min, mono 16 kHz 24 kbps.
   const bruto = join(pasta, 'audio');
   await rodar('yt-dlp', ['-f', 'ba/w', '--no-playlist', '--no-warnings', '-o', bruto + '.%(ext)s', v.url],
-    { aoLer: progresso(cfg, t, 'baixando áudio') });
+    { aoLer: progresso(cfg, t, 'baixando áudio').aoLer });
   const arq = readdirSync(pasta).find((n) => n.startsWith('audio.'));
   if (!arq) throw new Error('o yt-dlp não gerou o arquivo de áudio');
   const dur = Number(info.duration) || await duracaoDe(join(pasta, arq));
@@ -221,6 +221,13 @@ async function duracaoDe(arq) {
 }
 
 // ---------------------------------------------------------------- tarefa "baixar_corte"
+const PARADO_MS = (Number(process.env.CORTEX_PARADO_S) || 600) * 1000;   // variável só para teste
+function tamanhoDe(pasta, nome) {
+  let soma = 0;
+  try { for (const n of readdirSync(pasta)) if (n.startsWith(nome + '.') && !n.endsWith('.txt')) { try { soma += statSync(join(pasta, n)).size; } catch { /* sumiu */ } } } catch { /* */ }
+  return soma;
+}
+
 async function tarefaCorte(cfg, t) {
   const v = t.video, c = t.corte;
   if (!c) throw Object.assign(new Error('o corte foi apagado no painel'), { definitivo: true });
@@ -234,14 +241,38 @@ async function tarefaCorte(cfg, t) {
   for (const n of readdirSync(pastaVideo)) if (n.startsWith(nome + '.') && !n.endsWith('.txt')) rmSync(join(pastaVideo, n), { force: true });
 
   log(`Baixando corte ${c.tipo} "${c.titulo}" (${tc(c.inicio_s)} → ${tc(c.fim_s)})`);
-  await rodar('yt-dlp', [
-    '--no-playlist', '--no-warnings', '--newline',
-    '--download-sections', `*${tc(c.inicio_s)}-${tc(c.fim_s)}`,
-    '--force-keyframes-at-cuts',                      // corte no quadro exato (recodifica só as pontas)
-    '-f', 'bv*[height<=1080]+ba/b[height<=1080]/b',
-    '--merge-output-format', 'mp4',
-    '-o', destino + '.%(ext)s', v.url,
-  ], { aoLer: progresso(cfg, t, 'baixando') });
+  const prog = progresso(cfg, t, 'baixando', c.fim_s - c.inicio_s);
+  // Vigia: o tamanho do arquivo crescendo também conta como "andando" (se o formato da linha
+  // de progresso mudar, o download não é derrubado à toa). Parado 10 min = derruba e a tarefa
+  // volta a tentar (até 3 vezes).
+  let tamanho = 0, travou = false, ultimoLog = 0;
+  const vigia = setInterval(() => {
+    const agora = tamanhoDe(pastaVideo, nome);
+    if (agora > tamanho) { tamanho = agora; prog.avancou = Math.max(prog.avancou, Date.now()); }
+    if (prog.pct === null && tamanho > 0) {
+      painel(cfg, `/tarefas/${t.id}/prorrogar`, { corpo: { progresso: `baixando · ${(tamanho / 1048576).toFixed(0)} MB` } }).catch(() => {});
+    }
+    if (Date.now() - ultimoLog > 60000) { ultimoLog = Date.now(); log(prog.info || `baixando · ${(tamanho / 1048576).toFixed(0)} MB`); }
+    if (Date.now() - prog.avancou > PARADO_MS) { travou = true; matarFilhos(); }
+  }, 20000);
+  try {
+    await rodar('yt-dlp', [
+      '--no-playlist', '--no-warnings', '--newline',
+      '--download-sections', `*${tc(c.inicio_s)}-${tc(c.fim_s)}`,
+      // Curto: corte no quadro exato (recodifica). Longo: SEM recodificar - 15/11 o longo de
+      // 35 min ficou horas recodificando no PC. Sem isso o início pode cair alguns segundos
+      // antes (no quadro-chave), o que no longo não faz diferença e se acerta no Movavi.
+      ...(c.tipo === 'curto' ? ['--force-keyframes-at-cuts'] : []),
+      '-f', 'bv*[height<=1080]+ba/b[height<=1080]/b',
+      '--merge-output-format', 'mp4',
+      '-o', destino + '.%(ext)s', v.url,
+    ], { aoLer: prog.aoLer });
+  } catch (e) {
+    if (travou && !parando) throw new Error(`download parado há ${PARADO_MS / 60000} min sem avançar (internet ou site lento); vai tentar de novo`);
+    throw e;
+  } finally {
+    clearInterval(vigia);
+  }
 
   const arq = readdirSync(pastaVideo).find((n) => n.startsWith(nome + '.') && !n.endsWith('.txt') && !n.endsWith('.part'));
   if (!arq) throw new Error('o yt-dlp terminou mas o arquivo não apareceu');
@@ -255,16 +286,49 @@ async function tarefaCorte(cfg, t) {
   return caminho;
 }
 
-// Lê o "[download]  42.3%" do yt-dlp e avisa o painel a cada 20 s (isso também
-// renova o prazo da tarefa, para um download longo não voltar para a fila).
-function progresso(cfg, t, rotulo) {
-  let ultimo = 0;
-  return (linha) => {
+// Lê o andamento e avisa o painel a cada 15 s (isso também renova o prazo da tarefa).
+// Duas fontes: "[download]  42.3% ... ETA 01:23" do yt-dlp, e - no download de TRECHO
+// (--download-sections), que quem faz é o ffmpeg - o "time=00:12:34 ... speed=2.1x" dele,
+// comparado com a duração do corte (durS). 15/11: o corte longo ficava horas sem % na tela,
+// porque só a primeira fonte era lida.
+// Devolve { aoLer, avancou, info }: `avancou` = última vez que andou (para o vigia de travado).
+function progresso(cfg, t, rotulo, durS) {
+  const est = { avancou: Date.now(), pct: null, info: '' };
+  let ultimoEnvio = 0;
+  est.aoLer = (linha) => {
+    let p = null, extra = '';
     const m = linha.match(/\[download\]\s+([\d.]+)%/);
-    if (!m || Date.now() - ultimo < 20000) return;
-    ultimo = Date.now();
-    painel(cfg, `/tarefas/${t.id}/prorrogar`, { corpo: { progresso: `${rotulo} ${Math.floor(Number(m[1]))}%` } }).catch(() => {});
+    if (m) {
+      p = Number(m[1]);
+      const e = linha.match(/ETA\s+([\d:]+)/);
+      if (e) extra = ` · faltam ${e[1]}`;
+    } else if (durS) {
+      const tm = linha.match(/time=\s*(\d+):(\d\d):(\d\d)/);
+      if (tm) {
+        const s = Number(tm[1]) * 3600 + Number(tm[2]) * 60 + Number(tm[3]);
+        p = Math.min(99.9, (s / durS) * 100);
+        const sp = linha.match(/speed=\s*([\d.]+)x/);
+        if (sp && Number(sp[1]) > 0) extra = ` · ${sp[1]}x · faltam ~${minutos((durS - s) / Number(sp[1]))}`;
+      }
+    }
+    if (p == null) return;
+    if (est.pct === null || p > est.pct) est.avancou = Date.now();
+    est.pct = p;
+    est.info = `${rotulo} ${Math.floor(p)}%${extra}`;
+    if (Date.now() - ultimoEnvio < 15000) return;
+    ultimoEnvio = Date.now();
+    painel(cfg, `/tarefas/${t.id}/prorrogar`, { corpo: { progresso: est.info } }).catch(() => {});
   };
+  return est;
+}
+function minutos(s) { s = Math.max(0, Math.round(s)); return s < 60 ? `${s} s` : s < 3600 ? `${Math.ceil(s / 60)} min` : `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min`; }
+
+// Interrompe o que estiver rodando (yt-dlp/ffmpeg e filhos).
+function matarFilhos() {
+  for (const p of filhos) {
+    if (WIN) spawnSync('taskkill', ['/pid', String(p.pid), '/T', '/F'], { windowsHide: true });
+    else { try { p.kill('SIGTERM'); } catch { /* */ } }
+  }
 }
 
 // ---------------------------------------------------------------- tarefa "roteiro"
@@ -306,8 +370,9 @@ async function executar(cfg, t) {
   const pasta = join(tmpdir(), 'cortex-' + t.id + '-' + Date.now());
   mkdirSync(pasta, { recursive: true });
   atual = { cfg, tarefa: t, pasta };
-  // Prazo renovado a cada 5 min enquanto a tarefa roda (legenda/áudio não têm % para avisar).
-  const vivo = setInterval(() => painel(cfg, `/tarefas/${t.id}/prorrogar`, { corpo: {} }).catch(() => {}), 5 * 60000);
+  // Sinal de vida a cada 1 min enquanto a tarefa roda: renova o prazo e mantém o PC "online"
+  // na tela (15/11: com 5 min, a tela mostrava "offline" no meio de um download longo).
+  const vivo = setInterval(() => painel(cfg, `/tarefas/${t.id}/prorrogar`, { corpo: {} }).catch(() => {}), 60000);
   try {
     if (t.tipo === 'texto') await tarefaTexto(cfg, t, pasta);
     else if (t.tipo === 'roteiro') await tarefaRoteiro(cfg, t);
@@ -334,10 +399,7 @@ async function parar(motivo) {
   if (parando) return;
   parando = true;
   log(motivo || 'Desligando…');
-  for (const p of filhos) {
-    if (WIN) spawnSync('taskkill', ['/pid', String(p.pid), '/T', '/F'], { windowsHide: true });
-    else { try { p.kill('SIGTERM'); } catch { /* */ } }
-  }
+  matarFilhos();
   const a = atual;
   if (a) {
     await painel(a.cfg, `/tarefas/${a.tarefa.id}/devolver`, { corpo: {} }).catch(() => {});

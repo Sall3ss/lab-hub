@@ -21,7 +21,7 @@
 import { db } from '../../lib/db.js';
 import { passoRoteiro } from './roteiro.js';
 
-export const AGENTE_VERSAO = '1.3.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+export const AGENTE_VERSAO = '1.4.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
 const PRAZO_MIN = { texto: 30, baixar_corte: 60, roteiro: 20 };
 const VERSAO_ROTEIRO = [1, 3, 0];       // agente mais velho nao sabe fazer 'roteiro': nao recebe
 const MAX_TENTATIVAS = 3;

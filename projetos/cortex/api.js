@@ -190,8 +190,10 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
         }
       }
       // Corte ja baixado nao muda de tempo: o arquivo no PC deixaria de bater.
-      if ((novo.inicio_s !== corte.inicio_s || novo.fim_s !== corte.fim_s) && !['triagem', 'descartado'].includes(corte.estado)) {
-        return json({ erro: 'Só dá para mudar o tempo de um corte que ainda está na triagem.' }, 400);
+      // Excecao: "Baixar de novo" (edicao -> download) pode levar tempo novo; o PC baixa outra vez.
+      if ((novo.inicio_s !== corte.inicio_s || novo.fim_s !== corte.fim_s) && !['triagem', 'descartado'].includes(corte.estado)
+          && !(corte.estado === 'edicao' && estado === 'download')) {
+        return json({ erro: 'Para mudar o tempo de um corte já baixado, use "Baixar de novo".' }, 400);
       }
       await db(env).batch([
         [`UPDATE cortex_cortes SET estado = ?, tipo = ?, inicio_s = ?, fim_s = ?, titulo = ?, descricao = ?, tags = ?,
@@ -223,6 +225,7 @@ function TAREFA_SQL(filtro) {
   const ult = `FROM cortex_tarefas t WHERE ${filtro} ORDER BY t.id DESC LIMIT 1`;
   return `(SELECT t.estado ${ult}) AS tarefa_estado,
           (SELECT t.progresso ${ult}) AS tarefa_progresso,
+          (SELECT t.atualizada_em ${ult}) AS tarefa_atualizada,
           (SELECT a.nome FROM cortex_tarefas t JOIN cortex_agentes a ON a.id = t.agente_id WHERE ${filtro} AND t.estado = 'pega' ORDER BY t.id DESC LIMIT 1) AS tarefa_pc`;
 }
 
