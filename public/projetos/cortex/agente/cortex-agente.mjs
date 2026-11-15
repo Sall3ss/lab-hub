@@ -29,7 +29,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '1.4.0';
+const VERSAO = '1.5.0';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -221,6 +221,22 @@ async function duracaoDe(arq) {
 }
 
 // ---------------------------------------------------------------- tarefa "baixar_corte"
+// Mede o arquivo pronto (ffprobe vem junto com o ffmpeg): "1080p60 · H.264 · 1920x1080 · 412 MB".
+// Se o ffprobe faltar ou falhar, segue sem a medida (não derruba o download).
+const CODECS = { h264: 'H.264', hevc: 'H.265', vp9: 'VP9', av1: 'AV1' };
+async function medirQualidade(arq) {
+  const mb = `${(statSync(arq).size / 1048576).toFixed(0)} MB`;
+  try {
+    const j = JSON.parse(await rodar('ffprobe', ['-v', 'error', '-select_streams', 'v:0',
+      '-show_entries', 'stream=width,height,r_frame_rate,codec_name', '-of', 'json', arq]));
+    const v = (j.streams || [])[0];
+    if (!v) return mb;
+    const [a, b] = String(v.r_frame_rate || '0/1').split('/').map(Number);
+    const fps = b ? Math.round(a / b) : 0;
+    return [`${v.height}p${fps > 30 ? fps : ''}`, CODECS[v.codec_name] || v.codec_name, `${v.width}x${v.height}`, mb].join(' · ');
+  } catch { return mb; }
+}
+
 const PARADO_MS = (Number(process.env.CORTEX_PARADO_S) || 600) * 1000;   // variável só para teste
 function tamanhoDe(pasta, nome) {
   let soma = 0;
@@ -276,14 +292,16 @@ async function tarefaCorte(cfg, t) {
 
   const arq = readdirSync(pastaVideo).find((n) => n.startsWith(nome + '.') && !n.endsWith('.txt') && !n.endsWith('.part'));
   if (!arq) throw new Error('o yt-dlp terminou mas o arquivo não apareceu');
+  const caminho = join(pastaVideo, arq);
+  const qualidade = await medirQualidade(caminho);
   writeFileSync(destino + '.txt', [
+    qualidade ? `QUALIDADE: ${qualidade}\n` : '',
     `TÍTULO: ${c.titulo}`, '', c.gancho ? `GANCHO: ${c.gancho}\n` : '',
     'DESCRIÇÃO:', c.descricao || '', '', `TAGS: ${(c.tags || []).join(', ')}`, '',
     `ORIGEM: ${v.url} (${tc(c.inicio_s)} → ${tc(c.fim_s)})`,
   ].join('\n'), 'utf8');
-  const caminho = join(pastaVideo, arq);
-  log(`Pronto: ${caminho} (${(statSync(caminho).size / 1048576).toFixed(0)} MB)`);
-  return caminho;
+  log(`Pronto: ${caminho}${qualidade ? ' · ' + qualidade : ''}`);
+  return { caminho, qualidade };
 }
 
 // Lê o andamento e avisa o painel a cada 15 s (isso também renova o prazo da tarefa).
@@ -377,8 +395,8 @@ async function executar(cfg, t) {
     if (t.tipo === 'texto') await tarefaTexto(cfg, t, pasta);
     else if (t.tipo === 'roteiro') await tarefaRoteiro(cfg, t);
     else {
-      const caminho = await tarefaCorte(cfg, t);
-      await painel(cfg, `/tarefas/${t.id}/concluir`, { corpo: { arquivo_local: caminho } });
+      const { caminho, qualidade } = await tarefaCorte(cfg, t);
+      await painel(cfg, `/tarefas/${t.id}/concluir`, { corpo: { arquivo_local: caminho, qualidade } });
     }
   } catch (e) {
     if (parando) return;    // interrompida pelo "desligar": quem devolve a tarefa é parar()

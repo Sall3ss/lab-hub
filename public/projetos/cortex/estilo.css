@@ -239,3 +239,6 @@ button, input, textarea { font: inherit; color: inherit; }
   .dupla { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { .rec, .c-estado.espera .ponto { animation: none; } }
+
+/* Qualidade do arquivo baixado (agente 1.5.0): "1080p60 · H.264". */
+.c-qual { margin-top: .3rem; font: 600 .7rem var(--mono); color: var(--suave); letter-spacing: .03em; }

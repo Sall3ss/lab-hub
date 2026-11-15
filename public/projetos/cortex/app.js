@@ -211,7 +211,8 @@
       '<span class="c-tc">' + tc(c.inicio_s) + '</span><span>' + duracao(c.fim_s - c.inicio_s) + '</span>' +
       (c.nota != null ? '<span class="nota" title="Potencial estimado pela IA">' + c.nota + '</span>' : '') + '</div>' +
       '<p class="c-titulo">' + esc(c.titulo) + '</p>' +
-      '<div class="c-sub">' + esc(c.video_titulo || NOME_PLAT[c.plataforma]) + '</div>' + st +
+      '<div class="c-sub">' + esc(c.video_titulo || NOME_PLAT[c.plataforma]) + '</div>' +
+      (c.qualidade ? '<div class="c-qual" title="' + esc(c.qualidade) + '">▣ ' + esc(c.qualidade.split(' · ').slice(0, 2).join(' · ')) + '</div>' : '') + st +
       (acoes ? '<div class="c-acoes">' + acoes + '</div>' : '') + '</div>';
   }
 
@@ -447,6 +448,7 @@
       (novo ? '<p style="margin:0;color:var(--suave);font-size:.84rem">Em <b style="color:var(--texto)">' + esc(v.titulo || v.url) + '</b>. Só é criado ao apertar Salvar.</p>'
             : '<dl class="info"><dt>Estado</dt><dd>' + nomes[c.estado] + '</dd><dt>Origem</dt><dd>' + (c.origem === 'ia' ? 'Sugerido pela IA' : 'Marcado à mão') + '</dd>' +
               (c.arquivo_local ? '<dt>No PC</dt><dd style="font-family:var(--mono);font-size:.78rem">' + esc(c.arquivo_local) + '</dd>' : '') +
+              (c.qualidade ? '<dt>Qualidade</dt><dd style="font-family:var(--mono);font-size:.78rem">' + esc(c.qualidade) + '</dd>' : '') +
               (c.erro ? '<dt>Falha</dt><dd style="color:var(--perigo)">' + esc(c.erro) + '</dd>' : '') + '</dl>') +
       ia +
       (acoesEstado ? '<div class="acoes">' + acoesEstado + '</div>' : '') +

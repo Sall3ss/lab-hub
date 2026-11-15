@@ -202,6 +202,12 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
     tarefa ficar 3 min sem notícia, o cartão avisa "sem notícia há N min" (aí sim caiu).
   Testado local: tempo editado gravado na aprovação, % e tempo restante chegando ao painel,
   download travado derrubado e repetido, gaveta no PC e no celular.
+- 15/11: **qualidade do arquivo baixado** (pergunta do dono). O yt-dlp pede o melhor até 1080p
+  (`bv*[height<=1080]+ba/b[height<=1080]/b`): se a origem é 720p, vem 720p; acima de 1080p
+  (1440p/4K no YouTube) é limitado a 1080p. Agente 1.5.0 mede o arquivo pronto com o ffprobe e
+  manda no "concluir"; coluna `qualidade` (migration 0009). Aparece no cartão ("▣ 1080p60 ·
+  H.264"), na gaveta (com resolução e tamanho) e no .txt ao lado do vídeo. Testado local com
+  um mp4 real 1080p60.
 
 ## Decisões
 

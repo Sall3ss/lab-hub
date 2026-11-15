@@ -58,7 +58,7 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
           ORDER BY v.atualizado_em DESC LIMIT 300`, u.id),
       db(env).all(
         `SELECT c.id, c.video_id, c.tipo, c.origem, c.inicio_s, c.fim_s, c.titulo, c.gancho, c.nota, c.estado,
-                c.erro, c.atualizado_em, v.titulo AS video_titulo, v.plataforma,
+                c.erro, c.qualidade, c.atualizado_em, v.titulo AS video_titulo, v.plataforma,
                 ${TAREFA_SQL('t.corte_id = c.id')}
            FROM cortex_cortes c JOIN cortex_videos v ON v.id = c.video_id
           WHERE c.usuario_id = ? AND c.estado <> 'descartado' AND v.arquivado = 0

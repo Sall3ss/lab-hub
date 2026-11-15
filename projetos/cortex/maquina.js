@@ -21,7 +21,7 @@
 import { db } from '../../lib/db.js';
 import { passoRoteiro } from './roteiro.js';
 
-export const AGENTE_VERSAO = '1.4.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+export const AGENTE_VERSAO = '1.5.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
 const PRAZO_MIN = { texto: 30, baixar_corte: 60, roteiro: 20 };
 const VERSAO_ROTEIRO = [1, 3, 0];       // agente mais velho nao sabe fazer 'roteiro': nao recebe
 const MAX_TENTATIVAS = 3;
@@ -214,8 +214,9 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     const lotes = [["UPDATE cortex_tarefas SET estado = 'feita', progresso = NULL, erro = NULL, atualizada_em = ? WHERE id = ?", [iso, tarefa.id]]];
     if (tarefa.tipo === 'baixar_corte' && tarefa.corte_id) {
       lotes.push([
-        "UPDATE cortex_cortes SET estado = 'edicao', arquivo_local = ?, erro = NULL, atualizado_em = ? WHERE id = ? AND estado = 'download'",
-        [corpo.arquivo_local ? `${ag.nome}: ${String(corpo.arquivo_local).slice(0, 400)}` : null, iso, tarefa.corte_id]]);
+        "UPDATE cortex_cortes SET estado = 'edicao', arquivo_local = ?, qualidade = ?, erro = NULL, atualizado_em = ? WHERE id = ? AND estado = 'download'",
+        [corpo.arquivo_local ? `${ag.nome}: ${String(corpo.arquivo_local).slice(0, 400)}` : null,
+         corpo.qualidade ? String(corpo.qualidade).slice(0, 80) : null, iso, tarefa.corte_id]]);
     }
     await db(env).batch(lotes);
     return json({ ok: true });
