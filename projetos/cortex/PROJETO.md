@@ -74,7 +74,7 @@ Por que esse desenho:
 | --- | --- |
 | `cortex_videos` | link colado: plataforma, id na plataforma (único por dono), título, canal, duração, `etapa` (entrada → transcricao → roteiro → cortado), erro, arquivado |
 | `cortex_transcricao` | o texto em pedaços com `inicio_s`/`fim_s` (live de 6 h passa de 400 KB; em pedaços cabe no D1 e a IA aponta o minuto) |
-| `cortex_cortes` | o corte: `tipo` longo/curto, `origem` ia/manual, início/fim, título, descrição, tags (JSON), gancho, motivo e nota da IA, `estado` (triagem → download → edicao → publicado, ou descartado), caminho do arquivo no PC |
+| `cortex_cortes` | o corte: `tipo` longo/curto, `origem` ia/manual, início/fim, título, descrição, tags (JSON), gancho e o tempo dele (`gancho_inicio_s`/`gancho_fim_s`, 0010), motivo e nota da IA, `estado` (triagem → download → edicao → publicado, ou descartado), `baixar_fora` (0010: aprovado sem o PC baixar), `qualidade` (0009), caminho do arquivo no PC |
 | `cortex_tarefas` | fila do PC: `texto` (buscar legenda/áudio), `baixar_corte` ou `roteiro` (0008: o PC só puxa os passos da IA); pendente → pega (com prazo) → feita/falhou, tentativas |
 | `cortex_roteiro_partes` | (0008) um passo do roteiro já feito: trecho, resumo dos assuntos (JSON), quantos cortes criou, qual modelo respondeu. Permite retomar de onde parou |
 | `cortex_agentes` | o PC (ou PCs) do dono: chave guardada só como hash, `visto_em` (mostra "PC online"), revogação, `baixa_cortes` (0007), versão do agente e das ferramentas |
@@ -208,8 +208,30 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   manda no "concluir"; coluna `qualidade` (migration 0009). Aparece no cartão ("▣ 1080p60 ·
   H.264"), na gaveta (com resolução e tamanho) e no .txt ao lado do vídeo. Testado local com
   um mp4 real 1080p60.
+- 15/11: três pedidos do dono (migration 0010, agente 1.6.0):
+  - **Aprovar sem baixar** (cortes longos): o dono baixa o trecho por fora
+    (https://kick-video.download, mais rápido e com qualidade alta). Botão "↗ Sem baixar" no
+    cartão da triagem e "↗ Aprovar sem baixar" na gaveta: o corte vai direto para C3 Edição com
+    `baixar_fora = 1` (o PC não recebe tarefa). A gaveta mostra início, fim, duração, gancho e
+    link do vídeo, cada um com "Copiar", o botão que abre o site e "Copiar título, descrição e
+    tags". O tempo continua editável (não há arquivo no PC para desencontrar). Saídas: "Marcar
+    publicado", "Baixar pelo PC" (vira download normal) e "Voltar para a triagem".
+  - **Concluir vídeo** ("resetar a linha do tempo"): arquiva o vídeo. Ele e os cortes saem do
+    quadro e da linha do tempo, nada é apagado, e o botão "Concluídos" (topo do quadro) lista e
+    reabre. Quando todos os aprovados de um vídeo estão publicados, aparece uma faixa verde
+    "Tudo publicado · Concluir vídeo" acima do quadro. Recusa se houver corte na fila do PC.
+    Substitui o antigo "Arquivar" da gaveta do vídeo (mesma ação, nome mais claro).
+  - **Tempo do gancho**: campos "Gancho começa/termina" (±1 s) abaixo do gancho, com o tempo
+    dentro do arquivo do corte (o que o Movavi mostra) calculado na hora. A IA passa a devolver
+    `gancho_inicio`/`gancho_fim` nos roteiros novos (descartado se cair fora do corte); cortes
+    antigos ficam sem, para preencher à mão. O .txt do PC (1.6.0) ganha "GANCHO NO CORTE".
+  Testado local: transições e recusas da API, validação do gancho (servidor e IA), concluir e
+  reabrir, telas no PC e no celular sem erro.
 
 ## Decisões
+
+- 15/11: "resetar a linha do tempo" = **concluir (arquivar)**, não apagar: guarda o histórico
+  do que foi publicado e dá para reabrir. Apagar de vez continua em "Excluir vídeo".
 
 - 14/11: **IA do roteiro grátis na beta** (pedido do dono: "primeiro quero entender o
   funcionamento, se der certo mais pra frente utilizo apis pagas"). Gemini gratuito com a chave

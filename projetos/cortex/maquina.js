@@ -21,7 +21,7 @@
 import { db } from '../../lib/db.js';
 import { passoRoteiro } from './roteiro.js';
 
-export const AGENTE_VERSAO = '1.5.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+export const AGENTE_VERSAO = '1.6.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
 const PRAZO_MIN = { texto: 30, baixar_corte: 60, roteiro: 20 };
 const VERSAO_ROTEIRO = [1, 3, 0];       // agente mais velho nao sabe fazer 'roteiro': nao recebe
 const MAX_TENTATIVAS = 3;
@@ -90,7 +90,7 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
       let corte = null;
       if (t.corte_id) {
         corte = await db(env).first(
-          'SELECT id, tipo, inicio_s, fim_s, titulo, descricao, tags, gancho FROM cortex_cortes WHERE id = ?', t.corte_id);
+          'SELECT id, tipo, inicio_s, fim_s, titulo, descricao, tags, gancho, gancho_inicio_s, gancho_fim_s FROM cortex_cortes WHERE id = ?', t.corte_id);
         if (corte) {
           try { corte.tags = JSON.parse(corte.tags || '[]'); } catch { corte.tags = []; }
           // numero do corte dentro do video (01, 02...) para o nome do arquivo seguir a ordem do tempo

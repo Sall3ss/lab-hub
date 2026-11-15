@@ -29,7 +29,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '1.5.0';
+const VERSAO = '1.6.0';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -297,6 +297,10 @@ async function tarefaCorte(cfg, t) {
   writeFileSync(destino + '.txt', [
     qualidade ? `QUALIDADE: ${qualidade}\n` : '',
     `TÍTULO: ${c.titulo}`, '', c.gancho ? `GANCHO: ${c.gancho}\n` : '',
+    // 1.6.0: onde o gancho está DENTRO deste arquivo (o tempo que o Movavi mostra) e no original.
+    c.gancho_inicio_s != null && c.gancho_fim_s != null
+      ? `GANCHO NO CORTE: ${tc(c.gancho_inicio_s - c.inicio_s)} → ${tc(c.gancho_fim_s - c.inicio_s)}` +
+        ` (no vídeo original: ${tc(c.gancho_inicio_s)} → ${tc(c.gancho_fim_s)})\n` : '',
     'DESCRIÇÃO:', c.descricao || '', '', `TAGS: ${(c.tags || []).join(', ')}`, '',
     `ORIGEM: ${v.url} (${tc(c.inicio_s)} → ${tc(c.fim_s)})`,
   ].join('\n'), 'utf8');

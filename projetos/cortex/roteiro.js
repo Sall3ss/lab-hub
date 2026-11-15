@@ -36,6 +36,8 @@ Regras:
 - Título em português do Brasil, chamativo e honesto (sem prometer o que o corte não entrega),
   até 90 caracteres, sem ser tudo em maiúsculas.
 - Gancho: a frase falada ou situação dos primeiros 3 segundos que segura quem está rolando o feed.
+  "gancho_inicio" e "gancho_fim" = onde essa frase é dita no vídeo (HH:MM:SS, dentro do corte,
+  de 2 a 20 segundos), tirados da transcrição.
 - Descrição: 1 a 3 frases para a plataforma. Tags: 5 a 12, minúsculas, sem #.
 - Nota de 0 a 100 = potencial real do corte. Seja exigente: 80+ só para o que é muito forte.
 - Tempos no formato HH:MM:SS, contados desde o começo do vídeo.`;
@@ -47,6 +49,8 @@ const CORTE = {
     fim: { type: 'STRING', description: 'HH:MM:SS' },
     titulo: { type: 'STRING' },
     gancho: { type: 'STRING' },
+    gancho_inicio: { type: 'STRING', description: 'HH:MM:SS em que o gancho começa a ser dito' },
+    gancho_fim: { type: 'STRING', description: 'HH:MM:SS em que o gancho termina' },
     descricao: { type: 'STRING' },
     tags: { type: 'ARRAY', items: { type: 'STRING' } },
     motivo: { type: 'STRING', description: 'por que vale cortar, em uma frase' },
@@ -134,9 +138,10 @@ async function gravar(env, video, parte, ini, fim, r, agora) {
     [video.id, parte, ini, fim, JSON.stringify(r.assuntos || []), r.cortes.length, r.modelo, agora]]];
   for (const c of r.cortes) {
     lotes.push([
-      `INSERT INTO cortex_cortes (video_id, usuario_id, tipo, origem, inicio_s, fim_s, titulo, descricao, tags, gancho, motivo, nota, estado, criado_em, atualizado_em)
-       VALUES (?, ?, ?, 'ia', ?, ?, ?, ?, ?, ?, ?, ?, 'triagem', ?, ?)`,
-      [video.id, video.usuario_id, c.tipo, c.inicio_s, c.fim_s, c.titulo, c.descricao, JSON.stringify(c.tags), c.gancho, c.motivo, c.nota, agora, agora]]);
+      `INSERT INTO cortex_cortes (video_id, usuario_id, tipo, origem, inicio_s, fim_s, titulo, descricao, tags, gancho, gancho_inicio_s, gancho_fim_s, motivo, nota, estado, criado_em, atualizado_em)
+       VALUES (?, ?, ?, 'ia', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'triagem', ?, ?)`,
+      [video.id, video.usuario_id, c.tipo, c.inicio_s, c.fim_s, c.titulo, c.descricao, JSON.stringify(c.tags), c.gancho,
+       c.gancho_inicio_s, c.gancho_fim_s, c.motivo, c.nota, agora, agora]]);
   }
   await db(env).batch(lotes);
 }
@@ -200,7 +205,13 @@ function limpar(lista, tipo, min, max) {
     if (f - i < dMin || f - i > dMax) return null;
     const titulo = String(c.titulo || '').replace(/\s+/g, ' ').trim().slice(0, 120);
     if (!titulo) return null;
+    // Tempo do gancho (15/11): so fica se cair dentro do corte; a IA as vezes erra, e um tempo
+    // errado atrapalha mais na edicao do que nenhum.
+    let gi = seg(c.gancho_inicio), gf = seg(c.gancho_fim);
+    if (gi === null || gf === null || gi < i || gf > f || gf - gi < 1 || gf - gi > 60) gi = gf = null;
+    else { gi = Math.round(gi); gf = Math.round(gf); }
     return {
+      gancho_inicio_s: gi, gancho_fim_s: gf,
       tipo, inicio_s: i, fim_s: f, titulo,
       gancho: String(c.gancho || '').trim().slice(0, 300) || null,
       descricao: String(c.descricao || '').trim().slice(0, 1500) || null,

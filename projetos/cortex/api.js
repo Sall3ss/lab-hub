@@ -8,10 +8,11 @@
 //   GET    /quadro                 videos + cortes do Kanban e se o PC esta online
 //   POST   /videos                 { url } -> cria o video e a tarefa "buscar texto" do PC
 //   GET    /videos/:id             video + todos os cortes (linha do tempo)
-//   PATCH  /videos/:id             { titulo?, arquivado? }
+//   PATCH  /videos/:id             { titulo?, arquivado? }  arquivado = "Concluir video" (sai do quadro)
+//   GET    /concluidos             videos concluidos (arquivados), para reabrir
 //   DELETE /videos/:id             apaga video, transcricao, cortes e tarefas
 //   POST   /cortes                 { video_id, tipo, inicio_s, fim_s, titulo, ... } corte manual
-//   PATCH  /cortes/:id             { estado?, titulo?, descricao?, tags?, gancho?, inicio_s?, fim_s? }
+//   PATCH  /cortes/:id             { estado?, titulo?, descricao?, tags?, gancho?, gancho_inicio_s?, gancho_fim_s?, inicio_s?, fim_s? }
 //   DELETE /cortes/:id
 //   POST   /videos/:id/tentar | /cortes/:id/tentar   devolve a tarefa que falhou para a fila
 //   GET    /agentes                lista os PCs conectados
@@ -34,11 +35,12 @@ const PC_ONLINE_MS = 2 * 60 * 1000;   // agente que falou nos ultimos 2 min = on
 const DURACAO = { curto: [15, 180], longo: [5 * 60, 90 * 60] };   // limites aceitos (s)
 
 // Mudancas de estado que o dono pode fazer pela tela. O resto e do agente.
+// 15/11: triagem -> edicao = "Aprovar sem baixar" (o dono baixa por fora; baixar_fora = 1).
 const TRANSICOES = {
-  triagem: ['download', 'descartado'],
+  triagem: ['download', 'edicao', 'descartado'],
   descartado: ['triagem'],
-  download: ['triagem'],              // cancelar antes de o PC baixar
-  edicao: ['publicado', 'download'],  // 'download' = baixar de novo
+  download: ['triagem'],                          // cancelar antes de o PC baixar
+  edicao: ['publicado', 'download', 'triagem'],   // 'download' = baixar (de novo) pelo PC; 'triagem' so se baixado fora
   publicado: ['edicao'],
 };
 
@@ -58,7 +60,7 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
           ORDER BY v.atualizado_em DESC LIMIT 300`, u.id),
       db(env).all(
         `SELECT c.id, c.video_id, c.tipo, c.origem, c.inicio_s, c.fim_s, c.titulo, c.gancho, c.nota, c.estado,
-                c.erro, c.qualidade, c.atualizado_em, v.titulo AS video_titulo, v.plataforma,
+                c.erro, c.qualidade, c.baixar_fora, c.atualizado_em, v.titulo AS video_titulo, v.plataforma,
                 ${TAREFA_SQL('t.corte_id = c.id')}
            FROM cortex_cortes c JOIN cortex_videos v ON v.id = c.video_id
           WHERE c.usuario_id = ? AND c.estado <> 'descartado' AND v.arquivado = 0
@@ -70,6 +72,17 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
       total: pc.length, online: online.length, nomes_online: online.map((a) => a.nome),
       baixam: pc.filter((a) => a.baixa_cortes).length,
     } });
+  }
+
+  // Videos concluidos (arquivados): saem do quadro e da linha do tempo, mas nada e apagado.
+  if (rota === 'concluidos' && metodo === 'GET') {
+    const videos = await db(env).all(
+      `SELECT v.id, v.url, v.plataforma, v.titulo, v.canal, v.duracao_s, v.atualizado_em,
+              (SELECT COUNT(*) FROM cortex_cortes c WHERE c.video_id = v.id AND c.estado = 'publicado') AS publicados,
+              (SELECT COUNT(*) FROM cortex_cortes c WHERE c.video_id = v.id AND c.estado <> 'descartado') AS cortes
+         FROM cortex_videos v WHERE v.usuario_id = ? AND v.arquivado = 1
+        ORDER BY v.atualizado_em DESC LIMIT 200`, u.id);
+    return json({ videos });
   }
 
   if (rota === 'videos' && !id && metodo === 'POST') {
@@ -124,6 +137,12 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
       const corpo = await request.json().catch(() => ({}));
       const titulo = corpo.titulo !== undefined ? String(corpo.titulo).trim().slice(0, 200) || null : video.titulo;
       const arquivado = corpo.arquivado !== undefined ? (corpo.arquivado ? 1 : 0) : video.arquivado;
+      // Concluir com corte na fila do PC deixaria um download orfao, fora do quadro.
+      if (arquivado && !video.arquivado) {
+        const fila = await db(env).first(
+          "SELECT COUNT(*) AS n FROM cortex_cortes WHERE video_id = ? AND estado = 'download'", video.id);
+        if (fila.n) return json({ erro: `Tem ${fila.n} corte(s) na fila do PC. Espere baixar ou cancele antes de concluir.` }, 409);
+      }
       await db(env).run('UPDATE cortex_videos SET titulo = ?, arquivado = ?, atualizado_em = ? WHERE id = ?',
         titulo, arquivado, agora, video.id);
       await auditar(env, { quem: u.email, acao: 'editar', entidade: 'cortex_videos', entidade_id: video.id,
@@ -153,9 +172,10 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
     if (c.erro) return json({ erro: c.erro }, 400);
     const r = await db(env).run(
       `INSERT INTO cortex_cortes (video_id, usuario_id, tipo, origem, inicio_s, fim_s, titulo, descricao, tags, gancho,
-                                  estado, criado_em, atualizado_em)
-       VALUES (?, ?, ?, 'manual', ?, ?, ?, ?, ?, ?, 'triagem', ?, ?)`,
-      video.id, u.id, c.tipo, c.inicio_s, c.fim_s, c.titulo, c.descricao, JSON.stringify(c.tags), c.gancho, agora, agora);
+                                  gancho_inicio_s, gancho_fim_s, estado, criado_em, atualizado_em)
+       VALUES (?, ?, ?, 'manual', ?, ?, ?, ?, ?, ?, ?, ?, 'triagem', ?, ?)`,
+      video.id, u.id, c.tipo, c.inicio_s, c.fim_s, c.titulo, c.descricao, JSON.stringify(c.tags), c.gancho,
+      c.gancho_inicio_s, c.gancho_fim_s, agora, agora);
     await auditar(env, { quem: u.email, acao: 'criar', entidade: 'cortex_cortes', entidade_id: r.meta.last_row_id, depois: c, ip: data.ip });
     return json({ ok: true, id: r.meta.last_row_id }, 201);
   }
@@ -178,6 +198,9 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
           return json({ erro: `não dá para passar de "${corte.estado}" para "${corpo.estado}"` }, 400);
         }
         estado = corpo.estado;
+        if (corte.estado === 'edicao' && estado === 'triagem' && !corte.baixar_fora) {
+          return json({ erro: 'Esse corte já foi baixado pelo PC: para refazer, use "Baixar de novo".' }, 400);
+        }
         // Entrou na fila do PC: nasce a tarefa. Saiu dela: a tarefa pendente some.
         if (estado === 'download') {
           extras.push([`INSERT INTO cortex_tarefas (usuario_id, tipo, video_id, corte_id, criada_em, atualizada_em)
@@ -189,20 +212,25 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
           extras.push(["DELETE FROM cortex_tarefas WHERE corte_id = ? AND estado IN ('pendente', 'falhou')", [corte.id]]);
         }
       }
+      // baixar_fora: aprovado sem o PC (triagem -> edicao). Volta a 0 quando o PC passa a baixar.
+      const baixarFora = estado === 'edicao' && corte.estado === 'triagem' ? 1
+        : estado === 'download' || estado === 'triagem' ? 0 : corte.baixar_fora;
       // Corte ja baixado nao muda de tempo: o arquivo no PC deixaria de bater.
-      // Excecao: "Baixar de novo" (edicao -> download) pode levar tempo novo; o PC baixa outra vez.
+      // Excecoes: "Baixar de novo" (edicao -> download) leva o tempo novo; corte baixado fora
+      // nao tem arquivo no PC, entao o tempo segue livre na edicao.
       if ((novo.inicio_s !== corte.inicio_s || novo.fim_s !== corte.fim_s) && !['triagem', 'descartado'].includes(corte.estado)
-          && !(corte.estado === 'edicao' && estado === 'download')) {
+          && !(corte.estado === 'edicao' && (estado === 'download' || corte.baixar_fora))) {
         return json({ erro: 'Para mudar o tempo de um corte já baixado, use "Baixar de novo".' }, 400);
       }
       await db(env).batch([
         [`UPDATE cortex_cortes SET estado = ?, tipo = ?, inicio_s = ?, fim_s = ?, titulo = ?, descricao = ?, tags = ?,
-                 gancho = ?, erro = NULL, atualizado_em = ? WHERE id = ?`,
-          [estado, novo.tipo, novo.inicio_s, novo.fim_s, novo.titulo, novo.descricao, JSON.stringify(novo.tags), novo.gancho, agora, corte.id]],
+                 gancho = ?, gancho_inicio_s = ?, gancho_fim_s = ?, baixar_fora = ?, erro = NULL, atualizado_em = ? WHERE id = ?`,
+          [estado, novo.tipo, novo.inicio_s, novo.fim_s, novo.titulo, novo.descricao, JSON.stringify(novo.tags), novo.gancho,
+           novo.gancho_inicio_s, novo.gancho_fim_s, baixarFora, agora, corte.id]],
         ...extras,
       ]);
       await auditar(env, { quem: u.email, acao: 'editar', entidade: 'cortex_cortes', entidade_id: corte.id,
-        antes: { estado: corte.estado, titulo: corte.titulo }, depois: { estado, titulo: novo.titulo }, ip: data.ip });
+        antes: { estado: corte.estado, titulo: corte.titulo }, depois: { estado, titulo: novo.titulo, baixar_fora: baixarFora }, ip: data.ip });
       return json({ ok: true, estado });
     }
 
@@ -349,7 +377,17 @@ function validarCorte(c, video) {
   if (!titulo) return { erro: 'Dê um título ao corte.' };
   const tags = (Array.isArray(c.tags) ? c.tags : String(c.tags || '').split(','))
     .map((t) => String(t).trim().toLowerCase()).filter(Boolean).slice(0, 30);
+  // Tempo do gancho (15/11): opcional; se vier, os dois juntos e dentro do corte.
+  const vazio = (x) => x === undefined || x === null || x === '';
+  let gi = null, gf = null;
+  if (!vazio(c.gancho_inicio_s) || !vazio(c.gancho_fim_s)) {
+    gi = Math.round(Number(c.gancho_inicio_s)); gf = Math.round(Number(c.gancho_fim_s));
+    if (vazio(c.gancho_inicio_s) || vazio(c.gancho_fim_s) || !Number.isFinite(gi) || !Number.isFinite(gf)) return { erro: 'Preencha os dois tempos do gancho (ou deixe os dois vazios).' };
+    if (gf <= gi) return { erro: 'O fim do gancho tem que vir depois do início dele.' };
+    if (gi < inicio || gf > fim) return { erro: 'O gancho tem que ficar dentro do corte.' };
+  }
   return {
+    gancho_inicio_s: gi, gancho_fim_s: gf,
     tipo, inicio_s: inicio, fim_s: fim, titulo, tags,
     descricao: c.descricao ? String(c.descricao).slice(0, 5000) : null,
     gancho: c.gancho ? String(c.gancho).slice(0, 300) : null,

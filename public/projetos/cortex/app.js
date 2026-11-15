@@ -187,6 +187,14 @@
     $('atalhos').innerHTML = atalhos; marcarAtalho();
     var nv = estado.videos.length, nc = estado.cortes.length;
     $('resumo').textContent = nv + (nv === 1 ? ' vídeo' : ' vídeos') + ' · ' + nc + (nc === 1 ? ' corte' : ' cortes');
+    // Vídeos com todos os cortes aprovados já publicados: hora de concluir (limpa o quadro e a linha do tempo).
+    var prontos = estado.videos.filter(function (v) { var n = contagem(v.id); return v.etapa === 'cortado' && n.publicados && !n.abertos; });
+    $('prontos').hidden = !prontos.length;
+    $('prontos').innerHTML = prontos.map(function (v) {
+      var n = contagem(v.id);
+      return '<div class="pronto-item"><span class="pronto-txt"><b>✓ Tudo publicado</b> ' + esc(v.titulo || v.url) + ' · ' + n.publicados + ' corte(s)' + (n.triagem ? ', ' + n.triagem + ' sobrando na triagem' : '') + '</span>' +
+        '<button class="btn btn-ok" type="button" data-concluir="' + v.id + '">Concluir vídeo</button></div>';
+    }).join('');
   }
 
   function cartaoVideo(v) {
@@ -201,7 +209,9 @@
 
   function cartaoCorte(c) {
     var acoes = '';
-    if (c.estado === 'triagem') acoes = '<button type="button" class="mini sim" data-acao="download" data-corte="' + c.id + '">✓ Aprovar</button><button type="button" class="mini nao" data-acao="descartado" data-corte="' + c.id + '">✕ Descartar</button>';
+    if (c.estado === 'triagem') acoes = '<button type="button" class="mini sim" data-acao="download" data-corte="' + c.id + '">✓ Aprovar</button>' +
+      (c.tipo === 'longo' ? '<button type="button" class="mini fora" data-acao="edicao" data-corte="' + c.id + '" title="Aprova sem o PC baixar: você baixa por fora com o tempo">↗ Sem baixar</button>' : '') +
+      '<button type="button" class="mini nao" data-acao="descartado" data-corte="' + c.id + '">✕ Descartar</button>';
     else if (c.estado === 'download' && c.erro) acoes = '<button type="button" class="mini sim" data-tentar-corte="' + c.id + '">↻ Tentar de novo</button><button type="button" class="mini nao" data-acao="triagem" data-corte="' + c.id + '">Cancelar</button>';
     else if (c.estado === 'download' && c.tarefa_estado !== 'pega') acoes = '<button type="button" class="mini nao" data-acao="triagem" data-corte="' + c.id + '">Cancelar</button>';
     else if (c.estado === 'edicao') acoes = '<button type="button" class="mini sim" data-acao="publicado" data-corte="' + c.id + '">✓ Publicado</button>';
@@ -212,6 +222,7 @@
       (c.nota != null ? '<span class="nota" title="Potencial estimado pela IA">' + c.nota + '</span>' : '') + '</div>' +
       '<p class="c-titulo">' + esc(c.titulo) + '</p>' +
       '<div class="c-sub">' + esc(c.video_titulo || NOME_PLAT[c.plataforma]) + '</div>' +
+      (c.baixar_fora && c.estado === 'edicao' ? '<div class="c-fora">↗ BAIXAR FORA · ' + tc(c.inicio_s) + ' → ' + tc(c.fim_s) + '</div>' : '') +
       (c.qualidade ? '<div class="c-qual" title="' + esc(c.qualidade) + '">▣ ' + esc(c.qualidade.split(' · ').slice(0, 2).join(' · ')) + '</div>' : '') + st +
       (acoes ? '<div class="c-acoes">' + acoes + '</div>' : '') + '</div>';
   }
@@ -254,12 +265,71 @@
   function mudarEstado(id, novo, botao, extra) {
     if (botao) botao.disabled = true;
     var corpo = Object.assign({}, extra || {}, { estado: novo });
+    var antes = (estado.cortes.find(function (c) { return c.id === id; }) || {}).estado;
     return api('/cortes/' + id, { metodo: 'PATCH', corpo: corpo }).then(function () {
-      aviso({ download: 'Aprovado: foi para a fila do PC.', descartado: 'Descartado.', triagem: 'Voltou para a triagem.', publicado: 'Marcado como publicado.', edicao: 'Voltou para a edição.' }[novo] || 'Feito.');
+      aviso(novo === 'edicao' && antes === 'triagem' ? 'Aprovado sem baixar: o tempo para copiar está na C3 Edição.'
+        : ({ download: 'Aprovado: foi para a fila do PC.', descartado: 'Descartado.', triagem: 'Voltou para a triagem.', publicado: 'Marcado como publicado.', edicao: 'Voltou para a edição.' }[novo] || 'Feito.'));
       carregar();
       return true;
     }).catch(function (e) { aviso(e.message, true); if (botao) botao.disabled = false; return false; });
   }
+
+  // ---------- concluir vídeo (15/11: "resetar a linha do tempo" quando tudo foi publicado) ----------
+  // Concluir = arquivar: o vídeo e os cortes saem do quadro e da linha do tempo, nada é apagado,
+  // e dá para reabrir em "Concluídos".
+  function contagem(videoId) {
+    var r = { publicados: 0, abertos: 0, triagem: 0, fila: 0 };
+    estado.cortes.forEach(function (c) {
+      if (c.video_id !== videoId) return;
+      if (c.estado === 'publicado') r.publicados++;
+      else if (c.estado === 'triagem') r.triagem++;
+      else if (c.estado === 'download' || c.estado === 'edicao') { r.abertos++; if (c.estado === 'download') r.fila++; }
+    });
+    return r;
+  }
+  function concluirVideo(v) {
+    var n = contagem(v.id), txt;
+    if (n.fila) { aviso('Tem ' + n.fila + ' corte(s) na fila do PC. Espere baixar ou cancele antes de concluir.', true); return; }
+    if (n.abertos) txt = 'Ainda tem ' + n.abertos + ' corte(s) aprovado(s) sem publicar na Edição. Concluir mesmo assim? Eles saem do quadro junto (nada é apagado).';
+    else if (n.triagem) txt = 'Tudo o que foi aprovado está publicado. Os ' + n.triagem + ' corte(s) que ficaram na triagem saem junto. Concluir o vídeo?';
+    else txt = 'Concluir este vídeo? Ele e os cortes saem do quadro e da linha do tempo. Fica tudo guardado em "Concluídos", dá para reabrir.';
+    confirmar(txt, 'Concluir').then(function (sim) {
+      if (!sim) return;
+      api('/videos/' + v.id, { metodo: 'PATCH', corpo: { arquivado: true } }).then(function () {
+        aviso('Vídeo concluído: está em "Concluídos".'); fecharGaveta(); selVideo = null; detalhe = null; desenharLinha(); carregar();
+      }).catch(function (e) { aviso(e.message, true); });
+    });
+  }
+  $('btn-concluir').addEventListener('click', function () { if (detalhe) concluirVideo(detalhe.video); });
+  function abrirConcluidos() {
+    api('/concluidos').then(function (j) {
+      var lista = j.videos || [];
+      abrirGaveta('Vídeos concluídos',
+        (lista.length ? '<ul class="lista-conc">' + lista.map(function (v) {
+          return '<li><div><span class="tag-plat ' + v.plataforma + '">' + PLAT[v.plataforma] + '</span> <b>' + esc(v.titulo || v.url) + '</b>' +
+            '<small>' + v.publicados + ' publicado(s) de ' + v.cortes + ' corte(s) · concluído em ' + data(v.atualizado_em) + '</small></div>' +
+            '<button class="btn btn-fino" type="button" data-reabrir="' + v.id + '">Reabrir</button></li>';
+        }).join('') + '</ul>' : '<p style="color:var(--suave);margin:0">Nenhum vídeo concluído ainda. Quando todos os cortes aprovados de um vídeo estiverem publicados, use <b>Concluir vídeo</b> na linha do tempo.</p>') +
+        '<div class="acoes"><button class="btn btn-fino" type="button" id="conc-fechar">Fechar</button></div>',
+        function (box) {
+          box.querySelector('#conc-fechar').onclick = fecharGaveta;
+          box.querySelectorAll('[data-reabrir]').forEach(function (b) {
+            b.onclick = function () {
+              b.disabled = true;
+              api('/videos/' + b.dataset.reabrir, { metodo: 'PATCH', corpo: { arquivado: false } }).then(function () {
+                aviso('Reaberto: voltou para o quadro.'); abrirConcluidos(); carregar();
+              }).catch(function (e) { aviso(e.message, true); b.disabled = false; });
+            };
+          });
+        });
+    }).catch(function (e) { aviso(e.message, true); });
+  }
+  $('btn-concluidos').addEventListener('click', abrirConcluidos);
+  $('prontos').addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-concluir]'); if (!b) return;
+    var v = estado.videos.find(function (x) { return x.id === Number(b.dataset.concluir); });
+    if (v) concluirVideo(v);
+  });
 
   // ---------- linha do tempo ----------
   function selecionar(id) {
@@ -288,7 +358,7 @@
   function desenharLinha() {
     var corpo = $('linha-corpo'), nome = $('linha-nome'), btn = $('btn-marcar');
     if (!detalhe) {
-      nome.textContent = 'Nenhum vídeo selecionado'; btn.hidden = true;
+      nome.textContent = 'Nenhum vídeo selecionado'; btn.hidden = true; $('btn-concluir').hidden = true;
       corpo.innerHTML = '<p class="linha-vazia">Toque num vídeo do quadro para ver os cortes dele aqui.</p>';
       return;
     }
@@ -296,6 +366,10 @@
     nome.textContent = (v.titulo || v.url) + (v.duracao_s ? '  ·  ' + tc(v.duracao_s) : '');
     nome.title = nome.textContent;
     btn.hidden = false;
+    var cont = contagem(v.id), bc = $('btn-concluir');
+    bc.hidden = v.etapa !== 'cortado';
+    bc.classList.toggle('btn-ok', !!cont.publicados && !cont.abertos);
+    bc.textContent = cont.publicados && !cont.abertos ? '✓ Concluir vídeo (tudo publicado)' : 'Concluir vídeo';
     var fimMax = cortes.reduce(function (m, c) { return Math.max(m, c.fim_s); }, 0);
     var total = v.duracao_s || Math.max(3600, Math.ceil(fimMax * 1.1 / 600) * 600);
     var passo = escala(total), marcas = '';
@@ -379,7 +453,7 @@
         '<form class="bloco" id="f-video"><label class="campo"><span>Título</span><input name="titulo" maxlength="200" value="' + esc(v.titulo || '') + '" placeholder="O PC preenche com o título original"></label>' +
         '<p class="msg-form" id="msg-video"></p><div class="acoes"><button class="btn btn-cor" type="submit">Salvar</button>' +
         '<button class="btn" type="button" id="v-marcar">+ Marcar corte</button></div></form>' +
-        '<div class="acoes"><button class="btn btn-fino esq" type="button" id="v-arquivar">Arquivar</button><button class="btn btn-perigo" type="button" id="v-excluir">Excluir vídeo</button></div>',
+        '<div class="acoes"><button class="btn btn-fino esq" type="button" id="v-arquivar">Concluir vídeo</button><button class="btn btn-perigo" type="button" id="v-excluir">Excluir vídeo</button></div>',
         function (box) {
           box.querySelector('#f-video').onsubmit = function (ev) {
             ev.preventDefault();
@@ -390,14 +464,7 @@
           box.querySelector('#v-marcar').onclick = function () { formCorte(null); };
           var vt = box.querySelector('#v-tentar');
           if (vt) vt.onclick = function () { tentar('videos', v.id, vt).then(fecharGaveta); };
-          box.querySelector('#v-arquivar').onclick = function () {
-            confirmar('Arquivar este vídeo? Ele e os cortes dele saem do quadro (nada é apagado).', 'Arquivar').then(function (sim) {
-              if (!sim) return;
-              api('/videos/' + v.id, { metodo: 'PATCH', corpo: { arquivado: true } }).then(function () {
-                aviso('Arquivado.'); fecharGaveta(); selVideo = null; detalhe = null; desenharLinha(); carregar();
-              }).catch(function (e) { aviso(e.message, true); });
-            });
-          };
+          box.querySelector('#v-arquivar').onclick = function () { concluirVideo(v); };
           box.querySelector('#v-excluir').onclick = function () {
             confirmar('Excluir este vídeo, a transcrição e todos os cortes dele? Os arquivos já baixados no PC ficam lá.').then(function (sim) {
               if (!sim) return;
@@ -420,11 +487,28 @@
     });
   }
 
-  function ajustes(campo, livre) {
+  function ajustes(campo, livre, passo) {
     if (!livre) return '';
-    return '<span class="ajustes">' + [-5, 5].map(function (d) {
+    passo = passo || 5;
+    return '<span class="ajustes">' + [-passo, passo].map(function (d) {
       return '<button type="button" class="mini" data-campo="' + campo + '" data-ajuste="' + d + '">' + (d > 0 ? '+' : '−') + Math.abs(d) + ' s</button>';
     }).join('') + '</span>';
+  }
+
+  // Corte aprovado sem baixar (15/11): tudo o que o dono precisa para baixar por fora,
+  // cada item com o próprio botão de copiar. O site abre em outra aba.
+  function blocoFora(c, v) {
+    function linha(rot, val, mono) {
+      return '<div class="fora-item"><span>' + rot + '</span><code' + (mono ? '' : ' class="txt"') + '>' + esc(val) + '</code><button type="button" class="mini" data-copia="' + esc(val) + '">Copiar</button></div>';
+    }
+    var textos = c.titulo + '\n\n' + (c.descricao || '') + ((c.tags || []).length ? '\n\n' + c.tags.map(function (t) { return '#' + t.replace(/\s+/g, ''); }).join(' ') : '');
+    return '<div class="caixa-fora"><b>BAIXAR FORA DO CORTEX</b>' +
+      linha('Início', tc(c.inicio_s), true) + linha('Fim', tc(c.fim_s), true) +
+      linha('Duração', duracao(c.fim_s - c.inicio_s), true) +
+      (c.gancho_inicio_s != null ? linha('Gancho', tc(c.gancho_inicio_s - c.inicio_s) + ' → ' + tc(c.gancho_fim_s - c.inicio_s), true) : '') +
+      linha('Vídeo', v.url, false) +
+      '<div class="fora-acoes"><a class="btn btn-cor" href="https://kick-video.download" target="_blank" rel="noopener">Abrir kick-video.download ↗</a>' +
+      '<button type="button" class="btn btn-fino" data-copia="' + esc(textos) + '">Copiar título, descrição e tags</button></div></div>';
   }
 
   // Formulário de corte: novo (c = null) ou existente.
@@ -433,10 +517,14 @@
     c = c || { tipo: 'curto', inicio_s: '', fim_s: '', titulo: '', descricao: '', tags: [], gancho: '', estado: 'triagem', origem: 'manual' };
     // Tempo muda na triagem e no 'Baixar de novo' (edição): o PC baixa com o tempo novo.
     var tempoLivre = ['triagem', 'descartado', 'edicao'].indexOf(c.estado) >= 0;
-    var nomes = { triagem: 'Triagem', download: 'Na fila do PC', edicao: 'Pronto para o Movavi', publicado: 'Publicado', descartado: 'Descartado' };
+    var fora = !novo && c.baixar_fora && c.estado === 'edicao';
+    var nomes = { triagem: 'Triagem', download: 'Na fila do PC', edicao: fora ? 'Aprovado: baixar fora do Cortex' : 'Pronto para o Movavi', publicado: 'Publicado', descartado: 'Descartado' };
     var acoesEstado = '';
     if (!novo) {
-      if (c.estado === 'triagem') acoesEstado = '<button class="btn btn-ok" type="button" data-ir="download">✓ Aprovar e baixar</button><button class="btn btn-fino" type="button" data-ir="descartado">Descartar</button>';
+      if (c.estado === 'triagem') acoesEstado = '<button class="btn btn-ok" type="button" data-ir="download">✓ Aprovar e baixar</button>' +
+        (c.tipo === 'longo' ? '<button class="btn" type="button" data-ir="edicao">↗ Aprovar sem baixar</button>' : '') +
+        '<button class="btn btn-fino" type="button" data-ir="descartado">Descartar</button>';
+      else if (fora) acoesEstado = '<button class="btn btn-ok" type="button" data-ir="publicado">✓ Marcar publicado</button><button class="btn btn-fino" type="button" data-ir="download">Baixar pelo PC</button><button class="btn btn-fino" type="button" data-ir="triagem">Voltar para a triagem</button>';
       else if (c.estado === 'descartado') acoesEstado = '<button class="btn" type="button" data-ir="triagem">Voltar para a triagem</button>';
       else if (c.estado === 'download') acoesEstado = '<button class="btn btn-fino" type="button" data-ir="triagem">Cancelar download</button>';
       else if (c.estado === 'edicao') acoesEstado = '<button class="btn btn-ok" type="button" data-ir="publicado">✓ Marcar publicado</button><button class="btn btn-fino" type="button" data-ir="download">Baixar de novo</button>';
@@ -450,16 +538,20 @@
               (c.arquivo_local ? '<dt>No PC</dt><dd style="font-family:var(--mono);font-size:.78rem">' + esc(c.arquivo_local) + '</dd>' : '') +
               (c.qualidade ? '<dt>Qualidade</dt><dd style="font-family:var(--mono);font-size:.78rem">' + esc(c.qualidade) + '</dd>' : '') +
               (c.erro ? '<dt>Falha</dt><dd style="color:var(--perigo)">' + esc(c.erro) + '</dd>' : '') + '</dl>') +
-      ia +
+      ia + (fora ? blocoFora(c, v) : '') +
       (acoesEstado ? '<div class="acoes">' + acoesEstado + '</div>' : '') +
       '<form class="bloco" id="f-corte" novalidate>' +
       '<div class="campo"><span>Tipo</span><div class="escolha" id="esc-tipo"><button type="button" data-v="curto">Curto · 45-90 s</button><button type="button" data-v="longo">Longo · 30-40 min</button></div></div>' +
       '<div class="dupla"><label class="campo"><span>Início</span><input class="tc-campo" name="inicio" inputmode="numeric" placeholder="00:00:00" value="' + (c.inicio_s === '' ? '' : tc(c.inicio_s)) + '"' + (tempoLivre ? '' : ' disabled') + '>' + ajustes('inicio', tempoLivre) + '</label>' +
       '<label class="campo"><span>Fim</span><input class="tc-campo" name="fim" inputmode="numeric" placeholder="00:00:00" value="' + (c.fim_s === '' ? '' : tc(c.fim_s)) + '"' + (tempoLivre ? '' : ' disabled') + '>' + ajustes('fim', tempoLivre) + '</label></div>' +
-      (c.estado === 'edicao' ? '<p style="margin:-.2rem 0 0;font-size:.78rem;color:var(--suave)">Mudou o tempo? Use <b>Baixar de novo</b>: o PC baixa com o tempo novo.</p>' : '') +
+      (c.estado === 'edicao' ? '<p style="margin:-.2rem 0 0;font-size:.78rem;color:var(--suave)">' + (fora ? 'Sem arquivo no PC: ajuste o tempo e aperte <b>Salvar</b>.' : 'Mudou o tempo? Use <b>Baixar de novo</b>: o PC baixa com o tempo novo.') + '</p>' : '') +
       '<p style="margin:-.2rem 0 0;font:.74rem var(--mono);color:var(--suave)" id="dur-corte"></p>' +
       '<label class="campo"><span>Título</span><input name="titulo" maxlength="150" value="' + esc(c.titulo) + '" placeholder="Título de alto clique"></label>' +
       '<label class="campo"><span>Gancho (primeiros segundos)</span><input name="gancho" maxlength="300" value="' + esc(c.gancho || '') + '" placeholder="A frase que segura quem está rolando o feed"></label>' +
+      // 15/11: onde o gancho é dito (tempo do vídeo original); abaixo, o tempo dentro do arquivo do corte.
+      '<div class="dupla"><label class="campo"><span>Gancho começa</span><input class="tc-campo" name="g_inicio" inputmode="numeric" placeholder="00:00:00" value="' + (c.gancho_inicio_s == null ? '' : tc(c.gancho_inicio_s)) + '">' + ajustes('g_inicio', true, 1) + '</label>' +
+      '<label class="campo"><span>Gancho termina</span><input class="tc-campo" name="g_fim" inputmode="numeric" placeholder="00:00:00" value="' + (c.gancho_fim_s == null ? '' : tc(c.gancho_fim_s)) + '">' + ajustes('g_fim', true, 1) + '</label></div>' +
+      '<p class="dica-gancho" id="dica-gancho"></p>' +
       '<label class="campo"><span>Descrição</span><textarea name="descricao" maxlength="5000">' + esc(c.descricao || '') + '</textarea></label>' +
       '<label class="campo"><span>Tags (separadas por vírgula)</span><input name="tags" value="' + esc((c.tags || []).join(', ')) + '" placeholder="gta 6, trailer, rockstar"></label>' +
       '<p class="msg-form" id="msg-corte"></p>' +
@@ -467,20 +559,32 @@
       (novo ? '' : '<button class="btn btn-perigo" type="button" id="c-excluir" style="margin-left:auto">Excluir</button>') + '</div></form>',
       function (box) {
         var f = box.querySelector('#f-corte'), tipo = c.tipo;
+        box.querySelectorAll('[data-copia]').forEach(function (b) { b.onclick = function () { copiar(b, b.dataset.copia); }; });
         function marcarTipo() { box.querySelectorAll('#esc-tipo button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === tipo); }); }
         marcarTipo();
         box.querySelector('#esc-tipo').onclick = function (ev) { var b = ev.target.closest('button'); if (b) { tipo = b.dataset.v; marcarTipo(); mostrarDur(); } };
         // máscara de timecode: só dígitos e ":", e completa os ":" ao sair do campo
-        [f.inicio, f.fim].forEach(function (el) {
+        [f.inicio, f.fim, f.g_inicio, f.g_fim].forEach(function (el) {
           el.addEventListener('input', function () { this.value = this.value.replace(/[^\d:]/g, '').slice(0, 8); mostrarDur(); });
           el.addEventListener('blur', function () { var s = lerTC(this.value); if (s != null) this.value = tc(s); });
         });
         function mostrarDur() {
           var a = lerTC(f.inicio.value), b = lerTC(f.fim.value), el = box.querySelector('#dur-corte');
           el.textContent = a != null && b != null && b > a ? 'Duração: ' + duracao(b - a) : '';
+          // tempo do gancho dentro do arquivo do corte = o que aparece na linha do tempo do Movavi
+          var gi = lerTC(f.g_inicio.value), gf = lerTC(f.g_fim.value), d = box.querySelector('#dica-gancho');
+          if (gi == null || gf == null) d.textContent = f.g_inicio.value || f.g_fim.value ? '' : 'Tempo do vídeo original. Vazio = sem tempo marcado.';
+          else if (a == null || b == null || gi < a || gf > b || gf <= gi) d.textContent = '⚠ O gancho precisa ficar dentro do corte (' + (a != null ? tc(a) : '?') + ' → ' + (b != null ? tc(b) : '?') + ').';
+          else d.textContent = 'No arquivo do corte (Movavi): ' + tc(gi - a) + ' → ' + tc(gf - a) + ' · ' + duracao(gf - gi);
         }
         mostrarDur();
         box.querySelector('#c-cancelar').onclick = fecharGaveta;
+        function tempoGancho() {
+          var gi = f.g_inicio.value.trim(), gf = f.g_fim.value.trim();
+          if ((gi && lerTC(gi) == null) || (gf && lerTC(gf) == null)) return { erro: 'Tempo do gancho no formato 00:00:00.' };
+          if (!gi !== !gf) return { erro: 'Preencha os dois tempos do gancho (ou deixe os dois vazios).' };
+          return { gancho_inicio_s: gi ? lerTC(gi) : null, gancho_fim_s: gf ? lerTC(gf) : null };
+        }
         // botões −5 s / +5 s ao lado do início e do fim
         box.querySelectorAll('[data-ajuste]').forEach(function (b) {
           b.onclick = function () {
@@ -492,12 +596,13 @@
         box.querySelectorAll('[data-ir]').forEach(function (b) {
           b.onclick = function () {
             var extra = null, msg = box.querySelector('#msg-corte');
-            if (b.dataset.ir === 'download') {
+            if (b.dataset.ir === 'download' || (b.dataset.ir === 'edicao' && c.estado === 'triagem')) {
               // Aprovar / baixar de novo leva junto o que foi editado no formulário.
               var ini = lerTC(f.inicio.value), fim = lerTC(f.fim.value);
               if (ini == null || fim == null) { msg.textContent = 'Preencha início e fim no formato 00:00:00.'; return; }
-              extra = { tipo: tipo, inicio_s: ini, fim_s: fim, titulo: f.titulo.value.trim(), gancho: f.gancho.value.trim(),
-                descricao: f.descricao.value.trim(), tags: f.tags.value };
+              var tg = tempoGancho(); if (tg.erro) { msg.textContent = tg.erro; return; }
+              extra = Object.assign({ tipo: tipo, inicio_s: ini, fim_s: fim, titulo: f.titulo.value.trim(), gancho: f.gancho.value.trim(),
+                descricao: f.descricao.value.trim(), tags: f.tags.value }, tg);
             }
             mudarEstado(c.id, b.dataset.ir, b, extra).then(function (ok) { if (ok) fecharGaveta(); });
           };
@@ -515,8 +620,9 @@
           var msg = box.querySelector('#msg-corte');
           var ini = lerTC(f.inicio.value), fim = lerTC(f.fim.value);
           if (ini == null || fim == null) { msg.textContent = 'Preencha início e fim no formato 00:00:00.'; return; }
-          var corpo = { tipo: tipo, inicio_s: ini, fim_s: fim, titulo: f.titulo.value.trim(), gancho: f.gancho.value.trim(),
-            descricao: f.descricao.value.trim(), tags: f.tags.value };
+          var tg = tempoGancho(); if (tg.erro) { msg.textContent = tg.erro; return; }
+          var corpo = Object.assign({ tipo: tipo, inicio_s: ini, fim_s: fim, titulo: f.titulo.value.trim(), gancho: f.gancho.value.trim(),
+            descricao: f.descricao.value.trim(), tags: f.tags.value }, tg);
           if (novo) corpo.video_id = v.id;
           var btn = f.querySelector('[type=submit]'); btn.disabled = true; msg.textContent = '';
           api(novo ? '/cortes' : '/cortes/' + c.id, { metodo: novo ? 'POST' : 'PATCH', corpo: corpo }).then(function () {

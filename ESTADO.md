@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 14/11/2026 (Cortex: roteiro com IA grátis, etapa 3).**
+**Atualizado em 15/11/2026 (Cortex: aprovar sem baixar, concluir vídeo, tempo do gancho).**
 
 ## Pronto
 
@@ -106,7 +106,10 @@
    corte manual, triagem). Etapa 2 no ar: agente do PC (`cortex-agente.mjs`, Node sem
    dependências) conectado pela tela Cortex › PCs, um por máquina (casa e trabalho). A porta da
    API ganhou `/api/p/<slug>/maquina/...` (sem sessão; o projeto confere a chave). `GROQ_API_KEY`
-   gravada (14/11). Etapa 3 (roteiro) com o Gemini GRÁTIS (chave da Jean), puxada pelo agente 1.3.0. Arquitetura,
+   gravada (14/11). Etapa 3 (roteiro) com o Gemini GRÁTIS (chave da Jean), puxada pelo agente 1.3.0.
+   15/11: download com % e vigia de travamento, tempo ajustável na triagem, qualidade medida,
+   "aprovar sem baixar" (longos, baixados por fora), "Concluir vídeo" e tempo do gancho
+   (agente 1.6.0). Arquitetura,
    modelo de dados e próximos passos em `projetos/cortex/PROJETO.md`.
 
 ## ClipStudio: arquivado em 15/10/2026
