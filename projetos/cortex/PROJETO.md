@@ -184,6 +184,10 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
 - 14/11: o vídeo parou na V3 "aguardando a IA (etapa 3)": a etapa ainda não existia. O dono
   pediu para fazer GRÁTIS para testar: etapa 3 feita com o Gemini gratuito (chave da Jean). A
   migration 0008 coloca na fila do roteiro os vídeos que já estavam na V3.
+- 14/11: **etapa 3 funcionou no ar** com a live da Kick (5h22): 19 cortes na Triagem (3 longos,
+  16 curtos) e marcas na linha do tempo. Com muitos cartões a coluna espremia os cartões (só a
+  1ª linha aparecia): corrigido (`.col-lista > * { flex-shrink: 0 }`), conferido em print no
+  PC e no celular com 23 cartões.
 
 ## Decisões
 
