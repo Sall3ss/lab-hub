@@ -26,6 +26,9 @@
   papel azul. A esfera é o centro (opacidade .78, gira devagar, núcleo rosa pulsando no
   CSS); chip e fluxo bem fracos nos cantos (no celular, só esfera e chip). Cartões ficaram
   translúcidos para a esfera aparecer através deles. ~600 KB no total.
+- 14/11: ícone da aba do hub = logo do dono (hexágono com a galáxia), sem o fundo: recorte
+  por máscara hexagonal, em `public/hub-icone/` (32, 180 para iPhone, 192). Só a página do
+  hub usa; cada projeto tem o próprio ícone.
 - Estrutura de isolamento por projeto e o comando `scripts/novo-projeto.mjs`, testado numa
   cópia descartável com dois projetos: pastas separadas, registro da API gerado, slug
   repetido e slug inválido recusados, rota `/ping` respondendo.
