@@ -73,7 +73,8 @@ antigos (não bloqueiam o `vite build`); por isso o `publicar` não roda `tsc`.
 ## Estado
 
 **14/11/2026 - logo do Cyberidle (enviada pelo dono).** Robô blindado de olho-mira sobre
-piso isométrico. Virou o ícone do jogo no navegador (`site/favicon.ico` e
+piso isométrico. Virou o ícone do jogo no navegador, **sem o fundo** (pedido do dono;
+recortado por `../_arquivos/Cyberidle/logo-sem-fundo.py <logo> <pasta>`) (`site/favicon.ico` e
 `site/assets/icone/`: 32, 64, 192 e apple-touch 180; `<link>` em `jogo/apps/web/index.html`
 e no `site/index.html` já compilado; o `publicar` não apaga, `emptyOutDir: false`). No hub,
 o cartão mostra **a própria logo convertida em planta** (traço ciano, fundo transparente,
