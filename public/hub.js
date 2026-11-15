@@ -110,7 +110,14 @@
       '<path class="eg" d="M96 60 L112 52"/><text class="et" x="96" y="48">MOD-X</text>',
   };
 
+  // Projeto com logo propria: a logo (recortada, fundo transparente) ocupa o lugar do
+  // esquema no canto. Jean: escudo com a esfera de fogo, enviado pelo dono em 14/11/2026.
+  var EMBLEMAS = {
+    jean: '/hub-cartoes/jean.webp',
+  };
+
   function esquema(slug) {
+    if (EMBLEMAS[slug]) return '<img class="emblema" src="' + EMBLEMAS[slug] + '" alt="" width="160" height="160" loading="lazy" decoding="async">';
     return '<svg class="esquema" viewBox="0 0 120 150" aria-hidden="true" focusable="false">' +
       (ESQUEMAS[slug] || ESQUEMAS.padrao) + '</svg>';
   }

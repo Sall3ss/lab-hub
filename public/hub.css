@@ -144,6 +144,11 @@ body {
 .esquema .ez-l { fill: none; stroke: var(--ciano); stroke-width: 2; stroke-linecap: round; opacity: .85; }
 .esquema .et { fill: var(--ciano); font-family: var(--mono); font-size: 5.2px; letter-spacing: .06em; opacity: .85; }
 
+/* Logo propria do projeto no lugar do esquema (ver EMBLEMAS no hub.js). */
+.emblema { position: absolute; right: .55rem; bottom: .55rem; width: 8.25rem; height: auto; pointer-events: none;
+  opacity: calc(.82 + var(--prox) * .18); transition: all .3s ease; transform: scale(calc(1 + var(--prox) * .05)); transform-origin: 80% 80%;
+  filter: drop-shadow(0 0 calc(4px + var(--prox) * 10px) rgb(255 120 70 / .45)) drop-shadow(0 0 calc(var(--prox) * 8px) rgb(0 240 255 / .35)); }
+
 /* Status de fase como luz de painel. */
 .fase { display: inline-flex; align-items: center; gap: .4rem; flex-shrink: 0; font-family: var(--mono); font-size: .66rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--beta); }
 .fase i { width: .45rem; height: .45rem; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; }
@@ -217,6 +222,7 @@ body {
   .grade { grid-template-columns: 1fr; }
   .cartao h2 { font-size: 1.75rem; }
   .esquema { width: 7.5rem; }
+  .emblema { width: 7.25rem; }
   .filtros button { padding: .6rem .8rem; }
   .sobre-caixa { padding: 1.25rem; }
   .sobre h2 { font-size: 1.6rem; }

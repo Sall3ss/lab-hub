@@ -291,6 +291,13 @@ projeto a precisar dele.
     (voz imitada, volume medido) e conversa por voz com microfone falso. Falta o dono
     ver no ar com a voz de verdade.
 
+- 🟢 **14/11 - Logo da Jean (enviada pelo dono: escudo ciano com a esfera de fogo e a
+  fênix).** Ícone da aba: `public/projetos/jean/icone-32.png`, `icone-192.png` e
+  `icone-180.png` (Apple), a imagem inteira com o fundo escuro, que lê melhor pequena. No
+  cartão do hub: versão recortada sem o fundo, `public/hub-cartoes/jean.webp` (320 px,
+  38 KB), no lugar do esquema em linhas (`EMBLEMAS` no `hub.js`; acende com o mouse como os
+  outros cartões). O original fica só na conversa; os arquivos acima são os usados.
+
 ## Próximo passo
 
 - MVP completo (etapas 1 a 5). Próximo passo é decisão do dono.

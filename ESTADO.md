@@ -91,7 +91,9 @@
    fogo no centro representando a Jean, que pulsa com o volume da voz quando ela fala; a
    conversa por voz deixou de abrir outra tela.
    14/11: voz também confirmada no PC (conversa por voz ouvindo pelo Gemini, menos de
-   5 s por etapa). Estado e decisões em `projetos/jean/PROJETO.md`.
+   5 s por etapa). 14/11: logo da Jean (do dono) no ícone da aba e no cartão do hub
+   (`EMBLEMAS` no hub.js: projeto com logo própria troca o esquema pela logo).
+   Estado e decisões em `projetos/jean/PROJETO.md`.
 
 10. 🟡 **Cortex (14/11): central de cortes, em `/cortex`.** Sucessor da ideia do ClipStudio, refeito:
    a nuvem (Cloudflare pessoal) guarda link, transcrição, roteiro e estado; o PC do dono só
