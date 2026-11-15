@@ -150,8 +150,8 @@ body {
   filter: drop-shadow(0 0 calc(4px + var(--prox) * 10px) rgb(255 120 70 / .45)) drop-shadow(0 0 calc(var(--prox) * 8px) rgb(0 240 255 / .35)); }
 
 
-/* Plantas das logos (Cyberidle, Jean): maiores (têm cotas) e com brilho ciano. */
-.emblema-cyberidle, .emblema-jean { width: 10rem; right: .35rem; bottom: .35rem;
+/* Plantas das logos (Cyberidle, Jean, Cortex): maiores (têm cotas) e com brilho ciano. */
+.emblema-cyberidle, .emblema-jean, .emblema-cortex { width: 10rem; right: .35rem; bottom: .35rem;
   filter: drop-shadow(0 0 calc(3px + var(--prox) * 9px) rgb(0 240 255 / .45)); }
 /* Status de fase como luz de painel. */
 .fase { display: inline-flex; align-items: center; gap: .4rem; flex-shrink: 0; font-family: var(--mono); font-size: .66rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--beta); }

@@ -93,8 +93,10 @@
     // Cyberidle: a logo do dono (14/11/2026) convertida em planta (traço ciano, cotas).
     // Gerada por _arquivos/Cyberidle/logo-planta.py a partir da logo original.
     cyberidle: '/hub-cartoes/cyberidle.webp',
+    // Cortex: a logo do dono (14/11/2026) em planta. Gerada por _arquivos/Cortex/logo-planta.py.
+    cortex: '/hub-cartoes/cortex.webp',
   };
-  var EMBLEMA_TAM = { cyberidle: [440, 400], jean: [440, 400] };
+  var EMBLEMA_TAM = { cyberidle: [440, 400], jean: [440, 400], cortex: [440, 400] };
 
   function esquema(slug) {
     if (EMBLEMAS[slug]) {
