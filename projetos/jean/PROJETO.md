@@ -293,7 +293,8 @@ projeto a precisar dele.
 
 - 🟢 **14/11 - Logo da Jean (enviada pelo dono: escudo ciano com a esfera de fogo e a
   fênix).** Ícone da aba: `public/projetos/jean/icone-32.png`, `icone-192.png` e
-  `icone-180.png` (Apple), a imagem inteira com o fundo escuro, que lê melhor pequena. No
+  `icone-180.png` (Apple). No mesmo dia o dono pediu **sem o fundo em volta do escudo**:
+  os ícones agora saem da versão recortada (transparente, escudo justo). No
   cartão do hub: versão recortada sem o fundo, `public/hub-cartoes/jean.webp` (320 px,
   38 KB), no lugar do esquema em linhas (`EMBLEMAS` no `hub.js`; acende com o mouse como os
   outros cartões). O original fica só na conversa; os arquivos acima são os usados.

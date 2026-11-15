@@ -38,32 +38,44 @@
   // Projeto sem desenho proprio usa o 'padrao'. Para dar desenho a um projeto novo, basta
   // acrescentar a chave com o slug dele.
   var ESQUEMAS = {
-    // Personagem cyberpunk de capuz, viseira e braço mecânico.
+    // Planta da logo do Cyberidle (dono, 14/11/2026): robô blindado de olho-mira sobre
+    // um piso isométrico em grade, com a skyline da megacidade atrás.
     cyberidle:
-      '<line class="eg" x1="60" y1="4" x2="60" y2="146"/>' +
-      '<line class="eg" x1="14" y1="140" x2="106" y2="140"/>' +
-      '<path class="el" d="M49 36 Q47 13 60 13 Q73 13 71 36 L68 41 L52 41 Z"/>' +
-      '<rect class="ez" x="51" y="26" width="18" height="4.5" rx="1"/>' +
-      '<path class="el" d="M68 17 L77 7"/><circle class="ez" cx="77.5" cy="6.5" r="1.6"/>' +
-      '<path class="el" d="M53 41 L53 46 M67 41 L67 46"/>' +
-      '<path class="el" d="M44 46 L76 46 L80 60 L76 88 L44 88 L40 60 Z"/>' +
-      '<path class="el" d="M52 46 L60 62 L68 46"/>' +
-      '<rect class="ez" x="63" y="67" width="7" height="2"/><rect class="ez" x="63" y="71" width="4" height="2"/>' +
-      '<path class="el" d="M44 49 L36 59 L32 80 L33 91"/><circle class="el" cx="33.5" cy="94" r="3"/>' +
-      '<circle class="el" cx="79" cy="52" r="5"/><circle class="ez" cx="79" cy="52" r="1.6"/>' +
-      '<path class="el" d="M81 57 L88 59 L86 76 L80 75 Z"/>' +
-      '<circle class="el" cx="84" cy="79.5" r="3"/>' +
-      '<path class="el" d="M84 83 L91 84 L92 98 L86 99 Z"/>' +
-      '<path class="el" d="M87 99 L86 105 M89.5 99 L90 106 M91.5 98 L94 104"/>' +
-      '<path class="el" d="M44 88 L76 88"/><rect class="ez" x="57" y="86.5" width="6" height="3.5"/>' +
-      '<path class="el" d="M46 89 L58 89 L56 114 L55 136 L45 136 L46 114 Z"/>' +
-      '<path class="el" d="M62 89 L74 89 L74 114 L75 136 L65 136 L64 114 Z"/>' +
-      '<circle class="el" cx="51" cy="114" r="2.4"/><circle class="el" cx="69.5" cy="114" r="2.4"/>' +
-      '<path class="el" d="M43 136 L56 136 L57 140 L41 140 Z M64 136 L77 136 L79 140 L63 140 Z"/>' +
-      '<path class="eg" d="M70 28 L84 18 L114 18"/><text class="et" x="84" y="15">OPT-VISOR</text>' +
-      '<path class="eg" d="M88 66 L96 58 L116 58"/><text class="et" x="94" y="55">AUG-ARM</text>' +
-      '<path class="eg" d="M40 70 L16 70"/><text class="et" x="6" y="67">KEVLAR</text>' +
-      '<path class="eg" d="M110 80 L110 140 M107 140 L113 140"/><text class="et" x="100" y="112" transform="rotate(-90 106 112)">1.82 m</text>',
+      // skyline (atrás)
+      '<path class="eg" d="M12 124 V62 H20 V124 M22 124 V80 H29 V124 M16 62 V52 M91 124 V48 H99 V124 M101 124 V74 H107 V124 M95 48 V36"/>' +
+      '<circle class="ez" cx="16" cy="51" r="1.1"/><circle class="ez" cx="95" cy="35" r="1.1"/>' +
+      // piso isométrico 4x4
+      '<path class="el" d="M10 132 L60 118 L110 132 L60 146 Z"/>' +
+      '<path class="eg" d="M22.5 135.5 L72.5 121.5 M35 139 L85 125 M47.5 142.5 L97.5 128.5 M22.5 128.5 L72.5 142.5 M35 125 L85 139 M47.5 121.5 L97.5 135.5"/>' +
+      // capacete, olho-mira e módulo lateral
+      '<path class="el" d="M48 34 Q48 16 60 16 Q72 16 72 34 L69 41 L51 41 Z"/>' +
+      '<path class="el" d="M51 27 L69 27 L69 33 L51 33 Z"/>' +
+      '<circle class="el" cx="64" cy="30" r="4"/><circle class="ez" cx="64" cy="30" r="1.8"/>' +
+      '<circle class="eg" cx="64" cy="30" r="6.5"/><path class="eg" d="M56 30 H72 M64 22 V38"/>' +
+      '<rect class="el" x="72" y="25" width="3.5" height="9" rx="1"/>' +
+      '<path class="el" d="M55 41 V45 M65 41 V45"/>' +
+      // tronco, núcleo e placas
+      '<path class="el" d="M46 45 L74 45 L77 58 L72 80 L48 80 L43 58 Z"/>' +
+      '<path class="el" d="M50 49 L56 54 M70 49 L64 54 M54 68 H66 M55 73 H65"/>' +
+      '<circle class="el" cx="60" cy="59" r="4.5"/><circle class="ez" cx="60" cy="59" r="1.8"/>' +
+      // ombreiras e braços (espelhados)
+      '<path class="el" d="M46 45 Q36 43 34 54 L44 56 Z M74 45 Q84 43 86 54 L76 56 Z"/>' +
+      '<path class="el" d="M36 56 L44 57 L42 73 L34 72 Z M84 56 L76 57 L78 73 L86 72 Z"/>' +
+      '<circle class="el" cx="38" cy="76" r="3"/><circle class="el" cx="82" cy="76" r="3"/>' +
+      '<path class="el" d="M33 79 L42 80 L41 95 L33 94 Z M87 79 L78 80 L79 95 L87 94 Z"/>' +
+      '<path class="el" d="M33 96 L41 97 L40 103 L34 102 Z M87 96 L79 97 L80 103 L86 102 Z"/>' +
+      // cinto e pernas
+      '<path class="el" d="M48 80 L72 80 L72 85 L48 85 Z"/><rect class="ez" x="57" y="81" width="6" height="3"/>' +
+      '<path class="el" d="M49 85 L59 85 L58 104 L49 104 Z M71 85 L61 85 L62 104 L71 104 Z"/>' +
+      '<path class="el" d="M48 104 L58 104 L57 111 L49 111 Z M72 104 L62 104 L63 111 L71 111 Z"/>' +
+      '<path class="el" d="M49 111 L57 111 L57 126 L48 126 Z M71 111 L63 111 L63 126 L72 126 Z"/>' +
+      '<path class="el" d="M46 126 L58 126 L59 132 L44 132 Z M74 126 L62 126 L61 132 L76 132 Z"/>' +
+      // cotas
+      '<path class="eg" d="M70 26 L84 14 L112 14"/><text class="et" x="85" y="11">OPT-EYE</text>' +
+      '<path class="eg" d="M64.5 59 L100 30 L116 30"/><text class="et" x="100" y="27">CORE</text>' +
+      '<path class="eg" d="M49 95 L8 95"/><text class="et" x="4" y="92">ARMOR</text>' +
+      '<path class="eg" d="M116 16 V118 M113 16 H119 M113 118 H119"/><text class="et" x="104" y="70" transform="rotate(-90 112 70)">2.10 m</text>' +
+      '<text class="et" x="52" y="150">ISO-GRID</text>',
     // Núcleo de voz holográfico sobre um pedestal, com onda sonora.
     jean:
       '<line class="eg" x1="60" y1="4" x2="60" y2="146"/>' +
