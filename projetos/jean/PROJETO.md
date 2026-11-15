@@ -297,7 +297,15 @@ projeto a precisar dele.
   os ícones agora saem da versão recortada (transparente, escudo justo). No
   cartão do hub: versão recortada sem o fundo, `public/hub-cartoes/jean.webp` (320 px,
   38 KB), no lugar do esquema em linhas (`EMBLEMAS` no `hub.js`; acende com o mouse como os
-  outros cartões). O original fica só na conversa; os arquivos acima são os usados.
+  outros cartões).
+  - Mesmo dia, pedido do dono: no cartão, a logo virou **planta** ("como um esboço, uma
+    planta de arquitetura... tirar as cores e preenchimento, deixar apenas os rabiscos"):
+    só traço ciano (contorno do escudo, espirais principais da esfera, fênix), marcas de
+    canto, cota "Ø 48", chamadas NÚCLEO / ESCUDO / FÊNIX e legenda "J-01", no mesmo
+    estilo e tamanho da planta do Cyberidle (`.emblema-jean`). Gerada por
+    `_arquivos/Jean/logo-planta.py` a partir de `_arquivos/Jean/logo-recortada.png`
+    (original em `logo-original.png`); o arquivo do cartão continua sendo
+    `public/hub-cartoes/jean.webp`. O ícone da aba continua colorido.
 
 ## Próximo passo
 

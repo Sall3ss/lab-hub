@@ -84,15 +84,17 @@
       '<path class="eg" d="M96 60 L112 52"/><text class="et" x="96" y="48">MOD-X</text>',
   };
 
-  // Projeto com logo propria: a logo (recortada, fundo transparente) ocupa o lugar do
-  // esquema no canto. Jean: escudo com a esfera de fogo, enviado pelo dono em 14/11/2026.
+  // Projeto com logo propria: a logo, convertida em "planta" (so traco ciano, sem cor nem
+  // preenchimento, com cotas), ocupa o lugar do esquema no canto.
   var EMBLEMAS = {
+    // Jean: escudo com a esfera de fogo e a fenix (dono, 14/11/2026), em planta a pedido
+    // dele. Gerada por _arquivos/Jean/logo-planta.py a partir da logo recortada.
     jean: '/hub-cartoes/jean.webp',
     // Cyberidle: a logo do dono (14/11/2026) convertida em planta (traço ciano, cotas).
     // Gerada por _arquivos/Cyberidle/logo-planta.py a partir da logo original.
     cyberidle: '/hub-cartoes/cyberidle.webp',
   };
-  var EMBLEMA_TAM = { cyberidle: [440, 400] };
+  var EMBLEMA_TAM = { cyberidle: [440, 400], jean: [440, 400] };
 
   function esquema(slug) {
     if (EMBLEMAS[slug]) {
