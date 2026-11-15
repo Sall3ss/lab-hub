@@ -166,7 +166,7 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
 
 - 14/11: PC do trabalho liberado pelo dono ("posso utilizar normalmente com essas liberdades").
   Cada PC escolhe se recebe download de corte.
-- 14/11: pasta dos cortes é por PC (config.json do agente, comando `pasta`). O dono pediu
+- 14/11: pasta dos cortes é por PC (config.json do agente, comando `pasta`). O dono pediu, nas duas máquinas (casa e trabalho),
   `D:\Meus Documentos\Vídeos\Cortex`; o padrão continua `%USERPROFILE%\Videos\Cortex`.
 - 14/11: agente liga e desliga à mão pelo atalho da área de trabalho, não com o Windows.
 
