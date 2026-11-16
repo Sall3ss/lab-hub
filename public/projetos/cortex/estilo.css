@@ -62,7 +62,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .plat[data-p="youtube"], .tag-plat.youtube { background: rgb(255 61 61 / .16); color: var(--yt); }
 .plat[data-p="twitch"], .tag-plat.twitch { background: rgb(169 112 255 / .16); color: var(--tw); }
 .plat[data-p="kick"], .tag-plat.kick { background: rgb(83 252 24 / .12); color: var(--kk); }
-/* 16/11: "Só um trecho" - analisar a live a partir de um ponto */
+/* 16/11: "Começar em…" - analisar a live a partir de um ponto */
 .btn-trecho { white-space: nowrap; align-self: center; }
 .btn-trecho[aria-expanded="true"] { color: var(--cor); border-color: var(--cor); }
 .ingest-trecho { display: grid; grid-template-columns: 11rem 11rem 1fr; gap: .6rem; align-items: end; margin-top: .6rem; }

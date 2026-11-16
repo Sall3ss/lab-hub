@@ -231,7 +231,8 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
 - 16/11: **analisar só um trecho** (pedido do dono: live de 7 h em que o bom começa depois de
   3 h). Migration 0011 (`analisar_de_s`/`analisar_ate_s` em `cortex_videos`, NULL = sem limite),
   agente 1.7.0.
-  - Importar: botão "⏱ Só um trecho" ao lado do link abre "Analisar a partir de" e "Até (vazio =
+  - Importar: botão "⏱ Começar em…" (era "Só um trecho"; renomeado a pedido do dono: o uso
+    principal é a live inteira a partir de um ponto) ao lado do link abre "Analisar a partir de" e "Até (vazio =
     até o fim)". Gaveta do vídeo: os mesmos campos + "Salvar trecho". Cartão mostra
     "⏱ 03:00:00 → fim"; a linha do tempo listra o que ficou de fora.
   - PC: legenda nativa é filtrada no trecho; sem legenda, o yt-dlp baixa SÓ o áudio do trecho

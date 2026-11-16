@@ -67,7 +67,7 @@
     el.addEventListener('input', function () { this.value = this.value.replace(/[^\d:]/g, '').slice(0, 8); if (aoMudar) aoMudar(); });
     el.addEventListener('blur', function () { var s = lerTC(this.value); if (s != null) this.value = tc(s); });
   }
-  // "Só um trecho" (16/11): lê os dois campos -> { de, ate } em segundos, ou { erro }.
+  // "Começar em…" (16/11): lê os dois campos -> { de, ate } em segundos, ou { erro }.
   function lerCamposTrecho(elDe, elAte) {
     var de = elDe.value.trim() ? lerTC(elDe.value) : null, ate = elAte.value.trim() ? lerTC(elAte.value) : null;
     if ((elDe.value.trim() && de == null) || (elAte.value.trim() && ate == null)) return { erro: 'Tempo do trecho inválido. Use HH:MM:SS.' };
@@ -127,7 +127,7 @@
     el.dataset.p = p; el.textContent = p ? NOME_PLAT[p].toUpperCase() : 'LINK';
     $('msg-link').textContent = ''; $('msg-link').className = 'ingest-msg';
   });
-  // "Só um trecho": campos aparecem só quando pedidos; ao fechar, limpam (nada escondido vai junto).
+  // "Começar em…": campos aparecem só quando pedidos; ao fechar, limpam (nada escondido vai junto).
   function abrirTrechoImp(abrir) {
     $('trecho-imp').hidden = !abrir;
     $('btn-trecho').setAttribute('aria-expanded', abrir ? 'true' : 'false');
@@ -232,7 +232,7 @@
       (v.duracao_s ? '<span class="c-tc">' + tc(v.duracao_s) + '</span>' : '') + '</div>' +
       '<p class="c-titulo">' + esc(v.titulo || v.url.replace(/^https:\/\/(www\.)?/, '')) + '</p>' +
       (v.canal ? '<div class="c-sub">' + esc(v.canal) + '</div>' : '') +
-      (textoTrecho(v) ? '<div class="c-trecho" title="Só este trecho é analisado">⏱ ' + textoTrecho(v) + '</div>' : '') + st + '</button>';
+      (textoTrecho(v) ? '<div class="c-trecho" title="Parte do vídeo analisada">⏱ ' + textoTrecho(v) + '</div>' : '') + st + '</button>';
   }
 
   function cartaoCorte(c) {
@@ -413,7 +413,7 @@
       }).join('') + '</div>';
     }
     var obs = !v.duracao_s ? '<span>Duração ainda desconhecida: o PC informa ao buscar o vídeo.</span>' : '';
-    if (textoTrecho(v)) obs += '<span><b class="leg-fora"></b>Fora do trecho analisado (' + textoTrecho(v) + ')</span>';
+    if (textoTrecho(v)) obs += '<span><b class="leg-fora"></b>Fora da análise (' + textoTrecho(v) + ')</span>';
     corpo.innerHTML =
       '<div class="tl"><div class="tl-cab"><div class="r">TC</div><div class="l">L</div><div class="c">C</div></div>' +
       '<div class="tl-area">' + foraDoTrecho(v, total) + '<div class="regua" style="--passo:' + passoPct + '">' + marcas + '</div>' +
@@ -485,7 +485,7 @@
         '<dt>Link</dt><dd><a href="' + esc(v.url) + '" target="_blank" rel="noopener">' + esc(v.url) + '</a></dd>' +
         (v.canal ? '<dt>Canal</dt><dd>' + esc(v.canal) + '</dd>' : '') +
         '<dt>Duração</dt><dd>' + (v.duracao_s ? tc(v.duracao_s) : 'o PC informa ao buscar') + '</dd>' +
-        '<dt>Analisa</dt><dd>' + (textoTrecho(v) ? 'só ' + textoTrecho(v) : 'o vídeo inteiro') + '</dd>' +
+        '<dt>Analisa</dt><dd>' + (textoTrecho(v) ? textoTrecho(v) : 'o vídeo inteiro') + '</dd>' +
         '<dt>Etapa</dt><dd>' + etapas[v.etapa] + '</dd>' +
         '<dt>Importado</dt><dd>' + data(v.criado_em) + '</dd>' +
         (v.erro ? '<dt>Falha</dt><dd style="color:var(--perigo)">' + esc(v.erro) + '</dd>' : '') + '</dl>' +
