@@ -62,6 +62,22 @@
     for (var i = 0; i < p.length; i++) s = s * 60 + p[i];
     return s;
   }
+  // máscara de timecode: só dígitos e ":", e completa os ":" ao sair do campo
+  function mascaraTC(el, aoMudar) {
+    el.addEventListener('input', function () { this.value = this.value.replace(/[^\d:]/g, '').slice(0, 8); if (aoMudar) aoMudar(); });
+    el.addEventListener('blur', function () { var s = lerTC(this.value); if (s != null) this.value = tc(s); });
+  }
+  // "Só um trecho" (16/11): lê os dois campos -> { de, ate } em segundos, ou { erro }.
+  function lerCamposTrecho(elDe, elAte) {
+    var de = elDe.value.trim() ? lerTC(elDe.value) : null, ate = elAte.value.trim() ? lerTC(elAte.value) : null;
+    if ((elDe.value.trim() && de == null) || (elAte.value.trim() && ate == null)) return { erro: 'Tempo do trecho inválido. Use HH:MM:SS.' };
+    if (ate != null && ate - (de || 0) < 120) return { erro: 'O "até" precisa vir pelo menos 2 min depois do "a partir de".' };
+    return { de: de || null, ate: ate };
+  }
+  function textoTrecho(v) {
+    if (!v.analisar_de_s && !v.analisar_ate_s) return '';
+    return (v.analisar_de_s ? tc(v.analisar_de_s) : '00:00:00') + ' → ' + (v.analisar_ate_s ? tc(v.analisar_ate_s) : 'fim');
+  }
   function data(iso) {
     try { return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; }
   }
@@ -111,14 +127,25 @@
     el.dataset.p = p; el.textContent = p ? NOME_PLAT[p].toUpperCase() : 'LINK';
     $('msg-link').textContent = ''; $('msg-link').className = 'ingest-msg';
   });
+  // "Só um trecho": campos aparecem só quando pedidos; ao fechar, limpam (nada escondido vai junto).
+  function abrirTrechoImp(abrir) {
+    $('trecho-imp').hidden = !abrir;
+    $('btn-trecho').setAttribute('aria-expanded', abrir ? 'true' : 'false');
+    if (abrir) $('imp-de').focus(); else { $('imp-de').value = ''; $('imp-ate').value = ''; }
+  }
+  $('btn-trecho').addEventListener('click', function () { abrirTrechoImp($('trecho-imp').hidden); });
+  mascaraTC($('imp-de')); mascaraTC($('imp-ate'));
   $('form-link').addEventListener('submit', function (ev) {
     ev.preventDefault();
     var campo = $('link'), btn = $('btn-importar'), msg = $('msg-link');
     var url = campo.value.trim();
     if (!url) { msg.textContent = 'Cole o link do vídeo.'; msg.className = 'ingest-msg erro'; campo.focus(); return; }
+    var tr = $('trecho-imp').hidden ? { de: null, ate: null } : lerCamposTrecho($('imp-de'), $('imp-ate'));
+    if (tr.erro) { msg.textContent = tr.erro; msg.className = 'ingest-msg erro'; $('imp-de').focus(); return; }
     btn.disabled = true; btn.textContent = 'Importando…';
-    api('/videos', { metodo: 'POST', corpo: { url: url } }).then(function (r) {
+    api('/videos', { metodo: 'POST', corpo: { url: url, analisar_de_s: tr.de, analisar_ate_s: tr.ate } }).then(function (r) {
       campo.value = ''; $('plat').dataset.p = ''; $('plat').textContent = 'LINK';
+      abrirTrechoImp(false);
       msg.textContent = 'Importado. ' + (estado.pc.online ? 'O PC já vai buscar o texto.' : 'Quando o PC ligar, ele busca o texto.');
       msg.className = 'ingest-msg ok';
       selVideo = r.id;
@@ -204,7 +231,8 @@
       '<div class="c-linha"><span class="tag-plat ' + v.plataforma + '">' + PLAT[v.plataforma] + '</span>' +
       (v.duracao_s ? '<span class="c-tc">' + tc(v.duracao_s) + '</span>' : '') + '</div>' +
       '<p class="c-titulo">' + esc(v.titulo || v.url.replace(/^https:\/\/(www\.)?/, '')) + '</p>' +
-      (v.canal ? '<div class="c-sub">' + esc(v.canal) + '</div>' : '') + st + '</button>';
+      (v.canal ? '<div class="c-sub">' + esc(v.canal) + '</div>' : '') +
+      (textoTrecho(v) ? '<div class="c-trecho" title="Só este trecho é analisado">⏱ ' + textoTrecho(v) + '</div>' : '') + st + '</button>';
   }
 
   function cartaoCorte(c) {
@@ -385,9 +413,10 @@
       }).join('') + '</div>';
     }
     var obs = !v.duracao_s ? '<span>Duração ainda desconhecida: o PC informa ao buscar o vídeo.</span>' : '';
+    if (textoTrecho(v)) obs += '<span><b class="leg-fora"></b>Fora do trecho analisado (' + textoTrecho(v) + ')</span>';
     corpo.innerHTML =
       '<div class="tl"><div class="tl-cab"><div class="r">TC</div><div class="l">L</div><div class="c">C</div></div>' +
-      '<div class="tl-area"><div class="regua" style="--passo:' + passoPct + '">' + marcas + '</div>' +
+      '<div class="tl-area">' + foraDoTrecho(v, total) + '<div class="regua" style="--passo:' + passoPct + '">' + marcas + '</div>' +
       pista('longo') + pista('curto') + '<span class="cabeca" id="cabeca"></span></div></div>' +
       '<div class="tl-legenda"><span><b style="background:var(--longo)"></b>Longo (30-40 min)</span><span><b style="background:var(--curto)"></b>Curto (45-90 s)</span>' +
       '<span><b style="background:var(--fio-2)"></b>Descartado (apagado)</span>' + obs +
@@ -403,6 +432,16 @@
     });
   }
   $('btn-marcar').addEventListener('click', function () { if (detalhe) formCorte(null); });
+  // Faixas listradas = parte do vídeo que ficou de fora da análise (antes do "de", depois do "até").
+  function foraDoTrecho(v, total) {
+    var h = '';
+    if (v.analisar_de_s) h += '<span class="tl-fora" style="left:0;width:' + Math.min(100, v.analisar_de_s / total * 100).toFixed(3) + '%"></span>';
+    if (v.analisar_ate_s && v.analisar_ate_s < total) {
+      var l = v.analisar_ate_s / total * 100;
+      h += '<span class="tl-fora" style="left:' + l.toFixed(3) + '%;width:' + (100 - l).toFixed(3) + '%"></span>';
+    }
+    return h;
+  }
 
   // ---------- gaveta ----------
   function abrirGaveta(titulo, html, aoMontar) {
@@ -446,6 +485,7 @@
         '<dt>Link</dt><dd><a href="' + esc(v.url) + '" target="_blank" rel="noopener">' + esc(v.url) + '</a></dd>' +
         (v.canal ? '<dt>Canal</dt><dd>' + esc(v.canal) + '</dd>' : '') +
         '<dt>Duração</dt><dd>' + (v.duracao_s ? tc(v.duracao_s) : 'o PC informa ao buscar') + '</dd>' +
+        '<dt>Analisa</dt><dd>' + (textoTrecho(v) ? 'só ' + textoTrecho(v) : 'o vídeo inteiro') + '</dd>' +
         '<dt>Etapa</dt><dd>' + etapas[v.etapa] + '</dd>' +
         '<dt>Importado</dt><dd>' + data(v.criado_em) + '</dd>' +
         (v.erro ? '<dt>Falha</dt><dd style="color:var(--perigo)">' + esc(v.erro) + '</dd>' : '') + '</dl>' +
@@ -453,6 +493,11 @@
         '<form class="bloco" id="f-video"><label class="campo"><span>Título</span><input name="titulo" maxlength="200" value="' + esc(v.titulo || '') + '" placeholder="O PC preenche com o título original"></label>' +
         '<p class="msg-form" id="msg-video"></p><div class="acoes"><button class="btn btn-cor" type="submit">Salvar</button>' +
         '<button class="btn" type="button" id="v-marcar">+ Marcar corte</button></div></form>' +
+        '<form class="bloco" id="f-trecho" novalidate><div class="dupla">' +
+        '<label class="campo"><span>Analisar a partir de</span><input class="tc-campo" name="de" inputmode="numeric" autocomplete="off" placeholder="00:00:00" value="' + (v.analisar_de_s ? tc(v.analisar_de_s) : '') + '"></label>' +
+        '<label class="campo"><span>Até (vazio = até o fim)</span><input class="tc-campo" name="ate" inputmode="numeric" autocomplete="off" placeholder="fim do vídeo" value="' + (v.analisar_ate_s ? tc(v.analisar_ate_s) : '') + '"></label></div>' +
+        '<p class="dica-trecho">' + (v.etapa === 'entrada' ? 'O PC ainda não começou: muda sem custo.' : 'Mudar o trecho refaz a análise (o painel avisa o que muda antes).') + '</p>' +
+        '<p class="msg-form" id="msg-trecho"></p><div class="acoes"><button class="btn" type="submit">Salvar trecho</button></div></form>' +
         '<div class="acoes"><button class="btn btn-fino esq" type="button" id="v-arquivar">Concluir vídeo</button><button class="btn btn-perigo" type="button" id="v-excluir">Excluir vídeo</button></div>',
         function (box) {
           box.querySelector('#f-video').onsubmit = function (ev) {
@@ -462,6 +507,27 @@
               .catch(function (e) { $('msg-video').textContent = e.message; });
           };
           box.querySelector('#v-marcar').onclick = function () { formCorte(null); };
+          var ft = box.querySelector('#f-trecho');
+          mascaraTC(ft.de); mascaraTC(ft.ate);
+          ft.onsubmit = function (ev) {
+            ev.preventDefault();
+            var tr = lerCamposTrecho(ft.de, ft.ate), msg = $('msg-trecho'), b = ft.querySelector('[type=submit]');
+            if (tr.erro) { msg.textContent = tr.erro; return; }
+            function enviar(confirmado) {
+              b.disabled = true; msg.textContent = '';
+              return api('/videos/' + v.id + '/trecho', { metodo: 'POST', corpo: { analisar_de_s: tr.de, analisar_ate_s: tr.ate, confirmado: confirmado } }).then(function (r) {
+                aviso(r.refez === 'roteiro' ? 'Trecho salvo: a IA lê de novo só essa parte.' : r.refez === 'texto' ? 'Trecho salvo: o PC busca o texto dessa parte.' : 'Trecho salvo.');
+                fecharGaveta(); detalhe = null; carregar().then(function () { if (selVideo) carregarDetalhe(selVideo); });
+              }).catch(function (e) {
+                b.disabled = false;
+                if (e.status === 409 && e.dados && e.dados.confirmar) {
+                  return confirmar(e.dados.confirmar + ' Continuar?', 'Refazer').then(function (sim) { if (sim) return enviar(true); });
+                }
+                msg.textContent = e.message;
+              });
+            }
+            enviar(false);
+          };
           var vt = box.querySelector('#v-tentar');
           if (vt) vt.onclick = function () { tentar('videos', v.id, vt).then(fecharGaveta); };
           box.querySelector('#v-arquivar').onclick = function () { concluirVideo(v); };

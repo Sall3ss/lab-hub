@@ -42,8 +42,17 @@
         <input id="link" name="link" type="url" inputmode="url" autocomplete="off" spellcheck="false"
                placeholder="Link do YouTube, Twitch ou Kick" />
       </div>
+      <button class="btn btn-fino btn-trecho" type="button" id="btn-trecho" aria-expanded="false" aria-controls="trecho-imp"
+              title="Analisar só um pedaço do vídeo">⏱ Só um trecho</button>
       <button class="btn btn-cor" type="submit" id="btn-importar">Importar</button>
     </form>
+    <div class="ingest-trecho" id="trecho-imp" hidden>
+      <label class="campo"><span>Analisar a partir de</span>
+        <input class="tc-campo" id="imp-de" inputmode="numeric" autocomplete="off" placeholder="03:00:00" /></label>
+      <label class="campo"><span>Até (vazio = até o fim)</span>
+        <input class="tc-campo" id="imp-ate" inputmode="numeric" autocomplete="off" placeholder="fim do vídeo" /></label>
+      <p class="dica-trecho">Só esse pedaço é transcrito e lido pela IA. O resto do vídeo nem é baixado.</p>
+    </div>
     <p class="ingest-msg" id="msg-link" role="status"></p>
   </section>
 

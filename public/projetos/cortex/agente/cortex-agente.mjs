@@ -3,7 +3,8 @@
 //
 // O painel (na nuvem) decide; este programa só executa o que é pesado e precisa de IP de casa:
 //   - "texto": busca título/duração, a legenda nativa do vídeo e, se não houver, o áudio
-//     comprimido em partes de 30 min, que o painel manda para o Whisper (Groq).
+//     comprimido em partes de 30 min, que o painel manda para o Whisper (Groq). 1.7.0: se o
+//     vídeo tem trecho marcado ("analisar de/até"), busca só esse pedaço.
 //   - "baixar_corte": baixa SÓ os minutos do corte (yt-dlp --download-sections) para a pasta
 //     de edição, com um .txt ao lado (título, gancho, descrição, tags) para publicar.
 //
@@ -29,7 +30,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '1.6.0';
+const VERSAO = '1.7.0';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -112,10 +113,22 @@ async function tarefaTexto(cfg, t, pasta) {
     titulo: info.title, canal: info.channel || info.uploader || info.uploader_id, duracao_s: info.duration,
   } });
 
+  // 1.7.0 (16/11): trecho escolhido no painel. Só o pedaço entre "de" e "até" é buscado e
+  // transcrito; os tempos continuam contados desde o começo do vídeo original.
+  const durTotal = Number(info.duration) || 0;
+  const de = Math.max(0, Number(v.analisar_de_s) || 0);
+  let ate = Number(v.analisar_ate_s) || 0;
+  if (durTotal && de >= durTotal) {
+    throw Object.assign(new Error(`o início escolhido (${tc(de)}) passa da duração do vídeo (${tc(durTotal)}); ajuste o trecho no painel`), { definitivo: true });
+  }
+  if (durTotal && ate > durTotal) ate = 0;      // "até" depois do fim = até o fim
+  const comTrecho = de > 0 || ate > 0;
+  if (comTrecho) log(`Só o trecho ${tc(de)} → ${ate ? tc(ate) : 'fim'}.`);
+
   const lingua = escolherLegenda(info);
   if (lingua) {
     log(`Legenda nativa encontrada (${lingua.codigo}${lingua.auto ? ', automática' : ''}). Baixando o texto…`);
-    const segs = await baixarLegenda(v.url, lingua, pasta);
+    const segs = (await baixarLegenda(v.url, lingua, pasta)).filter((s) => s.f > de && (!ate || s.i < ate));
     if (segs.length > 20) {
       // em lotes de 400 frases para cada pedido ficar leve para o painel
       const lotes = [];
@@ -130,17 +143,25 @@ async function tarefaTexto(cfg, t, pasta) {
   } else log('Sem legenda nativa; vou pelo áudio comprimido.');
 
   // Áudio: baixa a menor faixa de áudio e corta em partes de 30 min, mono 16 kHz 24 kbps.
+  // Com trecho, o yt-dlp baixa só aquele pedaço (--download-sections): o arquivo começa em 0,
+  // e cada parte vai ao painel com o tempo somado ao início do trecho.
   const bruto = join(pasta, 'audio');
-  await rodar('yt-dlp', ['-f', 'ba/w', '--no-playlist', '--no-warnings', '-o', bruto + '.%(ext)s', v.url],
-    { aoLer: progresso(cfg, t, 'baixando áudio').aoLer });
-  const arq = readdirSync(pasta).find((n) => n.startsWith('audio.'));
+  const durTrecho = comTrecho && durTotal ? (ate || durTotal) - de : 0;
+  await rodar('yt-dlp', ['-f', 'ba/w', '--no-playlist', '--no-warnings', '--newline',
+    ...(comTrecho ? ['--download-sections', `*${tc(de)}-${ate ? tc(ate) : 'inf'}`] : []),
+    '-o', bruto + '.%(ext)s', v.url],
+  { aoLer: progresso(cfg, t, 'baixando áudio', durTrecho).aoLer });
+  const arq = readdirSync(pasta).find((n) => n.startsWith('audio.') && !n.endsWith('.part'));
   if (!arq) throw new Error('o yt-dlp não gerou o arquivo de áudio');
-  const dur = Number(info.duration) || await duracaoDe(join(pasta, arq));
-  const total = Math.max(1, Math.ceil(dur / PARTE_AUDIO_S));
+  // Com trecho, mede o arquivo (o corte do yt-dlp cai no quadro-chave, alguns segundos de folga).
+  const dur = comTrecho ? await duracaoDe(join(pasta, arq), durTrecho) : durTotal || await duracaoDe(join(pasta, arq));
+  // (- 5 s: um resto de meio segundo no fim não vira uma parte quase vazia para a Groq)
+  const total = Math.max(1, Math.ceil((dur - 5) / PARTE_AUDIO_S));
   for (let i = 0; i < total; i++) {
-    const inicio = i * PARTE_AUDIO_S;
+    const local = i * PARTE_AUDIO_S;
+    const inicio = de + local;
     const parte = join(pasta, `parte_${i}.ogg`);
-    await rodar('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-ss', String(inicio), '-t', String(PARTE_AUDIO_S),
+    await rodar('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-ss', String(local), '-t', String(PARTE_AUDIO_S),
       '-i', join(pasta, arq), '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'libopus', '-b:a', '24k', parte]);
     const dados = readFileSync(parte);
     log(`Transcrevendo parte ${i + 1}/${total} (${(dados.length / 1048576).toFixed(1)} MB)…`);
@@ -215,9 +236,9 @@ function segundos(h) {
   return p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : p[0] * 60 + p[1];
 }
 
-async function duracaoDe(arq) {
-  const s = await rodar('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', arq]);
-  return Number(s.trim()) || PARTE_AUDIO_S;
+async function duracaoDe(arq, reserva) {
+  const s = await rodar('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', arq]).catch(() => '');
+  return Number(s.trim()) || reserva || PARTE_AUDIO_S;
 }
 
 // ---------------------------------------------------------------- tarefa "baixar_corte"

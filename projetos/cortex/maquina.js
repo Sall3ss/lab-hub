@@ -21,9 +21,10 @@
 import { db } from '../../lib/db.js';
 import { passoRoteiro } from './roteiro.js';
 
-export const AGENTE_VERSAO = '1.6.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+export const AGENTE_VERSAO = '1.7.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
 const PRAZO_MIN = { texto: 30, baixar_corte: 60, roteiro: 20 };
 const VERSAO_ROTEIRO = [1, 3, 0];       // agente mais velho nao sabe fazer 'roteiro': nao recebe
+const VERSAO_TRECHO = [1, 7, 0];        // 16/11: so a 1.7.0+ respeita "analisar de/ate"; a velha buscaria a live inteira
 const MAX_TENTATIVAS = 3;
 const VISTO_A_CADA_MS = 60 * 1000;      // grava "visto_em" no maximo 1x por minuto (poupa escrita no D1)
 const GROQ_MODELO = 'whisper-large-v3-turbo';
@@ -74,11 +75,14 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     if (ag.baixa_cortes) lista.push('baixar_corte');
     if (versaoMin(ag.versao, VERSAO_ROTEIRO)) lista.push('roteiro');
     const tipos = '(' + lista.map((x) => `'${x}'`).join(', ') + ')';
+    // Agente antigo nao pega texto de video com trecho marcado (atualiza sozinho em ate 10 min).
+    const semTrecho = versaoMin(ag.versao, VERSAO_TRECHO) ? '' :
+      " AND NOT (tipo = 'texto' AND EXISTS (SELECT 1 FROM cortex_videos v WHERE v.id = video_id AND (v.analisar_de_s IS NOT NULL OR v.analisar_ate_s IS NOT NULL)))";
     // Duas tentativas: se outro PC pegar a mesma tarefa no mesmo instante, tenta a seguinte.
     for (let i = 0; i < 2; i++) {
       const t = await db(env).first(
         `SELECT id, tipo, video_id, corte_id, tentativas FROM cortex_tarefas
-          WHERE usuario_id = ? AND estado = 'pendente' AND tipo IN ${tipos} ORDER BY id LIMIT 1`, ag.usuario_id);
+          WHERE usuario_id = ? AND estado = 'pendente' AND tipo IN ${tipos}${semTrecho} ORDER BY id LIMIT 1`, ag.usuario_id);
       if (!t) return json({ tarefa: null });
       const prazo = new Date(agora.getTime() + PRAZO_MIN[t.tipo] * 60000).toISOString();
       const r = await db(env).run(
@@ -86,7 +90,7 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
         ag.id, prazo, iso, t.id);
       if (!r.meta.changes) continue;
       const video = await db(env).first(
-        'SELECT id, url, plataforma, titulo, canal, duracao_s, criado_em FROM cortex_videos WHERE id = ?', t.video_id);
+        'SELECT id, url, plataforma, titulo, canal, duracao_s, analisar_de_s, analisar_ate_s, criado_em FROM cortex_videos WHERE id = ?', t.video_id);
       let corte = null;
       if (t.corte_id) {
         corte = await db(env).first(

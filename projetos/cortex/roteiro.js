@@ -83,15 +83,19 @@ export class ErroRoteiro extends Error {
 export async function passoRoteiro(env, tarefa) {
   if (!env.GEMINI_API_KEY) throw new ErroRoteiro('Falta a chave GEMINI_API_KEY no Cloudflare (a mesma da Jean).', { definitivo: true });
   const base = db(env);
-  const video = await base.first('SELECT id, usuario_id, titulo, canal, plataforma, duracao_s FROM cortex_videos WHERE id = ?', tarefa.video_id);
+  const video = await base.first('SELECT id, usuario_id, titulo, canal, plataforma, duracao_s, analisar_de_s FROM cortex_videos WHERE id = ?', tarefa.video_id);
   if (!video) throw new ErroRoteiro('vídeo não existe mais', { definitivo: true });
   const ext = await base.first('SELECT MAX(fim_s) AS fim, COUNT(*) AS n FROM cortex_transcricao WHERE video_id = ?', video.id);
   if (!ext || !ext.n) throw new ErroRoteiro('o vídeo não tem transcrição; use "Tentar de novo" na etapa de texto', { definitivo: true });
 
-  const dur = Math.max(Number(ext.fim) || 0, 60);
-  const n = Math.max(1, Math.round(dur / TRECHO_S));
-  const passo = dur / n;
-  const comLongos = dur >= MIN_LONGOS_S;
+  // 16/11: com "analisar de" marcado, a transcricao comeca no meio do video; os trechos da IA
+  // partem dali (nada de passos lendo horas vazias). `dur` = onde o texto termina.
+  const base0 = Math.max(0, Number(video.analisar_de_s) || 0);
+  const dur = Math.max(Number(ext.fim) || 0, base0 + 60);
+  const span = dur - base0;
+  const n = Math.max(1, Math.round(span / TRECHO_S));
+  const passo = span / n;
+  const comLongos = span >= MIN_LONGOS_S;
   const totalPassos = n + (comLongos ? 1 : 0);
   const feitas = await base.all('SELECT parte, resumo, cortes FROM cortex_roteiro_partes WHERE video_id = ? ORDER BY parte', video.id);
   const proxima = feitas.length ? Math.max(...feitas.map((f) => f.parte)) + 1 : 0;
@@ -101,17 +105,17 @@ export async function passoRoteiro(env, tarefa) {
   if (proxima < totalPassos) {
     let r;
     if (proxima < n) {
-      const ini = Math.floor(proxima * passo), fim = proxima === n - 1 ? Math.ceil(dur) + 1 : Math.floor((proxima + 1) * passo);
+      const ini = Math.floor(base0 + proxima * passo), fim = proxima === n - 1 ? Math.ceil(dur) + 1 : Math.floor(base0 + (proxima + 1) * passo);
       // 30 s de folga antes do trecho: um momento que comeca na divisa nao se perde.
       const linhas = await base.all(
         'SELECT inicio_s, fim_s, texto FROM cortex_transcricao WHERE video_id = ? AND inicio_s >= ? AND inicio_s < ? ORDER BY inicio_s',
-        video.id, Math.max(0, ini - 30), fim);
+        video.id, Math.max(base0, ini - 30), fim);
       r = await lerTrecho(env, video, linhas, ini, fim, proxima, n);
       await gravar(env, video, proxima, ini, fim, r, agora);
     } else {
       const assuntos = feitas.flatMap((f) => { try { return JSON.parse(f.resumo || '[]'); } catch { return []; } });
-      r = await escolherLongos(env, video, assuntos, dur);
-      await gravar(env, video, proxima, 0, Math.ceil(dur), r, agora);
+      r = await escolherLongos(env, video, assuntos, base0, dur);
+      await gravar(env, video, proxima, base0, Math.ceil(dur), r, agora);
     }
     cortesAte += r.cortes.length;
   }
@@ -163,21 +167,21 @@ ${texto || '(trecho sem fala)'}`;
   const assuntos = (Array.isArray(dados.assuntos) ? dados.assuntos : []).map((a) => ({
     i: seg(a.inicio), f: seg(a.fim), a: String(a.assunto || '').slice(0, 160), forca: limitar(a.forca),
   })).filter((a) => a.i !== null && a.f !== null && a.f > a.i && a.a).slice(0, 40);
-  const cortes = limpar(dados.curtos, 'curto', Math.max(0, ini - 30), fim + 90)
+  const cortes = limpar(dados.curtos, 'curto', Math.max(Number(video.analisar_de_s) || 0, ini - 30), fim + 90)
     .filter((c, k, todos) => !todos.slice(0, k).some((o) => sobrepoe(o, c)));
   // Nao repetir um curto que ja saiu no trecho anterior (folga de 30 s na divisa).
   const ja = await db(env).all("SELECT inicio_s, fim_s FROM cortex_cortes WHERE video_id = ? AND tipo = 'curto' AND origem = 'ia'", video.id);
   return { assuntos, cortes: cortes.filter((c) => !ja.some((o) => sobrepoe(o, c))), modelo };
 }
 
-async function escolherLongos(env, video, assuntos, dur) {
+async function escolherLongos(env, video, assuntos, ini, dur) {
   if (!assuntos.length) return { assuntos: [], cortes: [], modelo: null };
-  const max = Math.max(1, Math.min(6, Math.floor(dur / (40 * 60))));
+  const max = Math.max(1, Math.min(6, Math.floor((dur - ini) / (40 * 60))));
   const linhas = assuntos.map((a) => `[${hms(a.i)} - ${hms(a.f)}] (força ${a.forca}) ${a.a}`).join('\n');
   const pedido = `${cabecalho(video)}
-Duração total: ${hms(dur)}.
+${ini > 0 ? `Parte analisada: de ${hms(ini)} a ${hms(dur)} (o começo do vídeo ficou de fora, de propósito).` : `Duração total: ${hms(dur)}.`}
 
-Abaixo está o mapa de assuntos do vídeo inteiro (já resumido por trechos).
+Abaixo está o mapa de assuntos ${ini > 0 ? 'dessa parte' : 'do vídeo inteiro'} (já resumido por trechos).
 Tarefa: "longos" = de 1 a ${max} cortes LONGOS de 30 a 40 minutos (vídeo horizontal no YouTube),
 sem se sobrepor, cada um com um fio condutor (um tema, uma sequência, uma história). Comece e
 termine em divisas de assunto. Prefira os blocos com mais força.
@@ -185,7 +189,7 @@ termine em divisas de assunto. Prefira os blocos com mais força.
 Mapa de assuntos:
 ${linhas}`;
   const { dados, modelo } = await perguntar(env, pedido, ESQ_LONGOS);
-  const cortes = limpar(dados.longos, 'longo', 0, Math.ceil(dur) + 1)
+  const cortes = limpar(dados.longos, 'longo', ini, Math.ceil(dur) + 1)
     .filter((c, k, todos) => !todos.slice(0, k).some((o) => sobrepoe(o, c))).slice(0, max);
   return { assuntos: [], cortes, modelo };
 }

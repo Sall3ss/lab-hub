@@ -228,7 +228,32 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   Testado local: transições e recusas da API, validação do gancho (servidor e IA), concluir e
   reabrir, telas no PC e no celular sem erro.
 
+- 16/11: **analisar só um trecho** (pedido do dono: live de 7 h em que o bom começa depois de
+  3 h). Migration 0011 (`analisar_de_s`/`analisar_ate_s` em `cortex_videos`, NULL = sem limite),
+  agente 1.7.0.
+  - Importar: botão "⏱ Só um trecho" ao lado do link abre "Analisar a partir de" e "Até (vazio =
+    até o fim)". Gaveta do vídeo: os mesmos campos + "Salvar trecho". Cartão mostra
+    "⏱ 03:00:00 → fim"; a linha do tempo listra o que ficou de fora.
+  - PC: legenda nativa é filtrada no trecho; sem legenda, o yt-dlp baixa SÓ o áudio do trecho
+    (`--download-sections "*03:00:00-inf"`) e cada parte vai à Groq com o tempo somado ao início
+    (os tempos continuam do vídeo original). Agente < 1.7.0 não recebe texto de vídeo com trecho
+    (buscaria a live inteira); ele se atualiza sozinho em até 10 min.
+  - IA: os trechos de ~45 min começam no "de" (live de 7 h a partir de 3 h = 5 passos, não 9);
+    cortes da IA fora do trecho são descartados na validação.
+  - Mudar o trecho depois (`POST /videos/:id/trecho`): na entrada só grava. Com texto pronto,
+    pede confirmação e refaz: se o texto atual cobre o trecho novo, só a IA lê de novo (sem
+    gastar Groq); senão o PC busca o texto de novo. Cortes da IA na triagem/descartados saem;
+    aprovados e manuais ficam. Recusa enquanto o PC trabalha no vídeo.
+  - "Até" além do fim vira "até o fim"; trecho mínimo 2 min; início depois da duração recusado
+    (no servidor e, se a duração só vier do PC, falha clara no cartão para corrigir o trecho).
+  Testado local: API (21 verificações), roteiro com Google de mentira (trechos a partir de 3 h e
+  depois de 4 h, longos só na parte analisada), agente 1.7.0 com yt-dlp/ffmpeg de mentira
+  (baixou só a partir de 2 h, enviou `inicio=7200`), telas no PC e no celular sem erro.
+
 ## Decisões
+
+- 16/11: trecho mudado com texto pronto **aproveita a transcrição** quando ela cobre o trecho
+  novo (só a IA refaz), para não gastar a cota grátis da Groq de novo.
 
 - 15/11: "resetar a linha do tempo" = **concluir (arquivar)**, não apagar: guarda o histórico
   do que foi publicado e dá para reabrir. Apagar de vez continua em "Excluir vídeo".

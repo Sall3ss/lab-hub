@@ -6,7 +6,8 @@
 // roteiro e estado, e enfileira trabalho para o PC do dono (cortex_tarefas).
 //
 //   GET    /quadro                 videos + cortes do Kanban e se o PC esta online
-//   POST   /videos                 { url } -> cria o video e a tarefa "buscar texto" do PC
+//   POST   /videos                 { url, analisar_de_s?, analisar_ate_s? } -> cria o video e a tarefa "buscar texto" do PC
+//   POST   /videos/:id/trecho      { analisar_de_s, analisar_ate_s, confirmado? } muda o trecho analisado (16/11)
 //   GET    /videos/:id             video + todos os cortes (linha do tempo)
 //   PATCH  /videos/:id             { titulo?, arquivado? }  arquivado = "Concluir video" (sai do quadro)
 //   GET    /concluidos             videos concluidos (arquivados), para reabrir
@@ -54,6 +55,7 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
     const [videos, cortes, pc] = await Promise.all([
       db(env).all(
         `SELECT v.id, v.url, v.plataforma, v.titulo, v.canal, v.duracao_s, v.etapa, v.erro, v.criado_em, v.atualizado_em,
+                v.analisar_de_s, v.analisar_ate_s,
                 (SELECT COUNT(*) FROM cortex_cortes c WHERE c.video_id = v.id AND c.estado <> 'descartado') AS cortes,
                 ${TAREFA_SQL('t.video_id = v.id AND t.tipo IN (\'texto\', \'roteiro\')')}
            FROM cortex_videos v WHERE v.usuario_id = ? AND v.arquivado = 0
@@ -89,19 +91,21 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
     const corpo = await request.json().catch(() => ({}));
     const link = lerLink(corpo.url);
     if (link.erro) return json({ erro: link.erro }, 400);
+    const tr = lerTrecho(corpo.analisar_de_s, corpo.analisar_ate_s, null);
+    if (tr.erro) return json({ erro: tr.erro }, 400);
     const ja = await db(env).first(
       'SELECT id, arquivado FROM cortex_videos WHERE usuario_id = ? AND plataforma = ? AND id_externo = ?',
       u.id, link.plataforma, link.id_externo);
     if (ja) return json({ erro: ja.arquivado ? 'Esse vídeo já foi importado e está arquivado.' : 'Esse vídeo já está no quadro.', video_id: ja.id }, 409);
 
     const r = await db(env).run(
-      `INSERT INTO cortex_videos (usuario_id, url, plataforma, id_externo, etapa, criado_em, atualizado_em)
-       VALUES (?, ?, ?, ?, 'entrada', ?, ?)`, u.id, link.url, link.plataforma, link.id_externo, agora, agora);
+      `INSERT INTO cortex_videos (usuario_id, url, plataforma, id_externo, etapa, analisar_de_s, analisar_ate_s, criado_em, atualizado_em)
+       VALUES (?, ?, ?, ?, 'entrada', ?, ?, ?, ?)`, u.id, link.url, link.plataforma, link.id_externo, tr.de, tr.ate, agora, agora);
     const videoId = r.meta.last_row_id;
     await db(env).run(
       `INSERT INTO cortex_tarefas (usuario_id, tipo, video_id, criada_em, atualizada_em) VALUES (?, 'texto', ?, ?, ?)`,
       u.id, videoId, agora, agora);
-    await auditar(env, { quem: u.email, acao: 'criar', entidade: 'cortex_videos', entidade_id: videoId, depois: link, ip: data.ip });
+    await auditar(env, { quem: u.email, acao: 'criar', entidade: 'cortex_videos', entidade_id: videoId, depois: { ...link, analisar_de_s: tr.de, analisar_ate_s: tr.ate }, ip: data.ip });
     return json({ ok: true, id: videoId, ...link }, 201);
   }
 
@@ -120,6 +124,10 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
     await db(env).run(`UPDATE ${tabela} SET erro = NULL, atualizado_em = ? WHERE id = ?`, agora, dono.id);
     await auditar(env, { quem: u.email, acao: 'tentar-de-novo', entidade: tabela, entidade_id: dono.id, ip: data.ip });
     return json({ ok: true });
+  }
+
+  if (rota === 'videos' && id && partes[2] === 'trecho' && metodo === 'POST') {
+    return await mudarTrecho({ request, env, data, u, id, json, agora });
   }
 
   if (rota === 'videos' && id) {
@@ -246,6 +254,89 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
   }
 
   return json({ erro: 'rota nao encontrada', projeto: 'cortex' }, 404);
+}
+
+// ---------- trecho analisado (16/11) ----------
+// "Analisar de/ate": a live de 7 h em que o bom comeca depois de 3 h. NULL = sem limite.
+// Devolve { de, ate } (ja normalizados) ou { erro }.
+export function lerTrecho(deBruto, ateBruto, duracao) {
+  const vazio = (x) => x === undefined || x === null || x === '';
+  let de = vazio(deBruto) ? null : Math.round(Number(deBruto));
+  let ate = vazio(ateBruto) ? null : Math.round(Number(ateBruto));
+  if ((de !== null && (!Number.isFinite(de) || de < 0)) || (ate !== null && (!Number.isFinite(ate) || ate <= 0))) {
+    return { erro: 'Tempo do trecho inválido. Use HH:MM:SS.' };
+  }
+  if (de === 0) de = null;
+  if (duracao && de !== null && de >= duracao) return { erro: `O início do trecho passa da duração do vídeo (${fmt(duracao)}).` };
+  if (duracao && ate !== null && ate >= duracao) ate = null;          // "ate" no fim ou depois = ate o fim
+  if (ate !== null && ate - (de || 0) < 120) return { erro: 'O trecho precisa ter pelo menos 2 min (o "até" vem depois do "de").' };
+  return { de, ate };
+}
+
+// Mudar o trecho de um video ja importado. Se o PC ainda nao comecou, so grava. Se ja tem
+// texto, refaz: quando o texto atual cobre o trecho novo, aproveita (corta o que sobra e so
+// a IA le de novo, sem gastar a Groq); senao, busca o texto de novo. Cortes da IA ainda na
+// triagem (ou descartados) saem; aprovados e manuais ficam.
+async function mudarTrecho({ request, env, data, u, id, json, agora }) {
+  const video = await db(env).first('SELECT * FROM cortex_videos WHERE id = ? AND usuario_id = ?', Number(id), u.id);
+  if (!video) return json({ erro: 'vídeo não encontrado' }, 404);
+  const corpo = await request.json().catch(() => ({}));
+  const tr = lerTrecho(corpo.analisar_de_s, corpo.analisar_ate_s, video.duracao_s);
+  if (tr.erro) return json({ erro: tr.erro }, 400);
+  if (tr.de === video.analisar_de_s && tr.ate === video.analisar_ate_s) return json({ ok: true, refez: null });
+
+  const tarefas = await db(env).all(
+    "SELECT id, tipo, estado FROM cortex_tarefas WHERE video_id = ? AND tipo IN ('texto', 'roteiro')", video.id);
+  if (tarefas.some((t) => t.estado === 'pega')) {
+    return json({ erro: 'O PC está trabalhando neste vídeo agora. Espere terminar, ou desligue o PC pelo atalho (ele devolve a tarefa) e tente de novo.' }, 409);
+  }
+  const auditoria = () => auditar(env, { quem: u.email, acao: 'mudar-trecho', entidade: 'cortex_videos', entidade_id: video.id,
+    antes: { analisar_de_s: video.analisar_de_s, analisar_ate_s: video.analisar_ate_s }, depois: { analisar_de_s: tr.de, analisar_ate_s: tr.ate }, ip: data.ip });
+
+  // Nada transcrito ainda: so grava (e uma falha da busca de texto volta para a fila).
+  if (video.etapa === 'entrada') {
+    await db(env).batch([
+      ['UPDATE cortex_videos SET analisar_de_s = ?, analisar_ate_s = ?, erro = NULL, atualizado_em = ? WHERE id = ?', [tr.de, tr.ate, agora, video.id]],
+      ["UPDATE cortex_tarefas SET estado = 'pendente', tentativas = 0, erro = NULL, atualizada_em = ? WHERE video_id = ? AND tipo = 'texto' AND estado = 'falhou'", [agora, video.id]],
+    ]);
+    await auditoria();
+    return json({ ok: true, refez: null });
+  }
+
+  // O texto atual cobre o trecho novo? (texto completo e o trecho novo dentro do antigo)
+  const textoFeito = tarefas.some((t) => t.tipo === 'texto' && t.estado === 'feita') && !tarefas.some((t) => t.tipo === 'texto' && t.estado !== 'feita');
+  const cobreIni = (video.analisar_de_s || 0) <= (tr.de || 0);
+  const cobreFim = video.analisar_ate_s === null || (tr.ate !== null && tr.ate <= video.analisar_ate_s);
+  const so = textoFeito && cobreIni && cobreFim ? 'roteiro' : 'texto';
+
+  if (!corpo.confirmado) {
+    const ia = await db(env).first(
+      "SELECT COUNT(*) AS n FROM cortex_cortes WHERE video_id = ? AND origem = 'ia' AND estado IN ('triagem', 'descartado')", video.id);
+    const txt = (so === 'roteiro'
+      ? 'O texto que já existe cobre esse trecho: só a IA lê de novo (a transcrição não é refeita).'
+      : 'O PC busca o texto desse trecho de novo e a IA lê depois.') +
+      (ia.n ? ` ${ia.n} corte(s) da IA ainda na triagem ou descartados saem; aprovados e manuais ficam.` : '');
+    return json({ erro: 'confirmar', confirmar: txt, refaz: so }, 409);
+  }
+
+  const lotes = [
+    ['UPDATE cortex_videos SET analisar_de_s = ?, analisar_ate_s = ?, etapa = ?, erro = NULL, atualizado_em = ? WHERE id = ?',
+      [tr.de, tr.ate, so === 'roteiro' ? 'roteiro' : 'entrada', agora, video.id]],
+    ["DELETE FROM cortex_tarefas WHERE video_id = ? AND tipo IN ('texto', 'roteiro')", [video.id]],
+    ['DELETE FROM cortex_roteiro_partes WHERE video_id = ?', [video.id]],
+    ["DELETE FROM cortex_cortes WHERE video_id = ? AND origem = 'ia' AND estado IN ('triagem', 'descartado')", [video.id]],
+  ];
+  if (so === 'roteiro') {
+    lotes.push(['DELETE FROM cortex_transcricao WHERE video_id = ? AND (fim_s <= ? OR inicio_s >= ?)',
+      [video.id, tr.de || 0, tr.ate === null ? 1e9 : tr.ate]]);
+  } else {
+    lotes.push(['DELETE FROM cortex_transcricao WHERE video_id = ?', [video.id]]);
+  }
+  lotes.push([`INSERT INTO cortex_tarefas (usuario_id, tipo, video_id, criada_em, atualizada_em) VALUES (?, ?, ?, ?, ?)`,
+    [u.id, so, video.id, agora, agora]]);
+  await db(env).batch(lotes);
+  await auditoria();
+  return json({ ok: true, refez: so });
 }
 
 // Situacao da tarefa mais recente de um video/corte, para o cartao dizer o que o PC esta fazendo.
