@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 16/11/2026 (Cortex: analisar só um trecho do vídeo).**
+**Atualizado em 16/11/2026 (hub: fundo trocado por HUD estilo Stark).**
 
 ## Pronto
 
@@ -26,6 +26,11 @@
   papel azul. A esfera é o centro (opacidade .78, gira devagar, núcleo rosa pulsando no
   CSS); chip e fluxo bem fracos nos cantos (no celular, só esfera e chip). Cartões ficaram
   translúcidos para a esfera aparecer através deles. ~600 KB no total.
+  **16/11: substituído** (dono achou "muito carregado"): o fundo agora é um HUD no estilo
+  das telas do Stark, em SVG dentro do `index.html` (~3 KB, sem imagem): reator de anéis
+  finos em ciano no canto direito, três camadas girando devagar, moldura nos cantos da tela
+  e uma linha de varredura a cada 9 s. As imagens de `public/hub-fundo/` deixaram de ser
+  carregadas, mas continuam no repositório até o dono confirmar que podem sair.
 - 14/11: ícone da aba do hub = logo do dono (hexágono com a galáxia), sem o fundo: recorte
   por máscara hexagonal, em `public/hub-icone/` (32, 180 para iPhone, 192). Só a página do
   hub usa; cada projeto tem o próprio ícone.

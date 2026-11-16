@@ -22,32 +22,47 @@ body {
   background:
     radial-gradient(ellipse 80% 60% at 50% 0%, rgb(0 240 255 / .07), transparent 70%),
     radial-gradient(ellipse at center, transparent 55%, rgb(0 0 0 / .65) 100%),
-    linear-gradient(rgb(0 240 255 / .035) 1px, transparent 1px) 0 0 / 32px 32px,
-    linear-gradient(90deg, rgb(0 240 255 / .035) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(rgb(0 240 255 / .025) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(90deg, rgb(0 240 255 / .025) 1px, transparent 1px) 0 0 / 32px 32px,
     var(--fundo);
   background-attachment: fixed;
 }
 ::selection { background: var(--ciano); color: #001014; }
 
-/* ---- fundo com a planta do dono ----
-   Recortes de "Lab Hub System Schematic" (public/hub-fundo/), já sem o papel azul:
-   esfera colorida no centro (o destaque), chip e fluxo de dados em ciano, bem fracos,
-   nos cantos. Fica fixo atrás de tudo e não recebe clique. */
-.fundo-arte { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
-.fundo-arte img { display: block; max-width: none; user-select: none; }
-.fa-esfera { position: absolute; left: 50%; top: 62%; width: min(86vmin, 820px); aspect-ratio: 1; transform: translate(-50%, -50%); }
-.fa-esfera img { width: 100%; height: 100%; opacity: .78; animation: girar 240s linear infinite;
-  filter: drop-shadow(0 0 18px rgb(190 70 255 / .45)) saturate(1.15); }
-/* Luz do núcleo de plasma: rosa, pulsando devagar. */
-.fa-esfera::before { content: ""; position: absolute; inset: 22%; border-radius: 50%;
-  background: radial-gradient(circle, rgb(255 140 235 / .55) 0%, rgb(220 70 230 / .28) 30%, rgb(140 60 255 / .1) 55%, transparent 72%);
-  animation: pulsar 5s ease-in-out infinite; }
-.fa-esfera::after { content: ""; position: absolute; inset: -12%; border-radius: 50%;
-  background: radial-gradient(circle, rgb(160 60 255 / .14), transparent 65%); }
-.fa-chip { position: absolute; left: -3rem; top: 16%; width: 30rem; opacity: .14; transform: rotate(-4deg); }
-.fa-fluxo { position: absolute; right: -4rem; bottom: -1rem; width: 50rem; opacity: .12; }
+/* ---- fundo: HUD estilo Stark (16/11/2026, pedido do dono: "muito carregado") ----
+   Substitui a esfera roxa e os recortes da planta (600 KB de imagem, 3 animações pesadas).
+   Agora é um SVG de linhas finas em ciano, monocromático, fora do centro: o reator gira em
+   três camadas devagar (só transform, barato para o celular), a moldura marca os cantos da
+   tela e uma linha de varredura passa a cada 9 s. Opacidade baixa de propósito. */
+.fundo-hud { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.reator { position: absolute; width: min(118vmin, 1100px); aspect-ratio: 1; right: max(-30vmin, -280px); top: 56%; transform: translateY(-50%);
+  opacity: .5; fill: none; stroke: var(--ciano); filter: drop-shadow(0 0 6px rgb(0 240 255 / .35)); }
+.reator .fio { stroke-width: 1; stroke-opacity: .35; }
+.reator .fraco { stroke-opacity: .15; }
+.reator .regua { stroke-width: 10; stroke-opacity: .28; stroke-dasharray: 1 22.98; }
+.reator .regua-maior { stroke-width: 22; stroke-opacity: .4; stroke-dasharray: 2 238.2; }
+.reator .arcos { stroke-width: 3; stroke-opacity: .55; stroke-dasharray: 420 60 120 60 90 300 220 60 300 1009; }
+.reator .pontilhado { stroke-width: 2; stroke-opacity: .3; stroke-dasharray: 2 10; }
+.reator .setores { stroke-width: 22; stroke-opacity: .12; stroke-dasharray: 280 24 120 24 360 24 200 24 466 302; }
+.reator .mira { stroke-width: 1; stroke-opacity: .22; }
+.reator .tri { stroke-width: 1.5; stroke-opacity: .35; }
+.reator text { fill: var(--ciano); fill-opacity: .55; stroke: none; font-family: var(--mono); font-size: 15px; letter-spacing: 3px; }
+.reator g { transform-box: view-box; transform-origin: 50% 50%; }
+.gira-1 { animation: girar 120s linear infinite; }
+.gira-2 { animation: girar 180s linear infinite reverse; }
+.gira-3 { animation: girar 75s linear infinite; }
+.reator .pulso { transform-box: view-box; transform-origin: 50% 50%; animation: pulsar 6s ease-in-out infinite; }
+.moldura { position: absolute; width: 28px; height: 28px; border: 0 solid rgb(0 240 255 / .4); }
+.m1 { top: 12px; left: 12px; border-top-width: 1px; border-left-width: 1px; }
+.m2 { top: 12px; right: 12px; border-top-width: 1px; border-right-width: 1px; }
+.m3 { bottom: 12px; left: 12px; border-bottom-width: 1px; border-left-width: 1px; }
+.m4 { bottom: 12px; right: 12px; border-bottom-width: 1px; border-right-width: 1px; }
+.varre { position: absolute; left: 0; right: 0; top: 0; height: 1px; opacity: 0;
+  background: linear-gradient(90deg, transparent, rgb(0 240 255 / .5) 30%, rgb(0 240 255 / .5) 70%, transparent);
+  box-shadow: 0 0 12px rgb(0 240 255 / .4); animation: varrer 9s ease-in-out infinite; }
 @keyframes girar { to { transform: rotate(360deg); } }
-@keyframes pulsar { 50% { opacity: .55; transform: scale(.9); } }
+@keyframes pulsar { 50% { opacity: .55; transform: scale(.92); } }
+@keyframes varrer { 0% { transform: translateY(0); opacity: 0; } 8% { opacity: .7; } 45% { opacity: .7; } 55%, 100% { transform: translateY(100vh); opacity: 0; } }
 
 .rotulo-tec { margin: 0; font-family: var(--mono); font-size: .72rem; letter-spacing: .12em; color: var(--ciano); opacity: .8; }
 
@@ -220,9 +235,9 @@ body {
 @media (max-width: 30rem) {
   .topo h1 { font-size: 1.9rem; }
   .telemetria { width: 100%; }
-  .fa-esfera { width: 118vw; top: 50%; }
-  .fa-chip { width: 18rem; left: -5rem; top: 6%; }
-  .fa-fluxo { display: none; }
+  .reator { width: 150vw; right: -75vw; top: 62%; opacity: .38; }
+  .reator text { display: none; }
+  .moldura { width: 18px; height: 18px; }
   .grade { grid-template-columns: 1fr; }
   .cartao h2 { font-size: 1.75rem; }
   .esquema { width: 7.5rem; }

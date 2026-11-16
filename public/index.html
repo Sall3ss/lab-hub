@@ -17,11 +17,33 @@
   <link rel="stylesheet" href="/hub.css" />
 </head>
 <body>
-  <!-- Fundo: recortes da planta "Lab Hub System Schematic" do dono (esfera no centro). -->
-  <div class="fundo-arte" aria-hidden="true">
-    <img class="fa-chip" src="/hub-fundo/chip.webp" alt="" decoding="async" />
-    <img class="fa-fluxo" src="/hub-fundo/fluxo.webp" alt="" decoding="async" />
-    <div class="fa-esfera"><img src="/hub-fundo/esfera.webp" alt="" decoding="async" /></div>
+  <!-- Fundo: HUD no estilo das telas do Stark, desenhado em SVG (sem imagem, ~3 KB).
+       Um reator de aneis finos no canto direito, girando devagar, e a moldura da tela.
+       Tudo ciano e fraco, para o destaque ficar nos cartoes. Autoria: Claude (Opus 5.5). -->
+  <div class="fundo-hud" aria-hidden="true">
+    <svg class="reator" viewBox="-500 -500 1000 1000">
+      <defs>
+        <radialGradient id="nucleo"><stop offset="0" stop-color="#bffcff" stop-opacity=".9"/><stop offset=".35" stop-color="#00f0ff" stop-opacity=".35"/><stop offset="1" stop-color="#00f0ff" stop-opacity="0"/></radialGradient>
+      </defs>
+      <circle r="482" class="fio"/>
+      <circle r="458" class="regua"/>
+      <circle r="458" class="regua-maior"/>
+      <g class="gira-1"><circle r="420" class="arcos"/></g>
+      <g class="gira-2"><circle r="372" class="pontilhado"/></g>
+      <circle r="330" class="fio fraco"/>
+      <g class="gira-3"><circle r="290" class="setores"/></g>
+      <circle r="215" class="fio"/>
+      <g class="gira-2"><circle r="180" class="pontilhado"/></g>
+      <path class="mira" d="M-500 0H-240M240 0H500M0 -500V-240M0 240V500"/>
+      <path class="mira fraco" d="M-120 0H120M0 -120V120"/>
+      <circle r="120" class="fio"/>
+      <g class="gira-1"><path class="tri" d="M0 -95 82 47.5 -82 47.5Z"/></g>
+      <circle r="140" fill="url(#nucleo)" class="pulso"/>
+      <text x="250" y="-312">SYS.CORE // 98.2%</text>
+      <text x="300" y="338">PWR ▮▮▮▮▯ · ESTÁVEL</text>
+    </svg>
+    <span class="moldura m1"></span><span class="moldura m2"></span><span class="moldura m3"></span><span class="moldura m4"></span>
+    <span class="varre"></span>
   </div>
 
   <header class="topo">
