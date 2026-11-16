@@ -15,6 +15,11 @@
 //   GET    /painel                 projetos (cartao, tarefas, notas) + memorias
 //   PATCH  /tarefas/:id            { estado: 'aberta'|'feita' }
 //   DELETE /tarefas/:id | /notas/:id | /memorias/:id
+//   GET    /agenda                 { configurada, conectada, email, precisa_reconectar }
+//   GET    /agenda/conectar        manda para o login do Google (agenda, so leitura)
+//   GET    /agenda/volta           volta do Google (grava o acesso cifrado)
+//   GET    /agenda/eventos?dias=2  compromissos com os lembretes de cada um (16/11)
+//   DELETE /agenda                 desconecta (revoga no Google e apaga)
 //
 // A conversa so nasce no banco quando a primeira mensagem e enviada: "Nova conversa" na
 // tela nao grava nada (fundamento: nao gravar sem intencao).
@@ -27,6 +32,7 @@ import { responder, ErroMotor, transcrever, vozDoGemini } from './motor.js';
 import { instrucaoDeSistema } from './personalidade.js';
 import { contextoParaJean, dadosDoPainel, projetoPorSlug, todosOsProjetos } from './contexto.js';
 import { declaracoes, executar, decidirAcao, publica, PROPOSTAS } from './ferramentas.js';
+import { agendaConfigurada, urlParaConectar, voltaDoGoogle, estadoDaAgenda, desconectar, eventosDaAgenda, ErroAgenda } from './agenda.js';
 
 const MAX_TEXTO = 20000;         // caracteres por mensagem
 const MAX_HISTORICO = 30;        // falas enviadas ao modelo (o plano gratis tem limite por minuto)
@@ -105,6 +111,8 @@ export async function rotas({ request, env, data, u, partes, metodo, json, waitU
   }
 
   if (rota === 'painel' && metodo === 'GET') return json(await dadosDoPainel(env, u.id));
+
+  if (rota === 'agenda') return await rotasAgenda({ request, env, data, u, id, metodo, json });
 
   if (rota === 'tarefas' && id && metodo === 'PATCH') {
     const corpo = await request.json().catch(() => ({}));
@@ -330,4 +338,26 @@ function responderEmStreaming({ env, u, conversa, waitUntil, de, pagina, voz, ou
 
 function nomeBonito(nome) {
   return String(nome || '').toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase()).trim();
+}
+
+// Agenda Google (16/11/2026). Ver agenda.js.
+async function rotasAgenda({ request, env, data, u, id, metodo, json }) {
+  if (!id && metodo === 'GET') return json(await estadoDaAgenda(env, u));
+  if (!id && metodo === 'DELETE') {
+    if (!(await desconectar(env, u, data.ip))) return json({ erro: 'A agenda já não estava conectada.' }, 404);
+    return json({ ok: true });
+  }
+  if (!agendaConfigurada(env)) return json({ erro: 'A agenda Google ainda não foi configurada no servidor.', codigo: 'sem-config' }, 503);
+  if (id === 'conectar' && metodo === 'GET') return Response.redirect(await urlParaConectar(env, request, u), 302);
+  if (id === 'volta' && metodo === 'GET') return await voltaDoGoogle(env, request, u, data.ip);
+  if (id === 'eventos' && metodo === 'GET') {
+    try {
+      const dias = Number(new URL(request.url).searchParams.get('dias')) || 2;
+      return json(await eventosDaAgenda(env, u, { dias }));
+    } catch (e) {
+      if (e instanceof ErroAgenda) return json({ erro: e.message, codigo: e.codigo }, e.status);
+      throw e;
+    }
+  }
+  return json({ erro: 'rota nao encontrada', projeto: 'jean' }, 404);
 }

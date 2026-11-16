@@ -113,10 +113,13 @@ uplink    ok</pre>
           <div class="hud hud-1" aria-hidden="true"><i class="hud-anel"></i><span>NÚCLEO<br><b>FÊNIX</b></span></div>
           <div class="hud hud-2" aria-hidden="true"><span>SINAL DE VOZ<br><b data-hud="sinal">000</b></span><i class="hud-anel hud-anel-b"></i></div>
           <div class="hud hud-3" aria-hidden="true"><i class="hud-anel hud-anel-c"></i><span>MOTOR<br><b>GEMINI</b></span></div>
-          <div class="hud hud-4" aria-hidden="true"><span>CONTEXTO<br><b>LAB HUB</b></span></div>
+          <div class="hud hud-4" aria-hidden="true"><span><span id="hud-agenda-rotulo">CONTEXTO</span><br><b id="hud-agenda">LAB HUB</b></span></div>
           <div class="esfera-estado" role="status"><span class="esfera-luz" aria-hidden="true"></span>JEAN <b data-hud="modo">Em repouso</b></div>
         </div>
       </section>
+
+      <!-- Lembretes da Agenda Google (16/11): aparecem aqui, por cima, e a Jean fala -->
+      <div class="lembretes" id="lembretes" aria-live="assertive"></div>
 
       <section class="conversa" id="rolagem">
         <div class="mensagens" id="mensagens" aria-live="polite"></div>
@@ -190,6 +193,7 @@ uplink    ok</pre>
     <div class="abas" role="tablist">
       <button type="button" role="tab" class="aba ativa" data-aba="projetos" aria-selected="true">Projetos</button>
       <button type="button" role="tab" class="aba" data-aba="memorias" aria-selected="false">Memórias</button>
+      <button type="button" role="tab" class="aba" data-aba="agenda" aria-selected="false">Agenda</button>
     </div>
     <div class="painel-corpo" id="painel-corpo"></div>
   </aside>
@@ -272,6 +276,7 @@ uplink    ok</pre>
   <script src="./texto.js"></script>
   <script src="./voz.js"></script>
   <script src="./esfera.js"></script>
+  <script src="./lembretes.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

@@ -311,6 +311,51 @@ projeto a precisar dele.
   global (`public/jean-painel.js`, aparece no hub e no Cortex), emblema da saudação e
   avatar das respostas usam `icone-192.png`. Conferido em print no PC e no celular.
 
+- 🟡 **16/11 - Agenda Google com lembretes por voz** (pedido do dono). A Jean lê a Agenda
+  Google (SÓ LEITURA, escopo `calendar.readonly`) e avisa por voz dos compromissos.
+  **Nada roda em segundo plano** (pedido do dono): os avisos existem enquanto a página da
+  Jean está aberta (no tablet do setup, quase sempre). A tela busca os compromissos a cada
+  5 min e confere a cada 15 s; a hora do aviso segue as **notificações de cada evento no
+  Google** (ex.: 10 min antes; evento sem notificação = aviso na hora; dia inteiro não
+  fala). O aviso é um cartão na mesma tela (Ouvir / OK) e a Jean fala ("Matheus, lembrete:
+  Reunião com cliente começa em 10 minutos, às 14:39. Local: ...") com a esfera pulsando.
+  Se ela estiver ocupada (respondendo, conversa por voz, gravando), espera ficar livre. O
+  que já foi avisado fica lembrado no aparelho (recarregar não repete). Página aberta
+  atrasada avisa uma vez só o aviso mais recente que venceu.
+  - Onde: `projetos/jean/agenda.js` (OAuth, token cifrado, leitura dos eventos),
+    rotas `/agenda...` no `api.js`, tabela `jean_google` (migration 0012), tela
+    `public/projetos/jean/lembretes.js` e aba **Pulso › Agenda** (conectar, desconectar
+    com confirmação, avisar por voz neste aparelho, manter a tela acesa, testar, lista dos
+    próximos 8 dias). No painel de instrumentos, "PRÓXIMO" mostra o próximo compromisso.
+  - A Jean também responde sobre a agenda: ferramenta `ver_agenda` ("o que tenho hoje?").
+    Ela **não cria nem muda** eventos (pode ser uma etapa futura, com cartão de confirmação).
+  - Segurança: o token de renovação do Google fica **cifrado** no banco (AES-GCM, chave
+    derivada do `JEAN_GOOGLE_CLIENT_SECRET`); o pedido de conexão é assinado e amarrado ao
+    usuário logado; desconectar revoga no Google e apaga; conectar e desconectar são
+    auditados. Só são lidas as agendas marcadas como visíveis no Google Agenda; evento
+    recusado ou cancelado não entra.
+  - Navegador só toca som depois do primeiro toque: se a página abrir sozinha (tablet
+    reiniciou), aparece "Toque aqui uma vez para a Jean poder falar os lembretes".
+  - Testado aqui: servidor com banco temporário e Google de mentira (19 verificações:
+    conectar, pedido adulterado ou de outro usuário recusado, token cifrado, renovação,
+    acesso encerrado → "reconectar", desconectar com revogação, auditoria, sem segredos →
+    "falta configurar"); tela no PC e no celular (cartão, voz, esfera, sem repetir ao
+    recarregar, aba Agenda conectada e desconectada).
+  - **⏳ Falta o dono (contas pessoais dele), uma vez só:**
+    1. https://console.cloud.google.com → criar projeto (ex.: "Jean Lab Hub").
+    2. APIs e serviços › Biblioteca → **Google Calendar API** → Ativar.
+    3. Google Auth Platform (tela de consentimento OAuth) → Externo; nome "Jean"; e-mail
+       dele. Em Público-alvo, adicionar o próprio Gmail como usuário de teste e depois
+       **"Publicar app" (Em produção)**. Motivo: em modo Teste o Google encerra o acesso
+       a cada 7 dias. Publicado sem verificação, o Google mostra "app não verificado" na
+       hora de conectar (é o app dele mesmo: Avançado › Acessar Jean).
+    4. Clientes → Criar cliente OAuth → **Aplicativo da Web** → URI de redirecionamento
+       autorizado: `https://lab-hub-9uh.pages.dev/api/p/jean/agenda/volta`.
+    5. Cloudflare › Pages › lab-hub › Configurações › Variáveis e segredos (Produção):
+       `JEAN_GOOGLE_CLIENT_ID` e `JEAN_GOOGLE_CLIENT_SECRET` (tipo Segredo). Depois,
+       Implantações › última › **Tentar novamente** (segredo só vale numa publicação nova).
+    6. Na Jean: Pulso › Agenda › Conectar minha Agenda Google.
+
 ## Próximo passo
 
 - MVP completo (etapas 1 a 5). Próximo passo é decisão do dono.

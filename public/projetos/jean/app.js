@@ -851,11 +851,13 @@
       painel.querySelectorAll('[data-aba]').forEach(function (x) {
         x.classList.toggle('ativa', x === b); x.setAttribute('aria-selected', x === b ? 'true' : 'false');
       });
+      if (abaAtual === 'agenda') LembretesJean.atualizar();
       desenharPainel();
     });
   });
 
   async function carregarPainel() {
+    if (abaAtual === 'agenda') { desenharAgenda(); return LembretesJean.atualizar(); }
     if (!dadosPainel) corpoPainel.innerHTML = '<p class="vazio-lateral">Carregando...</p>';
     try { dadosPainel = await api('/painel'); desenharPainel(); }
     catch (e) { corpoPainel.innerHTML = '<p class="vazio-lateral">Não foi possível carregar. <button type="button" class="link" data-recarregar-painel>Tentar de novo</button></p>'; }
@@ -866,6 +868,7 @@
   var lixeira = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>';
 
   function desenharPainel() {
+    if (abaAtual === 'agenda') return desenharAgenda();
     if (!dadosPainel) return;
     if (abaAtual === 'memorias') {
       var ms = dadosPainel.memorias;
@@ -960,8 +963,18 @@
   var NOME_APAGAR = { tarefas: 'tarefa', notas: 'nota', memorias: 'memória' };
   corpoPainel.addEventListener('click', function (ev) {
     if (ev.target.closest('[data-recarregar-painel]')) return carregarPainel();
+    if (ev.target.closest('[data-desconectar-agenda]')) {
+      apagarPendente = { tipo: 'agenda' };
+      $('confirmar-titulo').textContent = 'Desconectar a Agenda Google?';
+      $('confirmar-texto').textContent = 'A Jean deixa de ver a sua agenda e de avisar dos compromissos. O acesso também é revogado na sua conta Google. Dá para conectar de novo quando quiser.';
+      $('confirmar-sim').textContent = 'Desconectar';
+      mostrarErro($('janela-confirmar'), '');
+      $('janela-confirmar').showModal();
+      return;
+    }
     var b = ev.target.closest('[data-apagar]');
     if (!b) return;
+    $('confirmar-sim').textContent = 'Excluir';
     apagarPendente = { tipo: b.dataset.apagar, id: b.dataset.id };
     var linha = b.closest('.linha');
     $('confirmar-titulo').textContent = 'Excluir ' + NOME_APAGAR[apagarPendente.tipo] + '?';
@@ -972,11 +985,95 @@
   $('confirmar-sim').addEventListener('click', async function () {
     var j = $('janela-confirmar');
     try {
-      await api('/' + apagarPendente.tipo + '/' + apagarPendente.id, { method: 'DELETE' });
+      await api(apagarPendente.tipo === 'agenda' ? '/agenda' : '/' + apagarPendente.tipo + '/' + apagarPendente.id, { method: 'DELETE' });
       j.close();
       await carregarPainel();
     } catch (e) { mostrarErro(j, erroDeRede(e)); }
   });
+  // ---- Aba "Agenda" (16/11): Agenda Google, lembretes por voz
+  function desenharAgenda() {
+    var st = LembretesJean.estado(), erroAg = LembretesJean.erro();
+    if (!st) { corpoPainel.innerHTML = erroAg ? '<p class="erro">' + esc(erroAg) + '</p>' : '<p class="vazio-lateral">Carregando...</p>'; return; }
+    if (!st.configurada) {
+      corpoPainel.innerHTML = '<p class="painel-dica">A Jean pode ler a sua Agenda Google e avisar por voz dos compromissos enquanto esta página estiver aberta.</p>' +
+        '<p class="vazio-lateral">Falta um passo seu no Google Cloud: criar o acesso da Jean e gravar dois segredos no Cloudflare. O passo a passo está na ficha da Jean (Agenda Google).</p>';
+      return;
+    }
+    if (!st.conectada || st.precisa_reconectar) {
+      corpoPainel.innerHTML = (st.precisa_reconectar ? '<p class="erro">O Google encerrou o acesso da Jean à agenda. Conecte de novo.</p>' : '') +
+        '<p class="painel-dica">A Jean lê a sua Agenda Google (só leitura: ela não cria nem apaga eventos) e avisa por voz nos horários das notificações de cada compromisso, enquanto esta página estiver aberta.</p>' +
+        '<a class="primario botao-link" href="' + API + '/agenda/conectar">' + (st.precisa_reconectar ? 'Reconectar' : 'Conectar') + ' minha Agenda Google</a>';
+      return;
+    }
+    var evs = LembretesJean.eventos(), porDia = {}, dias = [];
+    evs.forEach(function (e) {
+      var d = e.dia_inteiro ? new Date(e.inicio + 'T12:00:00') : new Date(e.inicio);
+      var k = d.toDateString();
+      if (!porDia[k]) { porDia[k] = { data: d, itens: [] }; dias.push(k); }
+      porDia[k].itens.push(e);
+    });
+    var hoje = new Date().toDateString(), amanha = new Date(Date.now() + 864e5).toDateString();
+    var nomeDia = function (k, d) { return k === hoje ? 'Hoje' : k === amanha ? 'Amanhã' : d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' }); };
+    var avisa = function (e) {
+      if (e.dia_inteiro) return 'dia inteiro (sem aviso por voz)';
+      var m = e.lembretes && e.lembretes.length ? e.lembretes : [0];
+      return 'avisa ' + m.map(function (x) { return x === 0 ? 'na hora' : x < 60 ? x + ' min antes' : x % 1440 === 0 ? (x === 1440 ? '1 dia antes' : (x / 1440) + ' dias antes') : x % 60 === 0 ? (x / 60) + ' h antes' : x + ' min antes'; }).join(', ');
+    };
+    corpoPainel.innerHTML =
+      '<section class="projeto"><div class="projeto-topo"><h3>Agenda Google</h3><span class="fase">Conectada</span></div>' +
+      '<p class="projeto-proximo">' + esc(st.email || 'conta Google') + '</p>' +
+      '<label class="chave"><input type="checkbox" id="ag-voz"' + (LembretesJean.vozLigada() ? ' checked' : '') + '> <span>Avisar por voz neste aparelho</span></label>' +
+      (LembretesJean.temTelaAcesa ? '<label class="chave"><input type="checkbox" id="ag-tela"' + (LembretesJean.telaAcesaLigada() ? ' checked' : '') + '> <span>Manter a tela acesa (tablet do setup)</span></label>' : '') +
+      '<p class="painel-dica">Os avisos acontecem enquanto esta página estiver aberta, nos horários das notificações de cada evento no Google. Evento sem notificação é avisado na hora.</p>' +
+      '<div class="proposta-botoes" style="justify-content:flex-start"><button type="button" class="mini" id="ag-testar">Testar lembrete</button>' +
+      '<button type="button" class="mini" id="ag-atualizar">Atualizar</button>' +
+      '<button type="button" class="link perigo" data-desconectar-agenda>Desconectar</button></div></section>' +
+      (erroAg ? '<p class="erro">' + esc(erroAg) + '</p>' : '') +
+      (dias.length ? dias.map(function (k) {
+        return '<section class="projeto"><h4>' + esc(nomeDia(k, porDia[k].data)) + '</h4>' + porDia[k].itens.map(function (e) {
+          return '<div class="linha"><div class="linha-texto"><span class="etiqueta">' + (e.dia_inteiro ? 'dia todo' : esc(LembretesJean.hora(e.inicio))) + '</span> ' + esc(e.titulo) +
+            '<small class="ag-detalhe">' + esc(avisa(e)) + (e.local ? ' · ' + esc(e.local) : '') + (e.calendario ? ' · ' + esc(e.calendario) : '') + '</small></div></div>';
+        }).join('') + '</section>';
+      }).join('') : '<p class="vazio-lateral">Nenhum compromisso nos próximos 8 dias.</p>');
+  }
+  corpoPainel.addEventListener('change', function (ev) {
+    if (ev.target.id === 'ag-voz') LembretesJean.ligarVoz(ev.target.checked);
+    if (ev.target.id === 'ag-tela') LembretesJean.telaAcesa(ev.target.checked);
+  });
+  corpoPainel.addEventListener('click', function (ev) {
+    if (ev.target.id === 'ag-testar') { VozJean.destravar(); LembretesJean.testar(); }
+    if (ev.target.id === 'ag-atualizar') { ev.target.disabled = true; LembretesJean.atualizar(); }
+  });
+
+  // A Jean fala o lembrete: a esfera pulsa junto (Esfera "falando").
+  function falarLembrete(texto, aoFim) {
+    VozJean.falar(texto, {
+      aoComecar: function () { if (!conversaVoz.ativa) Esfera.modo('falando'); },
+      aoTerminar: function () { if (!conversaVoz.ativa) Esfera.modo(estado.gerando ? 'pensando' : 'repouso'); aoFim(); },
+    });
+  }
+  var nomeDoDono = '';
+  function iniciarLembretes() {
+    if (embutido) return; // no painel por cima de outra página, quem avisa é a página da Jean
+    LembretesJean.iniciar({
+      api: api,
+      nomeDono: function () { return nomeDoDono; },
+      ocupada: function () { return !!estado.gerando || conversaVoz.ativa || !!gravacao || !!ditado; },
+      falar: falarLembrete,
+      aoMudar: function () { if (!painel.hidden && abaAtual === 'agenda') desenharAgenda(); },
+    });
+    // Volta do login do Google (?agenda=ok|recusado|...): abre a aba Agenda e explica.
+    var volta = parametros.get('agenda');
+    if (volta) {
+      var u = new URL(location.href); u.searchParams.delete('agenda'); history.replaceState(null, '', u);
+      var MSG = { ok: '', recusado: 'Você não autorizou o acesso à agenda no Google.', 'sem-permissao': 'A permissão de ver a agenda ficou desmarcada no Google. Conecte de novo e deixe marcada.', expirou: 'O pedido de conexão expirou. Tente de novo.', falhou: 'O Google não concluiu a conexão. Tente de novo.' };
+      abaAtual = 'agenda';
+      painel.querySelectorAll('[data-aba]').forEach(function (x) { var a = x.dataset.aba === 'agenda'; x.classList.toggle('ativa', a); x.setAttribute('aria-selected', a ? 'true' : 'false'); });
+      abrirPainel(true);
+      if (MSG[volta]) setTimeout(function () { alertaPainel(MSG[volta]); }, 600);
+    }
+  }
+
   function alertaPainel(msg) {
     corpoPainel.insertAdjacentHTML('afterbegin', '<p class="erro">' + esc(msg) + '</p>');
   }
@@ -1025,11 +1122,13 @@
       if (!s.logado || s.definir_acesso) return irParaEntrar();
       var nome = primeiroNome(s.usuario && s.usuario.nome);
       $('saudacao').textContent = nome ? 'Olá, ' + nome + '.' : 'Olá.';
+      nomeDoDono = nome;
       $('quem').textContent = (s.usuario && s.usuario.email) || '';
       carregando.hidden = true;
       app.hidden = false;
       ajustarCampo();
       carregarLista();
+      iniciarLembretes();
       var c = Number(new URL(location.href).searchParams.get('c'));
       if (c) abrirConversa(c); else if (!toque) campo.focus();
     })

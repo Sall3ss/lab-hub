@@ -102,6 +102,8 @@
    14/11: voz também confirmada no PC (conversa por voz ouvindo pelo Gemini, menos de
    5 s por etapa). 14/11: logo da Jean (do dono) no ícone da aba e no cartão do hub
    (`EMBLEMAS` no hub.js: projeto com logo própria troca o esquema pela logo).
+   16/11: Agenda Google (só leitura) com lembretes por voz enquanto a página está aberta;
+   falta o dono criar o acesso no Google Cloud e gravar 2 segredos (passo a passo na ficha).
    Estado e decisões em `projetos/jean/PROJETO.md`.
 
 10. 🟡 **Cortex (14/11): central de cortes, em `/cortex`.** Sucessor da ideia do ClipStudio, refeito:

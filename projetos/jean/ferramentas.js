@@ -10,6 +10,7 @@
 import { db } from '../../lib/db.js';
 import { auditar } from '../../lib/audit.js';
 import { projetoPorSlug, todosOsProjetos, dadosDoPainel } from './contexto.js';
+import { agendaParaJean } from './agenda.js';
 
 const FASES = ['beta', 'pronto', 'migrado'];
 const TIPOS_MEMORIA = ['fato', 'preferencia', 'decisao', 'regra'];
@@ -29,6 +30,8 @@ export function declaracoes() {
       parameters: { type: 'object', properties: { termo: txt('Palavra ou trecho a procurar. Vazio = conversas mais recentes.') } } },
     { name: 'ler_conversa', description: 'Lê as falas de uma conversa anterior (pelo id que buscar_conversas devolve).',
       parameters: { type: 'object', properties: { conversa_id: { type: 'integer', description: 'Id da conversa' } }, required: ['conversa_id'] } },
+    { name: 'ver_agenda', description: 'Lê a Agenda Google do dono (só leitura): compromissos de agora até N dias à frente, com horário de Brasília, local e lembretes. Use para "o que tenho hoje/amanhã", "estou livre às 15h?", "qual o próximo compromisso".',
+      parameters: { type: 'object', properties: { dias: { type: 'integer', description: 'Quantos dias à frente (1 = hoje até amanhã neste horário; máximo 14). Padrão 1.' } } } },
     { name: 'criar_nota', description: 'PROPÕE uma anotação num projeto. Só é gravada se o dono confirmar no cartão.',
       parameters: { type: 'object', properties: { projeto, texto: txt('Texto da nota, claro e autossuficiente') }, required: ['projeto', 'texto'] } },
     { name: 'criar_tarefa', description: 'PROPÕE uma tarefa (pendência) num projeto. Só é criada se o dono confirmar no cartão.',
@@ -44,7 +47,7 @@ export function declaracoes() {
   ];
 }
 
-const CONSULTAS = new Set(['ler_ficha', 'listar_pendencias', 'buscar_conversas', 'ler_conversa']);
+const CONSULTAS = new Set(['ler_ficha', 'listar_pendencias', 'buscar_conversas', 'ler_conversa', 'ver_agenda']);
 export const PROPOSTAS = ['criar_nota', 'criar_tarefa', 'concluir_tarefa', 'lembrar', 'esquecer', 'sugerir_fase'];
 const corta = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n) + ' [...]' : s; };
 const limpo = (s, n) => String(s == null ? '' : s).trim().slice(0, n);
@@ -90,6 +93,7 @@ async function consultar(env, u, nome, args) {
     }
     return { projeto: p.slug, parte: 'completa', ficha: corta(p.ficha, 12000), cortada: p.ficha.length > 12000 };
   }
+  if (nome === 'ver_agenda') return await agendaParaJean(env, u, Math.min(Math.max(Number(args.dias) || 1, 1), 14));
   if (nome === 'listar_pendencias') {
     const { projetos } = await dadosDoPainel(env, u.id);
     const alvo = args.projeto ? projetos.filter((p) => p.slug === args.projeto) : projetos;
