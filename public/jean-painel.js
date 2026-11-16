@@ -25,8 +25,9 @@
 
   var css = '' +
     '.jp-botao{position:fixed;right:max(1rem,env(safe-area-inset-right));bottom:max(1rem,env(safe-area-inset-bottom));z-index:2147483000;' +
-    'width:3.25rem;height:3.25rem;border-radius:1.1rem;border:0;cursor:pointer;color:#fff;font:700 1.35rem/1 system-ui,sans-serif;' +
-    'background:linear-gradient(135deg,#c8322b,#c98a12);box-shadow:0 10px 28px rgb(200 50 43 / .35);display:grid;place-items:center;transition:transform .15s}' +
+    'width:3.6rem;height:3.6rem;padding:0;border:0;cursor:pointer;background:none;' +
+    'filter:drop-shadow(0 6px 16px rgb(255 120 40 / .45));display:grid;place-items:center;transition:transform .15s}' +
+    '.jp-botao img{width:100%;height:100%;display:block}' +
     '.jp-botao:hover{transform:translateY(-2px)}.jp-botao:focus-visible{outline:3px solid #f2b441;outline-offset:3px}' +
     '.jp-dica{position:absolute;right:calc(100% + .5rem);white-space:nowrap;font:600 .75rem system-ui,sans-serif;color:#fff;background:#1f1b19;padding:.3rem .55rem;border-radius:.5rem;opacity:0;pointer-events:none;transition:opacity .15s}' +
     '.jp-botao:hover .jp-dica{opacity:1}@media (hover:none){.jp-dica{display:none}}' +
@@ -46,7 +47,8 @@
   botao.className = 'jp-botao';
   botao.setAttribute('aria-label', 'Falar com a Jean (Ctrl+K)');
   var mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
-  botao.innerHTML = 'J<span class="jp-dica">Jean · ' + (mac ? '⌘' : 'Ctrl') + '+K</span>';
+  // 16/11: a logo da Jean (do dono) no lugar do "J".
+  botao.innerHTML = '<img src="/projetos/jean/icone-192.png" alt="" width="58" height="58"><span class="jp-dica">Jean · ' + (mac ? '⌘' : 'Ctrl') + '+K</span>';
 
   var veu = document.createElement('div');
   veu.className = 'jp-veu jp-escondido';

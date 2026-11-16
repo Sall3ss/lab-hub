@@ -307,6 +307,10 @@ projeto a precisar dele.
     (original em `logo-original.png`); o arquivo do cartão continua sendo
     `public/hub-cartoes/jean.webp`. O ícone da aba continua colorido.
 
+- 🟢 **16/11 - Logo da Jean no lugar do "J"** (pedido do dono): botão flutuante do painel
+  global (`public/jean-painel.js`, aparece no hub e no Cortex), emblema da saudação e
+  avatar das respostas usam `icone-192.png`. Conferido em print no PC e no celular.
+
 ## Próximo passo
 
 - MVP completo (etapas 1 a 5). Próximo passo é decisão do dono.

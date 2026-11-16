@@ -441,3 +441,8 @@ body.compacto .esfera-area { height: clamp(11rem, 32vh, 16rem); }
 body.compacto .hud-3, body.compacto .hud-4 { display: none; }
 body.compacto .principal:has(#boas-vindas[hidden]) .esfera-area { height: 5.5rem; }
 @media (prefers-reduced-motion: reduce) { .hud-anel, .esfera-luz { animation: none !important; } }
+
+/* 16/11: logo da Jean (do dono) no lugar do "J" (emblema da saudação e avatar das respostas). */
+img.emblema { display: block; width: 4.2rem; height: 4.2rem; border-radius: 0; background: none; box-shadow: none; filter: drop-shadow(0 0 14px rgb(255 138 43 / .45)); }
+img.avatar { width: 2.1rem; height: 2.1rem; border-radius: 0; background: none; box-shadow: none; filter: drop-shadow(0 0 6px rgb(255 138 43 / .4)); }
+@media (max-width: 760px) { img.avatar { width: 1.85rem; height: 1.85rem; } img.emblema { width: 3.6rem; height: 3.6rem; } }

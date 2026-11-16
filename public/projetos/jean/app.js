@@ -193,7 +193,7 @@
       el.innerHTML = (entrada === 'audio' ? '<span class="por-audio">🎤 por áudio</span>' : '') + '<div class="balao"></div>';
       el.querySelector('.balao').textContent = conteudo;
     } else {
-      el.innerHTML = '<div class="avatar" aria-hidden="true">J</div><div class="corpo"><div class="md"></div>' +
+      el.innerHTML = '<img class="avatar" src="./icone-192.png" alt="" aria-hidden="true" width="32" height="32"><div class="corpo"><div class="md"></div>' +
         '<div class="acoes"><button type="button" class="acao" data-copiar>Copiar</button>' +
         '<button type="button" class="acao ouvir" data-ouvir><span class="barrinhas" aria-hidden="true"><i></i><i></i><i></i></span><span class="ouvir-rotulo">Ouvir</span></button></div></div>';
       el.querySelector('.md').innerHTML = TextoJean.paraHtml(conteudo);
