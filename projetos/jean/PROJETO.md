@@ -355,6 +355,9 @@ projeto a precisar dele.
        `JEAN_GOOGLE_CLIENT_ID` e `JEAN_GOOGLE_CLIENT_SECRET` (tipo Segredo). Depois,
        Implantações › última › **Tentar novamente** (segredo só vale numa publicação nova).
     6. Na Jean: Pulso › Agenda › Conectar minha Agenda Google.
+  - 16/11: dono fez os passos 1 a 5 (projeto no Google Cloud, Calendar API, consentimento,
+    cliente OAuth e os dois segredos no Pages). Publicação nova disparada para os segredos
+    valerem. Falta o passo 6 (conectar) e o primeiro lembrete real.
 
 ## Próximo passo
 
