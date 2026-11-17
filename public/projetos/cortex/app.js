@@ -639,9 +639,24 @@
           el.textContent = a != null && b != null && b > a ? 'Duração: ' + duracao(b - a) : '';
           // tempo do gancho dentro do arquivo do corte = o que aparece na linha do tempo do Movavi
           var gi = lerTC(f.g_inicio.value), gf = lerTC(f.g_fim.value), d = box.querySelector('#dica-gancho');
-          if (gi == null || gf == null) d.textContent = f.g_inicio.value || f.g_fim.value ? '' : 'Tempo do vídeo original. Vazio = sem tempo marcado.';
+          if (gi == null || gf == null) {
+            d.innerHTML = f.g_inicio.value || f.g_fim.value ? '' : 'Tempo do vídeo original. Vazio = sem tempo marcado. ' +
+              '<button type="button" class="mini" id="g-estimar">Marcar no começo do corte</button>';
+            var be = d.querySelector('#g-estimar');
+            if (be) be.onclick = estimarGancho;
+          }
           else if (a == null || b == null || gi < a || gf > b || gf <= gi) d.textContent = '⚠ O gancho precisa ficar dentro do corte (' + (a != null ? tc(a) : '?') + ' → ' + (b != null ? tc(b) : '?') + ').';
           else d.textContent = 'No arquivo do corte (Movavi): ' + tc(gi - a) + ' → ' + tc(gf - a) + ' · ' + duracao(gf - gi);
+        }
+        // 17/11: corte sem tempo do gancho -> começo do corte + duração da frase (~2,5 palavras/s).
+        // O curto começa no gancho; o resto se acerta com os botões ±1 s.
+        function estimarGancho() {
+          var a = lerTC(f.inicio.value), b = lerTC(f.fim.value);
+          if (a == null) return;
+          var palavras = f.gancho.value.trim().split(/\s+/).filter(Boolean).length;
+          var fala = Math.min(15, Math.max(2, Math.round(palavras / 2.5)));
+          f.g_inicio.value = tc(a); f.g_fim.value = tc(b != null ? Math.min(b, a + fala) : a + fala);
+          mostrarDur();
         }
         mostrarDur();
         box.querySelector('#c-cancelar').onclick = fecharGaveta;
@@ -655,6 +670,8 @@
         box.querySelectorAll('[data-ajuste]').forEach(function (b) {
           b.onclick = function () {
             var el = f[b.dataset.campo], s = lerTC(el.value);
+            // 17/11: gancho vazio + "±1 s" parte do começo do corte (antes não fazia nada)
+            if (s == null && /^g_/.test(b.dataset.campo)) { estimarGancho(); return; }
             if (s == null) return;
             el.value = tc(Math.max(0, s + Number(b.dataset.ajuste))); mostrarDur();
           };

@@ -56,7 +56,9 @@ const CORTE = {
     motivo: { type: 'STRING', description: 'por que vale cortar, em uma frase' },
     nota: { type: 'INTEGER' },
   },
-  required: ['inicio', 'fim', 'titulo', 'gancho', 'descricao', 'tags', 'motivo', 'nota'],
+  // 17/11: gancho_inicio/gancho_fim passaram a ser obrigatorios: opcionais, o Gemini quase
+  // sempre deixava de fora (cortes chegavam sem o tempo do gancho).
+  required: ['inicio', 'fim', 'titulo', 'gancho', 'gancho_inicio', 'gancho_fim', 'descricao', 'tags', 'motivo', 'nota'],
 };
 const ESQ_TRECHO = {
   type: 'OBJECT',
@@ -209,11 +211,7 @@ function limpar(lista, tipo, min, max) {
     if (f - i < dMin || f - i > dMax) return null;
     const titulo = String(c.titulo || '').replace(/\s+/g, ' ').trim().slice(0, 120);
     if (!titulo) return null;
-    // Tempo do gancho (15/11): so fica se cair dentro do corte; a IA as vezes erra, e um tempo
-    // errado atrapalha mais na edicao do que nenhum.
-    let gi = seg(c.gancho_inicio), gf = seg(c.gancho_fim);
-    if (gi === null || gf === null || gi < i || gf > f || gf - gi < 1 || gf - gi > 60) gi = gf = null;
-    else { gi = Math.round(gi); gf = Math.round(gf); }
+    const { gi, gf } = tempoGancho(c, tipo, i, f);
     return {
       gancho_inicio_s: gi, gancho_fim_s: gf,
       tipo, inicio_s: i, fim_s: f, titulo,
@@ -224,6 +222,26 @@ function limpar(lista, tipo, min, max) {
       nota: limitar(c.nota),
     };
   }).filter(Boolean);
+}
+
+// Tempo do gancho. 15/11 descartava qualquer tempo fora do corte, e quase todos caiam fora:
+// a transcricao vem em blocos de ~30 s, entao a IA aponta o comeco do BLOCO (alguns segundos
+// antes do corte). 17/11: tempo perto do corte (ate 30 s fora) e trazido para dentro; sem
+// tempo nenhum, o CURTO usa o proprio comeco (a regra do roteiro e "o corte comeca no gancho")
+// e a duracao estimada pela frase (~2,5 palavras/s). Longo sem tempo continua vazio.
+export function tempoGancho(c, tipo, i, f) {
+  const fala = Math.min(15, Math.max(2, Math.round(String(c.gancho || '').split(/\s+/).filter(Boolean).length / 2.5)));
+  let gi = seg(c.gancho_inicio), gf = seg(c.gancho_fim);
+  if (gi !== null && (gi < i - 30 || gi >= f)) gi = null;
+  if (gi === null) {
+    if (tipo !== 'curto') return { gi: null, gf: null };
+    gi = i; gf = null;
+  }
+  gi = Math.max(i, Math.round(gi));
+  if (gf === null || gf <= gi || gf - gi > 60) gf = gi + fala;
+  gf = Math.min(f, Math.round(gf));
+  if (gf - gi < 1) return { gi: null, gf: null };
+  return { gi, gf };
 }
 
 function sobrepoe(a, b) {

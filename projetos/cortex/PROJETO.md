@@ -251,6 +251,16 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   depois de 4 h, longos só na parte analisada), agente 1.7.0 com yt-dlp/ffmpeg de mentira
   (baixou só a partir de 2 h, enviou `inicio=7200`), telas no PC e no celular sem erro.
 
+- 17/11: **cortes chegando sem o tempo do gancho** (o dono viu nos últimos cortes). Duas causas
+  no `roteiro.js`: (1) `gancho_inicio`/`gancho_fim` eram opcionais no esquema da resposta e o
+  Gemini quase sempre os deixava de fora; (2) quando vinham, a IA apontava o começo do BLOCO de
+  ~30 s da transcrição, uns segundos antes do corte, e a validação jogava fora. Agora: campos
+  obrigatórios; tempo até 30 s fora do corte é trazido para dentro; curto sem tempo usa o começo
+  do corte (a regra do roteiro é "começa no gancho") + duração da frase (~2,5 palavras/s);
+  longo sem tempo continua vazio. Para os cortes que JÁ existem: botão "Marcar no começo do
+  corte" na gaveta, e os ±1 s do gancho com o campo vazio também partem do começo do corte
+  (antes não faziam nada). Testado: 7 casos da regra e tela no PC e no celular.
+
 ## Decisões
 
 - 16/11: trecho mudado com texto pronto **aproveita a transcrição** quando ela cobre o trecho
