@@ -22,7 +22,7 @@
 import { db } from '../../lib/db.js';
 import { passoRoteiro } from './roteiro.js';
 
-export const AGENTE_VERSAO = '1.8.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+export const AGENTE_VERSAO = '1.8.1';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
 const PRAZO_MIN = { texto: 30, baixar_corte: 60, roteiro: 20 };
 const VERSAO_ROTEIRO = [1, 3, 0];       // agente mais velho nao sabe fazer 'roteiro': nao recebe
 const VERSAO_TRECHO = [1, 7, 0];        // 16/11: so a 1.7.0+ respeita "analisar de/ate"; a velha buscaria a live inteira
@@ -247,7 +247,7 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     const trabalho = (async () => {
       let res;
       try { res = { ok: true, ...(await passoRoteiro(env, tarefa)) }; }
-      catch (e) { res = { erro: String(e.message || e).slice(0, 300), esperar_s: e.esperar_s, definitivo: !!e.definitivo }; }
+      catch (e) { res = { erro: String(e.message || e).slice(0, 300), esperar_s: e.esperar_s, aviso: e.aviso, definitivo: !!e.definitivo }; }
       clearInterval(bate);
       try { await w.write(enc.encode(JSON.stringify(res))); await w.close(); } catch { /* o PC desligou no meio */ }
     })();

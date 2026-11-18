@@ -287,6 +287,13 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   novo, puxar em vídeo comum, puxar duas vezes, mudar trecho durante); tela no PC e no celular.
   Falta: download de um corte de live pelo PC do dono (mesmo yt-dlp, pelo m3u8).
 
+- 18/11: **1º teste do dono com live** (gabepeixe, até 02:00:00): a captura da live funcionou
+  (capturado até 2h, duração 6h10 na hora), mas o roteiro parou em "Gemini não respondeu: 503
+  high demand". Correções (agente 1.8.1): 503/500/502/504, rede e demora do Google viram ESPERA
+  (90 s e repete o mesmo passo, como o limite 429), não falha; o cartão diz "Gemini sobrecarregado".
+  E "Puxar o resto" só com o roteiro PRONTO (etapa cortado): com a IA parada no meio, puxar faria
+  a parte já capturada ficar sem leitura. Testado local com um Google de mentira devolvendo 503.
+
 ## Decisões
 
 - 18/11: live da Kick vai pelo **m3u8** (o link do vídeo não abre enquanto a live roda) e o

@@ -363,8 +363,12 @@ async function puxarResto({ env, data, u, id, json, agora }) {
   if (!video) return json({ erro: 'vídeo não encontrado' }, 404);
   if (!video.ao_vivo_canal) return json({ erro: 'Só vídeos importados pelo link da live (kick.com/canal) têm "Puxar o resto".' }, 400);
   if (video.continuar_de_s !== null) return json({ erro: 'Já está puxando o resto deste vídeo. Espere o texto novo chegar.' }, 409);
-  if (!video.capturado_ate_s || !['roteiro', 'cortado'].includes(video.etapa)) {
-    return json({ erro: 'Espere a primeira captura terminar (o texto chegar) antes de puxar o resto.' }, 409);
+  // So depois do roteiro pronto: puxar com a IA parada no meio faria a parte antiga ficar sem
+  // leitura (a IA passa a ler so a parte nova). 18/11, achado no 1o teste do dono (Gemini 503).
+  if (!video.capturado_ate_s || video.etapa !== 'cortado') {
+    return json({ erro: video.etapa === 'roteiro'
+      ? 'A IA ainda não terminou de ler a parte já capturada. Termine o roteiro (ou use "Tentar de novo" se falhou) e depois puxe o resto.'
+      : 'Espere a primeira captura terminar (o texto chegar) antes de puxar o resto.' }, 409);
   }
   const ocupado = await db(env).first(
     "SELECT COUNT(*) AS n FROM cortex_tarefas WHERE video_id = ? AND tipo IN ('texto', 'roteiro') AND estado IN ('pega', 'pendente')", video.id);

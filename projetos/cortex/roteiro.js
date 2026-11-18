@@ -78,7 +78,7 @@ const ESQ_TRECHO = {
 const ESQ_LONGOS = { type: 'OBJECT', properties: { longos: { type: 'ARRAY', items: CORTE } }, required: ['longos'] };
 
 export class ErroRoteiro extends Error {
-  constructor(msg, { esperar_s, definitivo } = {}) { super(msg); this.esperar_s = esperar_s; this.definitivo = definitivo; }
+  constructor(msg, { esperar_s, definitivo, aviso } = {}) { super(msg); this.esperar_s = esperar_s; this.definitivo = definitivo; this.aviso = aviso; }
 }
 
 // Faz o proximo passo do roteiro deste video. Devolve { concluido, progresso }.
@@ -275,7 +275,9 @@ async function perguntar(env, pedido, esquema) {
     { responseMimeType: 'application/json', responseSchema: esquema, maxOutputTokens: 8192 },
     { responseMimeType: 'application/json', maxOutputTokens: 8192 },
   ];
-  let esperar = 0, ultimoErro = '';
+  // 18/11: "ocupado" = falha passageira do Google (503 alta demanda, 500/502/504, rede, demora).
+  // Antes contava como falha e, depois de 3, o video parava com erro; agora o PC espera e repete.
+  let esperar = 0, ultimoErro = '', ocupado = false;
   for (const modelo of modelos) {
     for (let c = 0; c < configs.length; c++) {
       const corpo = {
@@ -293,6 +295,7 @@ async function perguntar(env, pedido, esquema) {
         });
       } catch (e) {
         ultimoErro = `${modelo}: ${e.name === 'TimeoutError' ? 'demorou demais' : 'falha de rede'}`;
+        ocupado = true;
         break;   // proximo modelo
       }
       const j = await r.json().catch(() => ({}));
@@ -308,11 +311,13 @@ async function perguntar(env, pedido, esquema) {
       if (r.status === 400 && c < configs.length - 1) continue;          // tenta a config mais simples
       if (r.status === 401 || r.status === 403) throw new ErroRoteiro('O Google recusou a chave GEMINI_API_KEY. Confira no Cloudflare.', { definitivo: true });
       if (r.status === 429) { esperar = Math.max(esperar, atrasoPedido(j) || 60); ultimoErro = `${modelo}: limite do plano grátis`; break; }
+      if ([500, 502, 503, 504].includes(r.status)) ocupado = true;
       ultimoErro = `${modelo}: ${r.status} ${msg}`;
       break;
     }
   }
-  if (esperar) throw new ErroRoteiro('Limite do plano grátis do Gemini; o PC espera e tenta de novo.', { esperar_s: esperar });
+  if (esperar) throw new ErroRoteiro('Limite do plano grátis do Gemini; o PC espera e tenta de novo.', { esperar_s: esperar, aviso: 'limite do Gemini grátis' });
+  if (ocupado) throw new ErroRoteiro('Gemini sobrecarregado agora (' + ultimoErro.slice(0, 120) + '); o PC espera e tenta de novo.', { esperar_s: 90, aviso: 'Gemini sobrecarregado' });
   throw new ErroRoteiro('Gemini não respondeu: ' + ultimoErro);
 }
 

@@ -337,7 +337,8 @@
   $('linha-nome').addEventListener('click', function () { if (detalhe) abrirVideo(); });
   // ---------- "Puxar o resto" (18/11): live da Kick, só a parte nova ----------
   function podePuxar(v) {
-    return !!(v && v.ao_vivo_canal && v.capturado_ate_s && v.continuar_de_s == null && (v.etapa === 'roteiro' || v.etapa === 'cortado'));
+    // só com o roteiro pronto: com a IA parada no meio, a parte já capturada ficaria sem leitura
+    return !!(v && v.ao_vivo_canal && v.capturado_ate_s && v.continuar_de_s == null && v.etapa === 'cortado');
   }
   function puxarResto(v, botao, msgEl) {
     botao.disabled = true;

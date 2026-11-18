@@ -31,7 +31,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '1.8.0';
+const VERSAO = '1.8.1';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -507,7 +507,8 @@ async function tarefaRoteiro(cfg, t) {
       if (r.esperar_s && esperado < 8 * 3600) {
         const s = Math.min(Math.max(Number(r.esperar_s) || 60, 20), 1800);
         esperado += s;
-        const aviso = `limite do Gemini grátis: retoma em ${s < 120 ? s + ' s' : Math.ceil(s / 60) + ' min'}`;
+        // 1.8.1: o painel diz o motivo (limite do plano grátis ou Google sobrecarregado, 503).
+        const aviso = `${r.aviso || 'limite do Gemini grátis'}: retoma em ${s < 120 ? s + ' s' : Math.ceil(s / 60) + ' min'}`;
         log(aviso[0].toUpperCase() + aviso.slice(1) + '.');
         await painel(cfg, `/tarefas/${t.id}/prorrogar`, { corpo: { progresso: aviso } }).catch(() => {});
         await dorme(s * 1000);
