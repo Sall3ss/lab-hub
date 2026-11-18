@@ -22,10 +22,11 @@
 import { db } from '../../lib/db.js';
 import { passoRoteiro } from './roteiro.js';
 
-export const AGENTE_VERSAO = '1.8.3';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+export const AGENTE_VERSAO = '1.9.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
 const PRAZO_MIN = { texto: 30, baixar_corte: 60, roteiro: 20 };
 const VERSAO_ROTEIRO = [1, 3, 0];       // agente mais velho nao sabe fazer 'roteiro': nao recebe
 const VERSAO_TRECHO = [1, 7, 0];        // 16/11: so a 1.7.0+ respeita "analisar de/ate"; a velha buscaria a live inteira
+const VERSAO_FICHA = [1, 9, 0];         // 18/11: ficha .txt de corte "sem baixar"; o agente velho BAIXARIA o video
 const VERSAO_LIVE = [1, 8, 2];          // 18/11: live da Kick (link do canal, m3u8, "Puxar o resto" com "ate") so a 1.8.2+
 const MAX_TENTATIVAS = 3;
 const VISTO_A_CADA_MS = 60 * 1000;      // grava "visto_em" no maximo 1x por minuto (poupa escrita no D1)
@@ -83,6 +84,9 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     let semTrecho = versaoMin(ag.versao, VERSAO_TRECHO) ? '' :
       " AND NOT (tipo = 'texto' AND EXISTS (SELECT 1 FROM cortex_videos v WHERE v.id = video_id AND (v.analisar_de_s IS NOT NULL OR v.analisar_ate_s IS NOT NULL)))";
     // Agente < 1.8.0 nao sabe achar a live nem baixar pelo m3u8 (o link normal falha enquanto a live roda).
+    if (!versaoMin(ag.versao, VERSAO_FICHA)) {
+      semTrecho += " AND NOT (tipo = 'baixar_corte' AND EXISTS (SELECT 1 FROM cortex_cortes c WHERE c.id = corte_id AND c.baixar_fora = 1))";
+    }
     if (!versaoMin(ag.versao, VERSAO_LIVE)) {
       semTrecho += " AND NOT (tipo IN ('texto', 'baixar_corte') AND EXISTS (SELECT 1 FROM cortex_videos v WHERE v.id = video_id AND (v.ao_vivo_canal IS NOT NULL OR v.fonte_m3u8 IS NOT NULL)))";
     }
@@ -103,7 +107,8 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
       let corte = null;
       if (t.corte_id) {
         corte = await db(env).first(
-          'SELECT id, tipo, inicio_s, fim_s, titulo, descricao, tags, gancho, gancho_inicio_s, gancho_fim_s FROM cortex_cortes WHERE id = ?', t.corte_id);
+          `SELECT id, tipo, inicio_s, fim_s, titulo, descricao, tags, gancho, gancho_inicio_s, gancho_fim_s, baixar_fora, arquivo_local
+             FROM cortex_cortes WHERE id = ?`, t.corte_id);
         if (corte) {
           try { corte.tags = JSON.parse(corte.tags || '[]'); } catch { corte.tags = []; }
           // numero do corte dentro do video (01, 02...) para o nome do arquivo seguir a ordem do tempo
@@ -261,7 +266,11 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
   if (acao === 'concluir') {
     const corpo = await request.json().catch(() => ({}));
     const lotes = [["UPDATE cortex_tarefas SET estado = 'feita', progresso = NULL, erro = NULL, atualizada_em = ? WHERE id = ?", [iso, tarefa.id]]];
-    if (tarefa.tipo === 'baixar_corte' && tarefa.corte_id) {
+    if (tarefa.tipo === 'baixar_corte' && tarefa.corte_id && corpo.so_ficha) {
+      // 18/11: so a ficha .txt (corte aprovado sem baixar): grava onde ficou, o estado nao muda.
+      lotes.push(['UPDATE cortex_cortes SET arquivo_local = ?, erro = NULL, atualizado_em = ? WHERE id = ? AND baixar_fora = 1',
+        [corpo.arquivo_local ? `${ag.nome}: ${String(corpo.arquivo_local).slice(0, 400)}` : null, iso, tarefa.corte_id]]);
+    } else if (tarefa.tipo === 'baixar_corte' && tarefa.corte_id) {
       lotes.push([
         "UPDATE cortex_cortes SET estado = 'edicao', arquivo_local = ?, qualidade = ?, erro = NULL, atualizado_em = ? WHERE id = ? AND estado = 'download'",
         [corpo.arquivo_local ? `${ag.nome}: ${String(corpo.arquivo_local).slice(0, 400)}` : null,

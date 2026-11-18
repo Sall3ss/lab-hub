@@ -31,7 +31,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '1.8.3';
+const VERSAO = '1.9.0';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -391,6 +391,23 @@ function adotarPasta(cfg, nova) {
   return true;
 }
 
+function tempoExato(s) { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return ((h ? h + ' h ' : '') + (m ? m + ' min ' : '') + (x || (!h && !m) ? x + ' s' : '')).trim(); }
+// Ficha .txt ao lado do corte: tudo o que precisa na hora de editar e publicar.
+function escreverFicha(arquivo, v, c, qualidade) {
+  writeFileSync(arquivo, [
+    // 1.9.0: corte aprovado sem baixar - os tempos para baixar por fora vêm primeiro
+    c.baixar_fora ? `BAIXAR POR FORA: ${tc(c.inicio_s)} → ${tc(c.fim_s)} (${tempoExato(c.fim_s - c.inicio_s)})\nLINK: ${v.url}\n` : '',
+    qualidade ? `QUALIDADE: ${qualidade}\n` : '',
+    `TÍTULO: ${c.titulo}`, '', c.gancho ? `GANCHO: ${c.gancho}\n` : '',
+    // 1.6.0: onde o gancho está DENTRO deste arquivo (o tempo que o Movavi mostra) e no original.
+    c.gancho_inicio_s != null && c.gancho_fim_s != null
+      ? `GANCHO NO CORTE: ${tc(c.gancho_inicio_s - c.inicio_s)} → ${tc(c.gancho_fim_s - c.inicio_s)}` +
+        ` (no vídeo original: ${tc(c.gancho_inicio_s)} → ${tc(c.gancho_fim_s)})\n` : '',
+    'DESCRIÇÃO:', c.descricao || '', '', `TAGS: ${(c.tags || []).join(', ')}`, '',
+    `ORIGEM: ${v.url} (${tc(c.inicio_s)} → ${tc(c.fim_s)})`,
+  ].join('\n'), 'utf8');
+}
+
 async function tarefaCorte(cfg, t) {
   const v = t.video, c = t.corte;
   adotarPasta(cfg, t.pasta);
@@ -401,6 +418,18 @@ async function tarefaCorte(cfg, t) {
   mkdirSync(pastaVideo, { recursive: true });
   const nome = `${dois(c.numero || 1)} - ${nomeSeguro(c.titulo, 70)}`;
   const destino = join(pastaVideo, nome);
+
+  // 1.9.0 (18/11): corte aprovado SEM baixar (o dono baixa por fora): só a ficha .txt, com os
+  // tempos para baixar e o resto (título, gancho, descrição, tags). Nada de vídeo.
+  if (c.baixar_fora) {
+    // Título mudou: a ficha antiga (outro nome) sai, para não ficarem duas.
+    const antiga = (String(c.arquivo_local || '').match(/^[^:]+: (.+)$/) || [])[1];
+    if (antiga && antiga.endsWith('.txt') && antiga !== destino + '.txt' && existsSync(antiga)) { try { unlinkSync(antiga); } catch { /* */ } }
+    escreverFicha(destino + '.txt', v, c, null);
+    log(`Ficha do corte (sem baixar) gravada: ${destino}.txt`);
+    return { caminho: destino + '.txt', qualidade: null, soFicha: true };
+  }
+
   // Arquivo de um corte anterior com o mesmo nome (ex.: "baixar de novo") sai antes.
   for (const n of readdirSync(pastaVideo)) if (n.startsWith(nome + '.') && !n.endsWith('.txt')) rmSync(join(pastaVideo, n), { force: true });
 
@@ -443,16 +472,7 @@ async function tarefaCorte(cfg, t) {
   if (!arq) throw new Error('o yt-dlp terminou mas o arquivo não apareceu');
   const caminho = join(pastaVideo, arq);
   const qualidade = await medirQualidade(caminho);
-  writeFileSync(destino + '.txt', [
-    qualidade ? `QUALIDADE: ${qualidade}\n` : '',
-    `TÍTULO: ${c.titulo}`, '', c.gancho ? `GANCHO: ${c.gancho}\n` : '',
-    // 1.6.0: onde o gancho está DENTRO deste arquivo (o tempo que o Movavi mostra) e no original.
-    c.gancho_inicio_s != null && c.gancho_fim_s != null
-      ? `GANCHO NO CORTE: ${tc(c.gancho_inicio_s - c.inicio_s)} → ${tc(c.gancho_fim_s - c.inicio_s)}` +
-        ` (no vídeo original: ${tc(c.gancho_inicio_s)} → ${tc(c.gancho_fim_s)})\n` : '',
-    'DESCRIÇÃO:', c.descricao || '', '', `TAGS: ${(c.tags || []).join(', ')}`, '',
-    `ORIGEM: ${v.url} (${tc(c.inicio_s)} → ${tc(c.fim_s)})`,
-  ].join('\n'), 'utf8');
+  escreverFicha(destino + '.txt', v, c, qualidade);
   log(`Pronto: ${caminho}${qualidade ? ' · ' + qualidade : ''}`);
   return { caminho, qualidade };
 }
@@ -549,8 +569,8 @@ async function executar(cfg, t) {
     if (t.tipo === 'texto') await tarefaTexto(cfg, t, pasta);
     else if (t.tipo === 'roteiro') await tarefaRoteiro(cfg, t);
     else {
-      const { caminho, qualidade } = await tarefaCorte(cfg, t);
-      await painel(cfg, `/tarefas/${t.id}/concluir`, { corpo: { arquivo_local: caminho, qualidade } });
+      const { caminho, qualidade, soFicha } = await tarefaCorte(cfg, t);
+      await painel(cfg, `/tarefas/${t.id}/concluir`, { corpo: { arquivo_local: caminho, qualidade, so_ficha: !!soFicha } });
     }
   } catch (e) {
     if (parando) return;    // interrompida pelo "desligar": quem devolve a tarefa é parar()

@@ -18,6 +18,7 @@
 //   PATCH  /cortes/:id             { estado?, titulo?, descricao?, tags?, gancho?, gancho_inicio_s?, gancho_fim_s?, inicio_s?, fim_s? }
 //   DELETE /cortes/:id
 //   POST   /videos/:id/tentar | /cortes/:id/tentar   devolve a tarefa que falhou para a fila
+//   POST   /cortes/:id/ficha       corte aprovado sem baixar: o PC grava (de novo) a ficha .txt (18/11)
 //   GET    /agentes                lista os PCs conectados
 //   POST   /agentes                { nome } -> gera a chave do PC (mostrada UMA vez)
 //   PATCH  /agentes/:id            { baixa_cortes?, pasta? }  pasta dos cortes desse PC (18/11)
@@ -203,6 +204,17 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
     return json({ ok: true, id: r.meta.last_row_id }, 201);
   }
 
+  if (rota === 'cortes' && id && partes[2] === 'ficha' && metodo === 'POST') {
+    const corte = await db(env).first('SELECT id, video_id, estado, baixar_fora FROM cortex_cortes WHERE id = ? AND usuario_id = ?', Number(id), u.id);
+    if (!corte) return json({ erro: 'corte não encontrado' }, 404);
+    if (!corte.baixar_fora || !['edicao', 'publicado'].includes(corte.estado)) return json({ erro: 'A ficha avulsa é só para corte aprovado sem baixar (quem baixa pelo PC já ganha o .txt junto).' }, 400);
+    const pega = await db(env).first("SELECT id FROM cortex_tarefas WHERE corte_id = ? AND estado = 'pega'", corte.id);
+    if (pega) return json({ erro: 'O PC já está gravando a ficha desse corte.' }, 409);
+    await db(env).batch(fichaNaFila(u.id, corte, agora));
+    await auditar(env, { quem: u.email, acao: 'ficha-no-pc', entidade: 'cortex_cortes', entidade_id: corte.id, ip: data.ip });
+    return json({ ok: true });
+  }
+
   if (rota === 'cortes' && id) {
     const corte = await db(env).first(
       `SELECT c.*, v.duracao_s FROM cortex_cortes c JOIN cortex_videos v ON v.id = c.video_id
@@ -226,6 +238,8 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
         }
         // Entrou na fila do PC: nasce a tarefa. Saiu dela: a tarefa pendente some.
         if (estado === 'download') {
+          // (uma ficha de "sem baixar" ainda na fila sai: o download grava o .txt junto)
+          extras.push(["DELETE FROM cortex_tarefas WHERE corte_id = ? AND estado IN ('pendente', 'falhou')", [corte.id]]);
           extras.push([`INSERT INTO cortex_tarefas (usuario_id, tipo, video_id, corte_id, criada_em, atualizada_em)
                         VALUES (?, 'baixar_corte', ?, ?, ?, ?)`, [u.id, corte.video_id, corte.id, agora, agora]]);
         } else if (corte.estado === 'download') {
@@ -238,6 +252,18 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
       // baixar_fora: aprovado sem o PC (triagem -> edicao). Volta a 0 quando o PC passa a baixar.
       const baixarFora = estado === 'edicao' && corte.estado === 'triagem' ? 1
         : estado === 'download' || estado === 'triagem' ? 0 : corte.baixar_fora;
+      // 18/11: aprovado sem baixar ganha a FICHA no PC (.txt com título, gancho, descrição, tags e
+      // os tempos para baixar por fora), na mesma pasta dos cortes. Nasce na aprovação e é refeita
+      // quando o que está nela muda. Tarefa 'baixar_corte' de corte com baixar_fora = 1 = o PC grava
+      // só o .txt (agente 1.9.0+; o mais velho nem recebe).
+      const tagsAntes = JSON.stringify(lerTags(corte.tags));
+      const mudouFicha = ['tipo', 'inicio_s', 'fim_s', 'titulo', 'descricao', 'gancho', 'gancho_inicio_s', 'gancho_fim_s']
+        .some((k) => (novo[k] ?? null) !== (corte[k] ?? null)) || JSON.stringify(novo.tags) !== tagsAntes;
+      if (baixarFora && estado === 'edicao' && (corte.estado === 'triagem' || mudouFicha)) {
+        extras.push(...fichaNaFila(u.id, corte, agora));
+      } else if (corte.baixar_fora && estado !== corte.estado && !['edicao', 'download'].includes(estado)) {
+        extras.push(["DELETE FROM cortex_tarefas WHERE corte_id = ? AND estado IN ('pendente', 'falhou')", [corte.id]]);
+      }
       // Corte ja baixado nao muda de tempo: o arquivo no PC deixaria de bater.
       // Excecoes: "Baixar de novo" (edicao -> download) leva o tempo novo; corte baixado fora
       // nao tem arquivo no PC, entao o tempo segue livre na edicao.
@@ -394,6 +420,15 @@ async function puxarResto({ request, env, data, u, id, json, agora }) {
   await auditar(env, { quem: u.email, acao: 'puxar-resto', entidade: 'cortex_videos', entidade_id: video.id,
     antes: { capturado_ate_s: video.capturado_ate_s }, depois: { continuar_de_s: de, analisar_ate_s: ate }, ip: data.ip });
   return json({ ok: true, de, ate });
+}
+
+// Ficha .txt do corte aprovado sem baixar: troca a da fila (pendente/falhou) por uma nova.
+function fichaNaFila(usuarioId, corte, agora) {
+  return [
+    ["DELETE FROM cortex_tarefas WHERE corte_id = ? AND estado IN ('pendente', 'falhou')", [corte.id]],
+    [`INSERT INTO cortex_tarefas (usuario_id, tipo, video_id, corte_id, criada_em, atualizada_em)
+      VALUES (?, 'baixar_corte', ?, ?, ?, ?)`, [usuarioId, corte.video_id, corte.id, agora, agora]],
+  ];
 }
 
 // Situacao da tarefa mais recente de um video/corte, para o cartao dizer o que o PC esta fazendo.

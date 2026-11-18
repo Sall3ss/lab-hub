@@ -292,3 +292,7 @@ button, input, textarea { font: inherit; color: inherit; }
 /* 18/11: pasta dos cortes por PC, na tela PCs */
 .pc-pasta { display: flex; flex-direction: column; gap: .35rem; margin-top: .5rem; }
 .pc-pasta code { font: .74rem var(--mono); word-break: break-all; color: var(--texto); }
+
+/* 18/11: ficha .txt do corte "sem baixar" no PC */
+.fora-ficha { display: flex; align-items: center; justify-content: space-between; gap: .5rem; flex-wrap: wrap; font-size: .78rem; color: var(--metal); border-top: 1px dashed var(--fio); padding-top: .5rem; }
+.fora-ficha span { min-width: 0; word-break: break-all; }

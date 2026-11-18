@@ -300,7 +300,7 @@
     var corpo = Object.assign({}, extra || {}, { estado: novo });
     var antes = (estado.cortes.find(function (c) { return c.id === id; }) || {}).estado;
     return api('/cortes/' + id, { metodo: 'PATCH', corpo: corpo }).then(function () {
-      aviso(novo === 'edicao' && antes === 'triagem' ? 'Aprovado sem baixar: o tempo para copiar está na C3 Edição.'
+      aviso(novo === 'edicao' && antes === 'triagem' ? 'Aprovado sem baixar: o tempo está na C3 Edição e a ficha .txt vai para a pasta dos cortes no PC.'
         : ({ download: 'Aprovado: foi para a fila do PC.', descartado: 'Descartado.', triagem: 'Voltou para a triagem.', publicado: 'Marcado como publicado.', edicao: 'Voltou para a edição.' }[novo] || 'Feito.'));
       carregar();
       return true;
@@ -634,7 +634,17 @@
       (c.gancho_inicio_s != null ? linha('Gancho', tc(c.gancho_inicio_s - c.inicio_s) + ' → ' + tc(c.gancho_fim_s - c.inicio_s), true) : '') +
       linha('Vídeo', v.url, false) +
       '<div class="fora-acoes"><a class="btn btn-cor" href="https://kick-video.download" target="_blank" rel="noopener">Abrir kick-video.download ↗</a>' +
-      '<button type="button" class="btn btn-fino" data-copia="' + esc(textos) + '">Copiar título, descrição e tags</button></div></div>';
+      '<button type="button" class="btn btn-fino" data-copia="' + esc(textos) + '">Copiar título, descrição e tags</button></div>' +
+      // 18/11: a ficha .txt (título, gancho, tempos...) vai para a pasta dos cortes no PC, mesmo sem baixar o vídeo
+      '<div class="fora-ficha"><span>📄 ' + esc(textoFicha(c)) + '</span>' +
+      '<button type="button" class="mini" id="c-ficha">' + (c.arquivo_local ? 'Gravar de novo' : 'Gravar ficha no PC') + '</button></div></div>';
+  }
+  function textoFicha(c) {
+    var q = estado.cortes.find(function (x) { return x.id === c.id; }) || {};
+    if (q.tarefa_estado === 'pendente' || q.tarefa_estado === 'pega') return 'Ficha .txt na fila do PC…';
+    if (c.arquivo_local) return 'Ficha no PC: ' + c.arquivo_local;
+    if (q.tarefa_estado === 'falhou') return 'A ficha falhou no PC: ' + (c.erro || 'veja o cartão');
+    return 'Ficha .txt ainda não gravada no PC.';
   }
 
   // Formulário de corte: novo (c = null) ou existente.
@@ -686,6 +696,14 @@
       function (box) {
         var f = box.querySelector('#f-corte'), tipo = c.tipo;
         box.querySelectorAll('[data-copia]').forEach(function (b) { b.onclick = function () { copiar(b, b.dataset.copia); }; });
+        var bf = box.querySelector('#c-ficha');
+        if (bf) bf.onclick = function () {
+          bf.disabled = true;
+          api('/cortes/' + c.id + '/ficha', { metodo: 'POST' }).then(function () {
+            aviso(estado.pc.online ? 'O PC já vai gravar a ficha na pasta dos cortes.' : 'Na fila: quando o PC ligar, ele grava a ficha.');
+            bf.textContent = 'Na fila do PC'; carregar();
+          }).catch(function (e) { bf.disabled = false; aviso(e.message, true); });
+        };
         function marcarTipo() { box.querySelectorAll('#esc-tipo button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === tipo); }); }
         marcarTipo();
         box.querySelector('#esc-tipo').onclick = function (ev) { var b = ev.target.closest('button'); if (b) { tipo = b.dataset.v; marcarTipo(); mostrarDur(); } };

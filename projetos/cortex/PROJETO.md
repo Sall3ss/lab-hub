@@ -313,6 +313,18 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   caminho relativo, PC adotando pelo "oi" e pelo download (arquivo caiu na pasta nova), tela no PC
   e no celular.
 
+- 18/11: **ficha .txt também no corte aprovado sem baixar** (pedido do dono: baixa o vídeo por
+  fora, mas quer título, gancho, descrição etc. na pasta). Agente 1.9.0. Sem migration: é uma
+  tarefa `baixar_corte` de corte com `baixar_fora = 1`, e o PC grava SÓ o .txt (na mesma pasta
+  dos cortes: `<data> - <canal> - <vídeo>\Longos\NN - <título>.txt`), começando por
+  "BAIXAR POR FORA: início → fim (duração)" e o LINK. Nasce na aprovação e é refeita quando o
+  título, gancho, descrição, tags ou tempos mudam (a ficha antiga, de outro nome, sai). Na gaveta:
+  "📄 Ficha no PC: ..." e o botão "Gravar ficha no PC / Gravar de novo" (serve também para os
+  cortes aprovados antes). `concluir` com `so_ficha` só grava o caminho; o estado não muda.
+  Agente < 1.9.0 não recebe (baixaria o vídeo). Testado: recusas, agente gravando só o .txt,
+  título novo trocando o arquivo, "Baixar pelo PC" substituindo a ficha na fila, tela no PC e no
+  celular.
+
 ## Decisões
 
 - 18/11: live da Kick vai pelo **m3u8** (o link do vídeo não abre enquanto a live roda) e o
