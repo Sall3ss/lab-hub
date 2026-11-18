@@ -288,3 +288,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .caixa-resto { border: 1px solid rgb(55 214 122 / .35); border-radius: var(--raio); padding: .7rem; background: rgb(55 214 122 / .05); }
 .resto-tit { font: 600 .72rem/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ok); }
 .resto-mais { gap: .4rem; }
+
+/* 18/11: pasta dos cortes por PC, na tela PCs */
+.pc-pasta { display: flex; flex-direction: column; gap: .35rem; margin-top: .5rem; }
+.pc-pasta code { font: .74rem var(--mono); word-break: break-all; color: var(--texto); }

@@ -809,6 +809,12 @@
           (f.ytdlp ? ' · yt-dlp ' + esc(f.ytdlp) : '') + '</div>' +
           '<div class="simnao"><span>Recebe os downloads de corte?</span><button type="button" data-baixa="' + a.id + '" data-v="1" class="' + (a.baixa_cortes ? 'on' : '') + '">Sim</button>' +
           '<button type="button" data-baixa="' + a.id + '" data-v="0" class="nao' + (a.baixa_cortes ? '' : ' on') + '">Não</button></div>' +
+          // 18/11: pasta dos cortes escolhida aqui (antes só por comando no PC). "Usando agora" = o que o PC contou.
+          (a.baixa_cortes ? '<form class="pc-pasta" data-pasta-form="' + a.id + '" novalidate>' +
+            '<label class="campo"><span>Pasta dos cortes neste PC</span><input name="pasta" autocomplete="off" spellcheck="false" maxlength="240" value="' + esc(a.pasta || a.pasta_atual || '') + '" placeholder="D:\\Meus Documentos\\Vídeos\\Cortex"></label>' +
+            '<p class="pc-det">' + (a.pasta_atual ? 'Usando agora: <code>' + esc(a.pasta_atual) + '</code>' : 'O PC ainda não contou qual pasta usa (precisa do agente 1.8.3, que chega sozinho).') +
+            (a.pasta && a.pasta_atual && a.pasta !== a.pasta_atual ? '<br><b style="color:var(--curto)">Pasta nova salva: o PC passa a usar no próximo download.</b>' : '') + '</p>' +
+            '<p class="msg-form"></p><div class="acoes"><button class="btn btn-fino" type="submit">Salvar pasta</button></div></form>' : '') +
           '<div class="acoes"><button type="button" class="btn btn-perigo btn-fino" data-desligar="' + a.id + '" data-nome="' + esc(a.nome) + '">Desconectar</button></div></div>';
       }).join('');
       abrirGaveta('PCs conectados',
@@ -827,6 +833,16 @@
             b.onclick = function () {
               api('/agentes/' + b.dataset.baixa, { metodo: 'PATCH', corpo: { baixa_cortes: b.dataset.v === '1' } })
                 .then(function () { abrirPCs(); carregar(); }).catch(function (e) { aviso(e.message, true); });
+            };
+          });
+          box.querySelectorAll('[data-pasta-form]').forEach(function (f) {
+            f.onsubmit = function (ev) {
+              ev.preventDefault();
+              var btn = f.querySelector('[type=submit]'), msg = f.querySelector('.msg-form');
+              btn.disabled = true; msg.textContent = '';
+              api('/agentes/' + f.dataset.pastaForm, { metodo: 'PATCH', corpo: { pasta: f.pasta.value } })
+                .then(function () { aviso('Pasta salva. O PC passa a usar no próximo download.'); abrirPCs(); })
+                .catch(function (e) { btn.disabled = false; msg.textContent = e.message; });
             };
           });
           box.querySelectorAll('[data-desligar]').forEach(function (b) {

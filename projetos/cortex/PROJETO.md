@@ -303,6 +303,16 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   1.8.1 puxaria até o fim, por isso não recebe). Testado: API, PC simulado e tela no PC e no
   celular.
 
+- 18/11: **cortes no PC do trabalho caindo em C:\Users\...\Videos\Cortex** (relato do dono). É
+  a pasta padrão do agente quando o `config.json` daquele PC não tem `pasta` gravada (o comando
+  `pasta` não chegou a valer lá, ou foi rodado numa outra cópia do agente). Correção (migration
+  0014, agente 1.8.3): a pasta passa a ser escolhida na tela **PCs** do painel, por PC
+  (`cortex_agentes.pasta`). O PC recebe no "oi" (a cada 10 min) e junto de cada download, adota
+  na hora e grava no próprio `config.json`; e conta qual pasta está usando (`pasta_atual`, "Usando
+  agora" na tela). Caminho precisa ser completo (D:\..., \\servidor\...). Testado: recusa de
+  caminho relativo, PC adotando pelo "oi" e pelo download (arquivo caiu na pasta nova), tela no PC
+  e no celular.
+
 ## Decisões
 
 - 18/11: live da Kick vai pelo **m3u8** (o link do vídeo não abre enquanto a live roda) e o
@@ -321,7 +331,7 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
 
 - 14/11: PC do trabalho liberado pelo dono ("posso utilizar normalmente com essas liberdades").
   Cada PC escolhe se recebe download de corte.
-- 14/11: pasta dos cortes é por PC (config.json do agente, comando `pasta`). O dono pediu, nas duas máquinas (casa e trabalho),
+- 14/11: pasta dos cortes é por PC (config.json do agente, comando `pasta`; desde 18/11 também na tela PCs, que vale mais). O dono pediu, nas duas máquinas (casa e trabalho),
   `D:\Meus Documentos\Vídeos\Cortex`; o padrão continua `%USERPROFILE%\Videos\Cortex`.
 - 14/11: agente liga e desliga à mão pelo atalho da área de trabalho, não com o Windows.
 

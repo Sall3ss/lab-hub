@@ -20,7 +20,7 @@
 //   POST   /videos/:id/tentar | /cortes/:id/tentar   devolve a tarefa que falhou para a fila
 //   GET    /agentes                lista os PCs conectados
 //   POST   /agentes                { nome } -> gera a chave do PC (mostrada UMA vez)
-//   PATCH  /agentes/:id            { baixa_cortes }
+//   PATCH  /agentes/:id            { baixa_cortes?, pasta? }  pasta dos cortes desse PC (18/11)
 //   DELETE /agentes/:id            desconecta (revoga a chave)
 //
 // As rotas do proprio PC (sem sessao, com a chave dele) ficam em maquina.js.
@@ -407,7 +407,7 @@ function TAREFA_SQL(filtro) {
 
 async function listarAgentes(env, usuarioId) {
   const lista = await db(env).all(
-    `SELECT id, nome, baixa_cortes, visto_em, versao, ferramentas, criado_em FROM cortex_agentes
+    `SELECT id, nome, baixa_cortes, visto_em, versao, ferramentas, pasta, pasta_atual, criado_em FROM cortex_agentes
       WHERE usuario_id = ? AND revogado_em IS NULL ORDER BY id`, usuarioId);
   for (const a of lista) {
     a.online = !!a.visto_em && Date.now() - Date.parse(a.visto_em) < PC_ONLINE_MS;
@@ -438,16 +438,24 @@ async function rotasAgentes({ request, env, data, u, id, metodo, json, agora }) 
   }
 
   const ag = id && await db(env).first(
-    'SELECT id, nome, baixa_cortes FROM cortex_agentes WHERE id = ? AND usuario_id = ? AND revogado_em IS NULL', Number(id), u.id);
+    'SELECT id, nome, baixa_cortes, pasta FROM cortex_agentes WHERE id = ? AND usuario_id = ? AND revogado_em IS NULL', Number(id), u.id);
   if (!ag) return json({ erro: 'PC não encontrado' }, 404);
 
   if (metodo === 'PATCH') {
     const corpo = await request.json().catch(() => ({}));
-    const baixa = corpo.baixa_cortes ? 1 : 0;
-    await db(env).run('UPDATE cortex_agentes SET baixa_cortes = ? WHERE id = ?', baixa, ag.id);
+    const baixa = corpo.baixa_cortes === undefined ? ag.baixa_cortes : (corpo.baixa_cortes ? 1 : 0);
+    let pasta = ag.pasta;
+    if (corpo.pasta !== undefined) {
+      pasta = String(corpo.pasta || '').trim().replace(/^"|"$/g, '').replace(/[\\/]+$/, '') || null;
+      // Caminho completo: D:\..., \\servidor\..., ou /... (Linux/Mac). Sem os caracteres que o Windows recusa.
+      if (pasta && (!/^([A-Za-z]:[\\/]|\\\\[^\\]+\\|\/)/.test(pasta) || /[<>"|?*]/.test(pasta.slice(2)) || pasta.length > 240)) {
+        return json({ erro: 'Use o caminho completo da pasta, por exemplo D:\\Meus Documentos\\Vídeos\\Cortex.' }, 400);
+      }
+    }
+    await db(env).run('UPDATE cortex_agentes SET baixa_cortes = ?, pasta = ? WHERE id = ?', baixa, pasta, ag.id);
     await auditar(env, { quem: u.email, acao: 'editar', entidade: 'cortex_agentes', entidade_id: ag.id,
-      antes: { baixa_cortes: ag.baixa_cortes }, depois: { baixa_cortes: baixa }, ip: data.ip });
-    return json({ ok: true });
+      antes: { baixa_cortes: ag.baixa_cortes, pasta: ag.pasta }, depois: { baixa_cortes: baixa, pasta }, ip: data.ip });
+    return json({ ok: true, pasta });
   }
 
   if (metodo === 'DELETE') {

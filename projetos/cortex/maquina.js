@@ -3,7 +3,7 @@
 // functions/api/[[path]].js). Quem prova identidade e a chave do agente, no cabecalho
 // "Authorization: Bearer cx_...", que o dono gerou na tela "PCs" (o banco so tem o hash).
 //
-//   POST /oi                              { versao, ferramentas } -> config do agente
+//   POST /oi                              { versao, ferramentas, pasta } -> config do agente (+ pasta escolhida no painel)
 //   POST /proxima                         pega a proxima tarefa da fila (ou { tarefa: null })
 //   POST /tarefas/:id/prorrogar           { progresso? } estende o prazo (download longo)
 //   POST /tarefas/:id/meta                { titulo, canal, duracao_s, capturado_ate_s?, ao_vivo? }
@@ -22,7 +22,7 @@
 import { db } from '../../lib/db.js';
 import { passoRoteiro } from './roteiro.js';
 
-export const AGENTE_VERSAO = '1.8.2';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+export const AGENTE_VERSAO = '1.8.3';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
 const PRAZO_MIN = { texto: 30, baixar_corte: 60, roteiro: 20 };
 const VERSAO_ROTEIRO = [1, 3, 0];       // agente mais velho nao sabe fazer 'roteiro': nao recebe
 const VERSAO_TRECHO = [1, 7, 0];        // 16/11: so a 1.7.0+ respeita "analisar de/ate"; a velha buscaria a live inteira
@@ -42,7 +42,7 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
   const chave = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
   if (!/^cx_[A-Za-z0-9_-]{30,80}$/.test(chave)) return json({ erro: 'chave do agente ausente ou inválida' }, 401);
   const ag = await db(env).first(
-    'SELECT id, usuario_id, nome, baixa_cortes, visto_em, versao FROM cortex_agentes WHERE chave_hash = ? AND revogado_em IS NULL',
+    'SELECT id, usuario_id, nome, baixa_cortes, visto_em, versao, pasta FROM cortex_agentes WHERE chave_hash = ? AND revogado_em IS NULL',
     await hashChave(chave));
   if (!ag) return json({ erro: 'Este PC foi desconectado ou a chave não existe. Gere uma nova na tela "PCs".', revogado: true }, 401);
   if (metodo !== 'POST') return json({ erro: 'use POST' }, 405);
@@ -53,9 +53,11 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
 
   if (rota === 'oi') {
     const corpo = await request.json().catch(() => ({}));
-    await db(env).run('UPDATE cortex_agentes SET visto_em = ?, versao = ?, ferramentas = ? WHERE id = ?',
-      iso, String(corpo.versao || '').slice(0, 20), JSON.stringify(corpo.ferramentas || {}).slice(0, 500), ag.id);
-    return json({ ok: true, nome: ag.nome, baixa_cortes: !!ag.baixa_cortes, versao_atual: AGENTE_VERSAO, intervalo_s: 20 });
+    // 18/11: o PC conta qual pasta usa (aparece na tela PCs) e recebe a escolhida no painel.
+    await db(env).run('UPDATE cortex_agentes SET visto_em = ?, versao = ?, ferramentas = ?, pasta_atual = COALESCE(?, pasta_atual) WHERE id = ?',
+      iso, String(corpo.versao || '').slice(0, 20), JSON.stringify(corpo.ferramentas || {}).slice(0, 500),
+      corpo.pasta ? String(corpo.pasta).slice(0, 260) : null, ag.id);
+    return json({ ok: true, nome: ag.nome, baixa_cortes: !!ag.baixa_cortes, versao_atual: AGENTE_VERSAO, intervalo_s: 20, pasta: ag.pasta || null });
   }
 
   if (rota === 'tchau') {
@@ -114,7 +116,8 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
       if (t.tipo !== 'baixar_corte') {
         await db(env).run("UPDATE cortex_videos SET erro = NULL, atualizado_em = ? WHERE id = ?", iso, t.video_id);
       }
-      return json({ tarefa: { id: t.id, tipo: t.tipo, tentativa: t.tentativas + 1, prazo, video, corte } });
+      // pasta: a escolhida no painel vale ja neste download (sem esperar o proximo "oi").
+      return json({ tarefa: { id: t.id, tipo: t.tipo, tentativa: t.tentativas + 1, prazo, video, corte, pasta: ag.pasta || null } });
     }
     return json({ tarefa: null });
   }

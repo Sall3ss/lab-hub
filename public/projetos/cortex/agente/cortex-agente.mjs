@@ -31,7 +31,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '1.8.2';
+const VERSAO = '1.8.3';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -377,8 +377,23 @@ function tamanhoDe(pasta, nome) {
   return soma;
 }
 
+// 1.8.3 (18/11): a pasta dos cortes pode ser escolhida no painel (tela PCs). Vale mais que a do
+// config.json; fica gravada nele para o PC lembrar mesmo sem painel. Devolve true se mudou.
+function adotarPasta(cfg, nova) {
+  if (!nova || nova === cfg.pasta) return false;
+  cfg.pasta = nova;
+  try {
+    const salvo = lerConfig() || {};
+    salvo.pasta = nova;
+    writeFileSync(ARQ_CONFIG, JSON.stringify(salvo, null, 2));
+  } catch (e) { log('Não consegui gravar a pasta no config.json:', e.message); }
+  log(`Pasta dos cortes trocada pelo painel: ${nova}`);
+  return true;
+}
+
 async function tarefaCorte(cfg, t) {
   const v = t.video, c = t.corte;
+  adotarPasta(cfg, t.pasta);
   if (!c) throw Object.assign(new Error('o corte foi apagado no painel'), { definitivo: true });
   const dia = (v.criado_em || new Date().toISOString()).slice(0, 10);
   const pastaVideo = join(cfg.pasta, nomeSeguro(`${dia} ${v.canal ? v.canal + ' - ' : ''}${v.titulo || v.plataforma}`, 100),
@@ -602,8 +617,9 @@ async function principal() {
   while (!parando) {
     try {
       if (Date.now() - oiEm > 10 * 60000) {
-        const oi = await painel(cfg, '/oi', { corpo: { versao: VERSAO, ferramentas: f } });
+        const oi = await painel(cfg, '/oi', { corpo: { versao: VERSAO, ferramentas: f, pasta: cfg.pasta } });
         oiEm = Date.now();
+        if (adotarPasta(cfg, oi.pasta)) oiEm = 0;      // conta a pasta nova ao painel na próxima volta
         log(`Conectado como PC "${oi.nome}"${oi.baixa_cortes ? '' : ' (sem receber downloads de corte)'}.`);
         if (oi.versao_atual && oi.versao_atual !== VERSAO) await atualizar(cfg, oi.versao_atual);
       }
