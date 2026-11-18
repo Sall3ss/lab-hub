@@ -22,11 +22,11 @@
 import { db } from '../../lib/db.js';
 import { passoRoteiro } from './roteiro.js';
 
-export const AGENTE_VERSAO = '1.8.1';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+export const AGENTE_VERSAO = '1.8.2';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
 const PRAZO_MIN = { texto: 30, baixar_corte: 60, roteiro: 20 };
 const VERSAO_ROTEIRO = [1, 3, 0];       // agente mais velho nao sabe fazer 'roteiro': nao recebe
 const VERSAO_TRECHO = [1, 7, 0];        // 16/11: so a 1.7.0+ respeita "analisar de/ate"; a velha buscaria a live inteira
-const VERSAO_LIVE = [1, 8, 0];          // 18/11: live da Kick (link do canal, m3u8, "Puxar o resto") so a 1.8.0+
+const VERSAO_LIVE = [1, 8, 2];          // 18/11: live da Kick (link do canal, m3u8, "Puxar o resto" com "ate") so a 1.8.2+
 const MAX_TENTATIVAS = 3;
 const VISTO_A_CADA_MS = 60 * 1000;      // grava "visto_em" no maximo 1x por minuto (poupa escrita no D1)
 const GROQ_MODELO = 'whisper-large-v3-turbo';

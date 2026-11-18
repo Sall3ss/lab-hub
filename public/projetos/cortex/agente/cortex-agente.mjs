@@ -31,7 +31,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '1.8.1';
+const VERSAO = '1.8.2';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -127,7 +127,8 @@ async function tarefaTexto(cfg, t, pasta) {
   // 1.8.0: "Puxar o resto" (continuar_de_s) começa de onde a captura anterior parou.
   const continuar = v.continuar_de_s != null;
   const de = Math.max(0, Number(continuar ? v.continuar_de_s : v.analisar_de_s) || 0);
-  let ate = continuar ? 0 : Number(v.analisar_ate_s) || 0;
+  // 1.8.2: o "Puxar o resto" também respeita o "até" (puxar mais 2 h, depois mais 2 h...).
+  let ate = Number(v.analisar_ate_s) || 0;
   if (continuar && durTotal && durTotal - de < 90) {
     throw Object.assign(new Error(`ainda não tem parte nova: a live andou só ${minutos(Math.max(0, durTotal - de - 30))} desde a última captura. Tente de novo daqui a pouco`), { definitivo: true });
   }

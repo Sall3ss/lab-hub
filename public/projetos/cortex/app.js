@@ -340,14 +340,18 @@
     // só com o roteiro pronto: com a IA parada no meio, a parte já capturada ficaria sem leitura
     return !!(v && v.ao_vivo_canal && v.capturado_ate_s && v.continuar_de_s == null && v.etapa === 'cortado');
   }
-  function puxarResto(v, botao, msgEl) {
+  function puxarResto(v, botao, msgEl, ate) {
     botao.disabled = true;
-    return api('/videos/' + v.id + '/continuar', { metodo: 'POST' }).then(function () {
-      aviso(estado.pc.online ? 'Puxando o resto: o PC já vai buscar a parte nova.' : 'Na fila: quando o PC ligar, ele busca a parte nova.');
+    return api('/videos/' + v.id + '/continuar', { metodo: 'POST', corpo: { ate_s: ate == null ? null : ate } }).then(function (r) {
+      var ate2 = r.ate != null ? ' até ' + tc(r.ate) : ' até o fim';
+      aviso(estado.pc.online ? 'Puxando' + ate2 + ': o PC já vai buscar a parte nova.' : 'Na fila (' + ate2.trim() + '): quando o PC ligar, ele busca a parte nova.');
       fecharGaveta(); detalhe = null; carregar().then(function () { if (selVideo) carregarDetalhe(selVideo); });
     }).catch(function (e) { botao.disabled = false; if (msgEl) msgEl.textContent = e.message; else aviso(e.message, true); });
   }
-  $('btn-resto').addEventListener('click', function () { if (detalhe) puxarResto(detalhe.video, this); });
+  $('btn-resto').addEventListener('click', function () {
+    if (!detalhe) return;
+    abrirVideo(function (box) { var a = box.querySelector('#resto-ate'); if (a) { a.scrollIntoView({ block: 'center' }); a.focus(); } });
+  });
   function abrirConcluidos() {
     api('/concluidos').then(function (j) {
       var lista = j.videos || [];
@@ -414,7 +418,7 @@
     nome.title = 'Abrir os detalhes do vídeo: ' + nome.textContent;
     nome.disabled = false;
     $('btn-resto').hidden = !podePuxar(v);
-    if (podePuxar(v)) $('btn-resto').textContent = '⟳ Puxar o resto (de ' + tc(v.capturado_ate_s) + ')';
+    if (podePuxar(v)) $('btn-resto').textContent = '⟳ Puxar mais (de ' + tc(v.capturado_ate_s) + ')';
     btn.hidden = false;
     var cont = contagem(v.id), bc = $('btn-concluir');
     bc.hidden = v.etapa !== 'cortado';
@@ -495,7 +499,7 @@
     });
   }
 
-  function abrirVideo() {
+  function abrirVideo(depois) {   // depois(box): chamado com a gaveta montada (ex.: focar o "Puxar mais")
     var base = estado.videos.find(function (v) { return v.id === selVideo; });
     var pronto = detalhe && detalhe.video.id === selVideo ? Promise.resolve() : carregarDetalhe(selVideo);
     pronto.then(function () {
@@ -516,8 +520,14 @@
         (v.erro ? '<div class="acoes"><button class="btn btn-ok" type="button" id="v-tentar">↻ Tentar de novo</button></div>' : '') +
         // 18/11: "Puxar o resto" - só para vídeo que veio do link da live, depois da 1ª captura
         (podePuxar(v)
-          ? '<div class="bloco"><div class="acoes"><button class="btn btn-ok" type="button" id="v-resto">⟳ Puxar o resto (de ' + tc(v.capturado_ate_s) + ' em diante)</button></div>' +
-            '<p class="dica-trecho">Pega o que a live andou desde a última captura: o PC busca só a parte nova e a IA lê só ela. Os cortes que você já tem ficam.</p>' +
+          ? '<div class="bloco caixa-resto"><b class="resto-tit">⟳ Puxar mais da live</b><div class="dupla">' +
+            '<label class="campo"><span>De (onde parou)</span><input class="tc-campo" value="' + tc(v.capturado_ate_s) + '" disabled></label>' +
+            '<label class="campo"><span>Até (vazio = até o fim)</span><input class="tc-campo" id="resto-ate" inputmode="numeric" autocomplete="off" placeholder="fim do vídeo"></label></div>' +
+            '<div class="acoes resto-mais">' + [1, 2, 3].map(function (h) { return '<button type="button" class="mini" data-mais="' + h * 3600 + '">+' + h + ' h</button>'; }).join('') +
+            '<button type="button" class="mini" data-mais="0">Até o fim</button></div>' +
+            '<div class="acoes"><button class="btn btn-ok" type="button" id="v-resto"></button></div>' +
+            '<p class="dica-trecho">O PC busca só essa parte e a IA lê só ela; os cortes que você já tem ficam. Dá para ir puxando aos poucos até o fim' +
+            (v.duracao_s ? ' (na última captura o vídeo tinha ' + tc(v.duracao_s) + (v.ao_vivo ? ' e a live seguia no ar' : '') + ')' : '') + '.</p>' +
             '<p class="msg-form" id="msg-resto"></p></div>' : '') +
         '<form class="bloco" id="f-video"><label class="campo"><span>Título</span><input name="titulo" maxlength="200" value="' + esc(v.titulo || '') + '" placeholder="O PC preenche com o título original"></label>' +
         '<p class="msg-form" id="msg-video"></p><div class="acoes"><button class="btn btn-cor" type="submit">Salvar</button>' +
@@ -558,7 +568,25 @@
             enviar(false);
           };
           var vr = box.querySelector('#v-resto');
-          if (vr) vr.onclick = function () { puxarResto(v, vr, $('msg-resto')); };
+          if (vr) {
+            var ra = box.querySelector('#resto-ate');
+            mascaraTC(ra, rotuloResto);
+            ra.addEventListener('blur', rotuloResto);
+            function rotuloResto() {
+              var a = lerTC(ra.value);
+              vr.textContent = '⟳ Puxar de ' + tc(v.capturado_ate_s) + (a != null ? ' até ' + tc(a) + ' (' + duracao(Math.max(0, a - v.capturado_ate_s)) + ')' : ' até o fim');
+            }
+            rotuloResto();
+            box.querySelectorAll('[data-mais]').forEach(function (b) {
+              b.onclick = function () { var n = Number(b.dataset.mais); ra.value = n ? tc(v.capturado_ate_s + n) : ''; rotuloResto(); };
+            });
+            vr.onclick = function () {
+              var txt = ra.value.trim(), a = txt ? lerTC(txt) : null;
+              if (txt && a == null) { $('msg-resto').textContent = 'Tempo inválido. Use HH:MM:SS.'; return; }
+              if (a != null && a - v.capturado_ate_s < 120) { $('msg-resto').textContent = 'O "até" precisa vir pelo menos 2 min depois de ' + tc(v.capturado_ate_s) + '.'; return; }
+              puxarResto(v, vr, $('msg-resto'), a);
+            };
+          }
           var vt = box.querySelector('#v-tentar');
           if (vt) vt.onclick = function () { tentar('videos', v.id, vt).then(fecharGaveta); };
           box.querySelector('#v-arquivar').onclick = function () { concluirVideo(v); };
@@ -570,6 +598,7 @@
               }).catch(function (e) { aviso(e.message, true); });
             });
           };
+          if (depois) depois(box);
         });
     });
   }

@@ -283,3 +283,8 @@ button, input, textarea { font: inherit; color: inherit; }
 .lista-conc small { display: block; color: var(--suave); font: .7rem var(--mono); margin-top: .2rem; }
 .dica-gancho { margin: -.2rem 0 0; font: .74rem var(--mono); color: var(--suave); }
 .tl-legenda .leg-fora { background: repeating-linear-gradient(135deg, #555 0 3px, #222 3px 6px) !important; }
+
+/* 18/11: "Puxar mais da live" - de onde parou até onde o dono quiser (+1/+2/+3 h) */
+.caixa-resto { border: 1px solid rgb(55 214 122 / .35); border-radius: var(--raio); padding: .7rem; background: rgb(55 214 122 / .05); }
+.resto-tit { font: 600 .72rem/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ok); }
+.resto-mais { gap: .4rem; }

@@ -8,7 +8,8 @@
 //   GET    /quadro                 videos + cortes do Kanban e se o PC esta online
 //   POST   /videos                 { url, analisar_de_s?, analisar_ate_s? } -> cria o video e a tarefa "buscar texto" do PC
 //   POST   /videos/:id/trecho      { analisar_de_s, analisar_ate_s, confirmado? } muda o trecho analisado (16/11)
-//   POST   /videos/:id/continuar   "Puxar o resto" de uma live da Kick: so a parte nova (18/11)
+//   POST   /videos/:id/continuar   { ate_s? } "Puxar o resto" de uma live da Kick: so a parte nova (18/11),
+//                                   ate ate_s (vazio = ate o fim; 18/11: puxar de 2 em 2 h)
 //   GET    /videos/:id             video + todos os cortes (linha do tempo)
 //   PATCH  /videos/:id             { titulo?, arquivado? }  arquivado = "Concluir video" (sai do quadro)
 //   GET    /concluidos             videos concluidos (arquivados), para reabrir
@@ -137,7 +138,7 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
   }
 
   if (rota === 'videos' && id && partes[2] === 'continuar' && metodo === 'POST') {
-    return await puxarResto({ env, data, u, id, json, agora });
+    return await puxarResto({ request, env, data, u, id, json, agora });
   }
 
   if (rota === 'videos' && id && partes[2] === 'trecho' && metodo === 'POST') {
@@ -358,7 +359,7 @@ async function mudarTrecho({ request, env, data, u, id, json, agora }) {
 // Live da Kick colada enquanto rolava: o texto foi ate capturado_ate_s. Aqui o PC busca so dali
 // em diante (com 30 s de folga para nao cortar uma frase na divisa), o texto antigo fica, e a IA
 // le so a parte nova. Os cortes que ja existem ficam como estao.
-async function puxarResto({ env, data, u, id, json, agora }) {
+async function puxarResto({ request, env, data, u, id, json, agora }) {
   const video = await db(env).first('SELECT * FROM cortex_videos WHERE id = ? AND usuario_id = ?', Number(id), u.id);
   if (!video) return json({ erro: 'vídeo não encontrado' }, 404);
   if (!video.ao_vivo_canal) return json({ erro: 'Só vídeos importados pelo link da live (kick.com/canal) têm "Puxar o resto".' }, 400);
@@ -373,16 +374,26 @@ async function puxarResto({ env, data, u, id, json, agora }) {
   const ocupado = await db(env).first(
     "SELECT COUNT(*) AS n FROM cortex_tarefas WHERE video_id = ? AND tipo IN ('texto', 'roteiro') AND estado IN ('pega', 'pendente')", video.id);
   if (ocupado.n) return json({ erro: 'Este vídeo ainda tem trabalho na fila do PC (texto ou IA). Espere terminar e puxe o resto depois.' }, 409);
+  if (!video.ao_vivo && video.duracao_s && video.capturado_ate_s >= video.duracao_s - 60) {
+    return json({ erro: 'Esse vídeo já foi puxado até o fim (a live tinha terminado na última captura).' }, 409);
+  }
+  // 18/11: "ate" opcional (puxar mais 2 h, depois mais 2 h...). Vazio = ate o fim.
+  const corpo = await request.json().catch(() => ({}));
+  let ate = corpo.ate_s === undefined || corpo.ate_s === null || corpo.ate_s === '' ? null : Math.round(Number(corpo.ate_s));
+  if (ate !== null && (!Number.isFinite(ate) || ate - video.capturado_ate_s < 120)) {
+    return json({ erro: `O "até" precisa ser pelo menos 2 min depois de ${fmt(video.capturado_ate_s)} (onde a última captura parou).` }, 400);
+  }
+  if (ate !== null && !video.ao_vivo && video.duracao_s && ate >= video.duracao_s) ate = null;   // passou do fim = ate o fim
   const de = Math.max(0, video.capturado_ate_s - 30);
   await db(env).batch([
-    ["UPDATE cortex_videos SET continuar_de_s = ?, analisar_ate_s = NULL, etapa = 'entrada', erro = NULL, arquivado = 0, atualizado_em = ? WHERE id = ?",
-      [de, agora, video.id]],
+    ["UPDATE cortex_videos SET continuar_de_s = ?, analisar_ate_s = ?, etapa = 'entrada', erro = NULL, arquivado = 0, atualizado_em = ? WHERE id = ?",
+      [de, ate, agora, video.id]],
     ["DELETE FROM cortex_tarefas WHERE video_id = ? AND tipo IN ('texto', 'roteiro') AND estado = 'falhou'", [video.id]],
     ["INSERT INTO cortex_tarefas (usuario_id, tipo, video_id, criada_em, atualizada_em) VALUES (?, 'texto', ?, ?, ?)", [u.id, video.id, agora, agora]],
   ]);
   await auditar(env, { quem: u.email, acao: 'puxar-resto', entidade: 'cortex_videos', entidade_id: video.id,
-    antes: { capturado_ate_s: video.capturado_ate_s }, depois: { continuar_de_s: de }, ip: data.ip });
-  return json({ ok: true, de });
+    antes: { capturado_ate_s: video.capturado_ate_s }, depois: { continuar_de_s: de, analisar_ate_s: ate }, ip: data.ip });
+  return json({ ok: true, de, ate });
 }
 
 // Situacao da tarefa mais recente de um video/corte, para o cartao dizer o que o PC esta fazendo.

@@ -294,6 +294,15 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   E "Puxar o resto" só com o roteiro PRONTO (etapa cortado): com a IA parada no meio, puxar faria
   a parte já capturada ficar sem leitura. Testado local com um Google de mentira devolvendo 503.
 
+- 18/11: **"Puxar mais" aos poucos** (pedido do dono: live de 7 h, puxar mais 2 h, depois mais
+  2 h até o fim). O bloco "⟳ Puxar mais da live" na gaveta tem "De (onde parou)", "Até (vazio =
+  até o fim)" e atalhos +1 h/+2 h/+3 h/Até o fim; o botão diz o intervalo ("Puxar de 04:00:00 até
+  06:00:00 (2h00)"). O botão do topo da linha do tempo abre a gaveta nesse bloco.
+  `POST /videos/:id/continuar { ate_s }` grava o "até" em `analisar_ate_s`; "até" além do fim de
+  uma live já encerrada vira "até o fim"; vídeo já puxado até o fim recusa. Agente 1.8.2 (a
+  1.8.1 puxaria até o fim, por isso não recebe). Testado: API, PC simulado e tela no PC e no
+  celular.
+
 ## Decisões
 
 - 18/11: live da Kick vai pelo **m3u8** (o link do vídeo não abre enquanto a live roda) e o
