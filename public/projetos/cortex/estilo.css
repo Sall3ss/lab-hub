@@ -69,6 +69,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .dica-trecho { margin: 0; font-size: .8rem; color: var(--suave); }
 .ingest-trecho .dica-trecho { align-self: center; }
 .c-trecho { font: .68rem/1.4 var(--mono); color: var(--cor); }
+.c-vivo { font: 700 .6rem/1 var(--mono); letter-spacing: .08em; color: #fff; background: var(--perigo); border-radius: 3px; padding: .2rem .35rem; }
 .tl-fora { position: absolute; top: 0; bottom: 0; pointer-events: none;
   background: repeating-linear-gradient(135deg, rgba(0,0,0,.55) 0 6px, rgba(0,0,0,.35) 6px 12px); }
 .ingest-msg { margin: .45rem 0 0; min-height: 1.2em; font-size: .85rem; color: var(--suave); }
@@ -144,7 +145,11 @@ button, input, textarea { font: inherit; color: inherit; }
 /* ---------- linha do tempo ---------- */
 .linha { margin-top: 1rem; background: var(--painel); border: 1px solid var(--fio); border-radius: var(--raio); overflow: hidden; }
 .linha-topo { display: flex; align-items: center; gap: .8rem; padding: .6rem .8rem; background: var(--painel-2); border-bottom: 1px solid var(--fio); flex-wrap: wrap; }
-.linha-nome { flex: 1; min-width: 0; font-weight: 600; font-size: .85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--metal); }
+.linha-nome { flex: 1; min-width: 0; font-weight: 600; font-size: .85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--metal);
+  background: none; border: 0; padding: 0; text-align: left; font-family: inherit; }
+/* 18/11: o nome do vídeo abre a gaveta dele (vídeo já cortado não tem cartão no quadro) */
+.linha-nome:not(:disabled) { cursor: pointer; text-decoration: underline dotted rgb(255 255 255 / .25); text-underline-offset: 3px; }
+.linha-nome:not(:disabled):hover { color: var(--texto); }
 .linha-corpo { overflow-x: auto; }
 .linha-vazia { margin: 0; padding: 2.2rem 1rem; text-align: center; color: var(--suave); font-size: .85rem; }
 .tl { position: relative; min-width: 46rem; display: grid; grid-template-columns: 3.2rem 1fr; }

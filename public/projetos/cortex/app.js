@@ -146,7 +146,8 @@
     api('/videos', { metodo: 'POST', corpo: { url: url, analisar_de_s: tr.de, analisar_ate_s: tr.ate } }).then(function (r) {
       campo.value = ''; $('plat').dataset.p = ''; $('plat').textContent = 'LINK';
       abrirTrechoImp(false);
-      msg.textContent = 'Importado. ' + (estado.pc.online ? 'O PC já vai buscar o texto.' : 'Quando o PC ligar, ele busca o texto.');
+      msg.textContent = (r.ao_vivo_canal ? 'Live importada: o PC pega até o minuto em que buscar. ' : 'Importado. ') +
+        (estado.pc.online ? 'O PC já vai buscar o texto.' : 'Quando o PC ligar, ele busca o texto.');
       msg.className = 'ingest-msg ok';
       selVideo = r.id;
       return carregar();
@@ -225,13 +226,17 @@
   }
 
   function cartaoVideo(v) {
-    var st = situacao(v, v.etapa === 'entrada' ? 'buscando o texto…' : v.etapa === 'roteiro' ? 'IA começando a ler…' : 'transcrevendo…');
+    // 18/11: live da Kick - o PC primeiro acha a live; "Puxar o resto" busca só a parte nova.
+    var esperaEntrada = v.continuar_de_s != null ? 'puxando o resto…' : v.ao_vivo_canal && !v.capturado_ate_s ? 'procurando a live na Kick…' : 'buscando o texto…';
+    var st = situacao(v, v.etapa === 'entrada' ? esperaEntrada : v.etapa === 'roteiro' ? 'IA começando a ler…' : 'transcrevendo…');
     if (!st && v.etapa === 'roteiro') st = '<div class="c-estado espera"><span class="ponto"></span>Texto pronto: aguardando a IA (etapa 3)</div>';
     return '<button type="button" class="cartao' + (v.id === selVideo ? ' sel' : '') + '" data-video="' + v.id + '">' +
       '<div class="c-linha"><span class="tag-plat ' + v.plataforma + '">' + PLAT[v.plataforma] + '</span>' +
+      (v.ao_vivo ? '<span class="c-vivo" title="A live seguia no ar na última captura">● AO VIVO</span>' : '') +
       (v.duracao_s ? '<span class="c-tc">' + tc(v.duracao_s) + '</span>' : '') + '</div>' +
       '<p class="c-titulo">' + esc(v.titulo || v.url.replace(/^https:\/\/(www\.)?/, '')) + '</p>' +
       (v.canal ? '<div class="c-sub">' + esc(v.canal) + '</div>' : '') +
+      (v.ao_vivo_canal && v.capturado_ate_s ? '<div class="c-trecho" title="Até onde o texto foi capturado">⟳ capturado até ' + tc(v.capturado_ate_s) + '</div>' : '') +
       (textoTrecho(v) ? '<div class="c-trecho" title="Parte do vídeo analisada">⏱ ' + textoTrecho(v) + '</div>' : '') + st + '</button>';
   }
 
@@ -329,6 +334,19 @@
     });
   }
   $('btn-concluir').addEventListener('click', function () { if (detalhe) concluirVideo(detalhe.video); });
+  $('linha-nome').addEventListener('click', function () { if (detalhe) abrirVideo(); });
+  // ---------- "Puxar o resto" (18/11): live da Kick, só a parte nova ----------
+  function podePuxar(v) {
+    return !!(v && v.ao_vivo_canal && v.capturado_ate_s && v.continuar_de_s == null && (v.etapa === 'roteiro' || v.etapa === 'cortado'));
+  }
+  function puxarResto(v, botao, msgEl) {
+    botao.disabled = true;
+    return api('/videos/' + v.id + '/continuar', { metodo: 'POST' }).then(function () {
+      aviso(estado.pc.online ? 'Puxando o resto: o PC já vai buscar a parte nova.' : 'Na fila: quando o PC ligar, ele busca a parte nova.');
+      fecharGaveta(); detalhe = null; carregar().then(function () { if (selVideo) carregarDetalhe(selVideo); });
+    }).catch(function (e) { botao.disabled = false; if (msgEl) msgEl.textContent = e.message; else aviso(e.message, true); });
+  }
+  $('btn-resto').addEventListener('click', function () { if (detalhe) puxarResto(detalhe.video, this); });
   function abrirConcluidos() {
     api('/concluidos').then(function (j) {
       var lista = j.videos || [];
@@ -386,13 +404,16 @@
   function desenharLinha() {
     var corpo = $('linha-corpo'), nome = $('linha-nome'), btn = $('btn-marcar');
     if (!detalhe) {
-      nome.textContent = 'Nenhum vídeo selecionado'; btn.hidden = true; $('btn-concluir').hidden = true;
+      nome.textContent = 'Nenhum vídeo selecionado'; nome.disabled = true; btn.hidden = true; $('btn-concluir').hidden = true; $('btn-resto').hidden = true;
       corpo.innerHTML = '<p class="linha-vazia">Toque num vídeo do quadro para ver os cortes dele aqui.</p>';
       return;
     }
     var v = detalhe.video, cortes = detalhe.cortes;
     nome.textContent = (v.titulo || v.url) + (v.duracao_s ? '  ·  ' + tc(v.duracao_s) : '');
-    nome.title = nome.textContent;
+    nome.title = 'Abrir os detalhes do vídeo: ' + nome.textContent;
+    nome.disabled = false;
+    $('btn-resto').hidden = !podePuxar(v);
+    if (podePuxar(v)) $('btn-resto').textContent = '⟳ Puxar o resto (de ' + tc(v.capturado_ate_s) + ')';
     btn.hidden = false;
     var cont = contagem(v.id), bc = $('btn-concluir');
     bc.hidden = v.etapa !== 'cortado';
@@ -486,10 +507,17 @@
         (v.canal ? '<dt>Canal</dt><dd>' + esc(v.canal) + '</dd>' : '') +
         '<dt>Duração</dt><dd>' + (v.duracao_s ? tc(v.duracao_s) : 'o PC informa ao buscar') + '</dd>' +
         '<dt>Analisa</dt><dd>' + (textoTrecho(v) ? textoTrecho(v) : 'o vídeo inteiro') + '</dd>' +
+        (v.ao_vivo_canal ? '<dt>Live</dt><dd>' + (v.ao_vivo ? '<b style="color:var(--perigo)">● no ar</b> na última captura' : 'encerrada') +
+          (v.capturado_ate_s ? ' · capturado até <b>' + tc(v.capturado_ate_s) + '</b>' : ' · o PC ainda vai procurar') + '</dd>' : '') +
         '<dt>Etapa</dt><dd>' + etapas[v.etapa] + '</dd>' +
         '<dt>Importado</dt><dd>' + data(v.criado_em) + '</dd>' +
         (v.erro ? '<dt>Falha</dt><dd style="color:var(--perigo)">' + esc(v.erro) + '</dd>' : '') + '</dl>' +
         (v.erro ? '<div class="acoes"><button class="btn btn-ok" type="button" id="v-tentar">↻ Tentar de novo</button></div>' : '') +
+        // 18/11: "Puxar o resto" - só para vídeo que veio do link da live, depois da 1ª captura
+        (podePuxar(v)
+          ? '<div class="bloco"><div class="acoes"><button class="btn btn-ok" type="button" id="v-resto">⟳ Puxar o resto (de ' + tc(v.capturado_ate_s) + ' em diante)</button></div>' +
+            '<p class="dica-trecho">Pega o que a live andou desde a última captura: o PC busca só a parte nova e a IA lê só ela. Os cortes que você já tem ficam.</p>' +
+            '<p class="msg-form" id="msg-resto"></p></div>' : '') +
         '<form class="bloco" id="f-video"><label class="campo"><span>Título</span><input name="titulo" maxlength="200" value="' + esc(v.titulo || '') + '" placeholder="O PC preenche com o título original"></label>' +
         '<p class="msg-form" id="msg-video"></p><div class="acoes"><button class="btn btn-cor" type="submit">Salvar</button>' +
         '<button class="btn" type="button" id="v-marcar">+ Marcar corte</button></div></form>' +
@@ -528,6 +556,8 @@
             }
             enviar(false);
           };
+          var vr = box.querySelector('#v-resto');
+          if (vr) vr.onclick = function () { puxarResto(v, vr, $('msg-resto')); };
           var vt = box.querySelector('#v-tentar');
           if (vt) vt.onclick = function () { tentar('videos', v.id, vt).then(fecharGaveta); };
           box.querySelector('#v-arquivar').onclick = function () { concluirVideo(v); };

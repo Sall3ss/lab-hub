@@ -261,7 +261,37 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   corte" na gaveta, e os ±1 s do gancho com o campo vazio também partem do começo do corte
   (antes não faziam nada). Testado: 7 casos da regra e tela no PC e no celular.
 
+- 18/11: **live da Kick ainda rolando + "Puxar o resto"** (pedido do dono, igual ao
+  kick-video.download). Migration 0013 (`ao_vivo_canal`, `fonte_m3u8`, `ao_vivo`,
+  `capturado_ate_s`, `continuar_de_s`, `roteiro_de_s`), agente 1.8.0.
+  - Colar `kick.com/<canal>`: o vídeo nasce com id provisório (`live:<canal>:<hora>`); o PC
+    pergunta à API pública da Kick (`/api/v2/channels/<canal>/videos`) qual é o vídeo da live no
+    ar e manda uuid + m3u8 (`POST /maquina/tarefas/:id/live`). Se essa live já estiver no quadro,
+    recusa e aponta o "Puxar o resto". Colar a mesma live de novo também é recusado no painel.
+  - Descoberto no teste com uma live real (xQc, 9h45 no ar): enquanto a live roda, o yt-dlp NÃO
+    abre o link do vídeo (Kick: NOT_FOUND), mas abre o `master.m3u8`, que vem fechado no minuto
+    atual (é a "foto" da live). Por isso texto e download de corte desse vídeo vão pelo m3u8.
+  - A Kick tem legenda automática nas lives (a da língua do canal é a original; as outras são
+    tradução). O PC baixa a da língua do canal em paralelo (12 por vez): 17 min em 4 s. Pelo
+    yt-dlp, um arquivo por vez, 9 h de live não terminava em 2,5 min. Sem legenda: áudio pelo m3u8
+    só do trecho (testado: 3 min de áudio, 0,5 MB, 21 s) → Groq, como antes.
+  - Proteção da Kick: o PC se identifica como `cortex-agente/<versão>`. Fingir ser o Chrome dá 403.
+  - "Puxar o resto": botão na gaveta do vídeo e no topo da linha do tempo (vídeo cortado não tem
+    cartão no quadro; o nome do vídeo na linha do tempo agora abre a gaveta). Começa 30 s antes de
+    `capturado_ate_s`, o texto antigo fica, a IA lê só a parte nova (`roteiro_de_s`), cortes
+    antigos ficam. Sem parte nova (menos de 90 s), falha clara: "tente de novo daqui a pouco".
+  - Cartão: "● AO VIVO" e "⟳ capturado até HH:MM:SS". Agente < 1.8.0 não recebe texto nem
+    download de vídeo de live.
+  Testado: painel local + agente 1.8.0 com yt-dlp e Kick de verdade (live no ar): achou a live,
+  legenda, roteiro; puxar o resto pegou só os 3 min novos; recusas (link reservado, colar de
+  novo, puxar em vídeo comum, puxar duas vezes, mudar trecho durante); tela no PC e no celular.
+  Falta: download de um corte de live pelo PC do dono (mesmo yt-dlp, pelo m3u8).
+
 ## Decisões
+
+- 18/11: live da Kick vai pelo **m3u8** (o link do vídeo não abre enquanto a live roda) e o
+  texto prefere a **legenda da própria Kick** na língua do canal (instantânea, sem gastar a cota
+  da Groq). Se a qualidade dela incomodar, dá para forçar o Whisper (Groq).
 
 - 16/11: trecho mudado com texto pronto **aproveita a transcrição** quando ela cobre o trecho
   novo (só a IA refaz), para não gastar a cota grátis da Groq de novo.

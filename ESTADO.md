@@ -116,7 +116,8 @@
    gravada (14/11). Etapa 3 (roteiro) com o Gemini GRÁTIS (chave da Jean), puxada pelo agente 1.3.0.
    15/11: download com % e vigia de travamento, tempo ajustável na triagem, qualidade medida,
    "aprovar sem baixar" (longos, baixados por fora), "Concluir vídeo" e tempo do gancho
-   (agente 1.6.0). 16/11: analisar só um trecho ("a partir de 3 h"), agente 1.7.0. Arquitetura,
+   (agente 1.6.0). 16/11: analisar só um trecho ("a partir de 3 h"), agente 1.7.0. 18/11: live da Kick
+   ainda rolando (link do canal) e "Puxar o resto", agente 1.8.0. Arquitetura,
    modelo de dados e próximos passos em `projetos/cortex/PROJETO.md`.
 
 ## ClipStudio: arquivado em 15/10/2026

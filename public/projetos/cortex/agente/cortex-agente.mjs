@@ -4,7 +4,8 @@
 // O painel (na nuvem) decide; este programa só executa o que é pesado e precisa de IP de casa:
 //   - "texto": busca título/duração, a legenda nativa do vídeo e, se não houver, o áudio
 //     comprimido em partes de 30 min, que o painel manda para o Whisper (Groq). 1.7.0: se o
-//     vídeo tem trecho marcado ("analisar de/até"), busca só esse pedaço.
+//     vídeo tem trecho marcado ("analisar de/até"), busca só esse pedaço. 1.8.0: link de live
+//     da Kick (acha o vídeo da live, legenda da Kick, download pelo m3u8, "Puxar o resto").
 //   - "baixar_corte": baixa SÓ os minutos do corte (yt-dlp --download-sections) para a pasta
 //     de edição, com um .txt ao lado (título, gancho, descrição, tags) para publicar.
 //
@@ -30,7 +31,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '1.7.0';
+const VERSAO = '1.8.0';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -107,54 +108,91 @@ async function painel(cfg, caminho, { corpo, bruto, tipo, prazo } = {}) {
 // ---------------------------------------------------------------- tarefa "texto"
 async function tarefaTexto(cfg, t, pasta) {
   const v = t.video;
-  log(`Buscando informações de ${v.url}`);
-  const info = JSON.parse(await rodar('yt-dlp', ['-J', '--no-warnings', '--no-playlist', v.url]));
-  await painel(cfg, `/tarefas/${t.id}/meta`, { corpo: {
-    titulo: info.title, canal: info.channel || info.uploader || info.uploader_id, duracao_s: info.duration,
-  } });
+  // 1.8.0 (18/11): vídeo de live da Kick. Enquanto a live roda, o yt-dlp não abre o link do vídeo
+  // (a Kick responde NOT_FOUND), mas abre o endereço HLS (m3u8), que devolve até o minuto atual.
+  let alvo = v.fonte_m3u8 || v.url, idioma = null, aoVivo = null;
+  if (v.ao_vivo_canal) {
+    const lv = await liveKick(v);
+    await painel(cfg, `/tarefas/${t.id}/live`, { corpo: { uuid: lv.uuid, fonte: lv.fonte, titulo: lv.titulo, ao_vivo: lv.aoVivo } });
+    alvo = lv.fonte; idioma = lv.idioma; aoVivo = lv.aoVivo;
+    log(`Live da Kick: ${lv.titulo || v.ao_vivo_canal} (${lv.aoVivo ? 'AO VIVO' : 'já terminou'}).`);
+  }
+  const m3u8 = /\.m3u8(\?|$)/.test(alvo);
+  log(`Buscando informações de ${m3u8 ? 'kick.com/' + (v.ao_vivo_canal || '') + ' (HLS)' : v.url}`);
+  const info = JSON.parse(await rodar('yt-dlp', ['-J', '--no-warnings', '--no-playlist', alvo]));
+  const durTotal = Number(info.duration) || 0;
 
   // 1.7.0 (16/11): trecho escolhido no painel. Só o pedaço entre "de" e "até" é buscado e
   // transcrito; os tempos continuam contados desde o começo do vídeo original.
-  const durTotal = Number(info.duration) || 0;
-  const de = Math.max(0, Number(v.analisar_de_s) || 0);
-  let ate = Number(v.analisar_ate_s) || 0;
+  // 1.8.0: "Puxar o resto" (continuar_de_s) começa de onde a captura anterior parou.
+  const continuar = v.continuar_de_s != null;
+  const de = Math.max(0, Number(continuar ? v.continuar_de_s : v.analisar_de_s) || 0);
+  let ate = continuar ? 0 : Number(v.analisar_ate_s) || 0;
+  if (continuar && durTotal && durTotal - de < 90) {
+    throw Object.assign(new Error(`ainda não tem parte nova: a live andou só ${minutos(Math.max(0, durTotal - de - 30))} desde a última captura. Tente de novo daqui a pouco`), { definitivo: true });
+  }
   if (durTotal && de >= durTotal) {
     throw Object.assign(new Error(`o início escolhido (${tc(de)}) passa da duração do vídeo (${tc(durTotal)}); ajuste o trecho no painel`), { definitivo: true });
   }
   if (durTotal && ate > durTotal) ate = 0;      // "até" depois do fim = até o fim
-  const comTrecho = de > 0 || ate > 0;
-  if (comTrecho) log(`Só o trecho ${tc(de)} → ${ate ? tc(ate) : 'fim'}.`);
+  // Até onde esta captura vai. Na live, a "foto" de agora: o que vier depois fica para o "Puxar o resto".
+  const ateEf = ate || durTotal || 0;
+  await painel(cfg, `/tarefas/${t.id}/meta`, { corpo: {
+    ...(m3u8 ? {} : { titulo: info.title, canal: info.channel || info.uploader || info.uploader_id }),
+    duracao_s: durTotal, capturado_ate_s: ateEf || undefined, ...(aoVivo === null ? {} : { ao_vivo: aoVivo }),
+  } });
+  const comTrecho = de > 0 || ate > 0 || m3u8;
+  if (de > 0 || ate > 0) log(`Só o trecho ${tc(de)} → ${ateEf ? tc(ateEf) : 'fim'}.`);
 
-  const lingua = escolherLegenda(info);
-  if (lingua) {
-    log(`Legenda nativa encontrada (${lingua.codigo}${lingua.auto ? ', automática' : ''}). Baixando o texto…`);
-    const segs = (await baixarLegenda(v.url, lingua, pasta)).filter((s) => s.f > de && (!ate || s.i < ate));
-    if (segs.length > 20) {
-      // em lotes de 400 frases para cada pedido ficar leve para o painel
-      const lotes = [];
-      for (let i = 0; i < segs.length; i += 400) lotes.push(segs.slice(i, i + 400));
-      for (let i = 0; i < lotes.length; i++) {
-        await painel(cfg, `/tarefas/${t.id}/texto?parte=${i}&total=${lotes.length}&fonte=legenda`, { corpo: { segmentos: lotes[i] } });
-      }
-      log(`Texto enviado (${segs.length} frases). O vídeo segue para o roteiro.`);
-      return;
+  // Texto pronto (legenda): em lotes de 400 frases para cada pedido ficar leve para o painel.
+  const enviarLegenda = async (segs) => {
+    const lotes = [];
+    for (let i = 0; i < segs.length; i += 400) lotes.push(segs.slice(i, i + 400));
+    for (let i = 0; i < lotes.length; i++) {
+      await painel(cfg, `/tarefas/${t.id}/texto?parte=${i}&total=${lotes.length}&fonte=legenda`, { corpo: { segmentos: lotes[i] } });
     }
-    log('Legenda vazia ou curta demais; vou pelo áudio.');
-  } else log('Sem legenda nativa; vou pelo áudio comprimido.');
+    log(`Texto enviado (${segs.length} frases). O vídeo segue para o roteiro.`);
+  };
+
+  if (m3u8) {
+    // Legenda da própria Kick, na língua do canal (as outras são tradução automática).
+    // Baixada em paralelo: pelo yt-dlp, uma live de 9 h levava muitos minutos (um arquivo por vez).
+    if (idioma) {
+      try {
+        log(`Buscando a legenda da Kick (${idioma})…`);
+        const segs = await legendaHls(cfg, t, alvo, idioma, de, ateEf);
+        // Mínimo proporcional: no "Puxar o resto" de poucos minutos, 20 frases era exigir demais.
+        const minimo = ateEf ? Math.min(20, Math.max(3, Math.floor((ateEf - de) / 20))) : 20;
+        if (segs.length >= minimo) { await enviarLegenda(segs); return; }
+        log('Legenda da Kick vazia ou curta demais; vou pelo áudio.');
+      } catch (e) { log(`Legenda da Kick falhou (${e.message}); vou pelo áudio.`); }
+    } else log('Língua do canal desconhecida; vou pelo áudio.');
+  } else {
+    const lingua = escolherLegenda(info);
+    if (lingua) {
+      log(`Legenda nativa encontrada (${lingua.codigo}${lingua.auto ? ', automática' : ''}). Baixando o texto…`);
+      try {
+        const segs = (await baixarLegenda(v.url, lingua, pasta)).filter((s) => s.f > de && (!ate || s.i < ate));
+        if (segs.length > 20) { await enviarLegenda(segs); return; }
+        log('Legenda vazia ou curta demais; vou pelo áudio.');
+      } catch (e) { if (parando) throw e; log(`Legenda falhou (${e.message}); vou pelo áudio.`); }
+    } else log('Sem legenda nativa; vou pelo áudio comprimido.');
+  }
 
   // Áudio: baixa a menor faixa de áudio e corta em partes de 30 min, mono 16 kHz 24 kbps.
-  // Com trecho, o yt-dlp baixa só aquele pedaço (--download-sections): o arquivo começa em 0,
-  // e cada parte vai ao painel com o tempo somado ao início do trecho.
+  // Com trecho (ou live), o yt-dlp baixa só aquele pedaço (--download-sections): o arquivo
+  // começa em 0, e cada parte vai ao painel com o tempo somado ao início do trecho.
   const bruto = join(pasta, 'audio');
-  const durTrecho = comTrecho && durTotal ? (ate || durTotal) - de : 0;
+  const durTrecho = comTrecho && ateEf ? ateEf - de : 0;
   await rodar('yt-dlp', ['-f', 'ba/w', '--no-playlist', '--no-warnings', '--newline',
-    ...(comTrecho ? ['--download-sections', `*${tc(de)}-${ate ? tc(ate) : 'inf'}`] : []),
-    '-o', bruto + '.%(ext)s', v.url],
+    ...(comTrecho ? ['--download-sections', `*${tc(de)}-${ateEf ? tc(ateEf) : 'inf'}`] : []),
+    '-o', bruto + '.%(ext)s', alvo],
   { aoLer: progresso(cfg, t, 'baixando áudio', durTrecho).aoLer });
   const arq = readdirSync(pasta).find((n) => n.startsWith('audio.') && !n.endsWith('.part'));
   if (!arq) throw new Error('o yt-dlp não gerou o arquivo de áudio');
   // Com trecho, mede o arquivo (o corte do yt-dlp cai no quadro-chave, alguns segundos de folga).
-  const dur = comTrecho ? await duracaoDe(join(pasta, arq), durTrecho) : durTotal || await duracaoDe(join(pasta, arq));
+  let dur = comTrecho ? await duracaoDe(join(pasta, arq), durTrecho) : durTotal || await duracaoDe(join(pasta, arq));
+  if (durTrecho) dur = Math.min(dur, durTrecho + 15);
   // (- 5 s: um resto de meio segundo no fim não vira uma parte quase vazia para a Groq)
   const total = Math.max(1, Math.ceil((dur - 5) / PARTE_AUDIO_S));
   for (let i = 0; i < total; i++) {
@@ -185,6 +223,79 @@ async function tarefaTexto(cfg, t, pasta) {
     unlinkSync(parte);
   }
   log('Áudio transcrito. O vídeo segue para o roteiro.');
+}
+
+// 1.8.0 (18/11): a live do canal na Kick, pela API pública do site (a mesma que a página usa).
+// Quem pergunta é o PC (IP de casa); servidor de nuvem a Kick pode bloquear.
+const IDIOMAS = { english: 'en', portuguese: 'pt', spanish: 'es', french: 'fr', german: 'de', arabic: 'ar', turkish: 'tr',
+  italian: 'it', russian: 'ru', japanese: 'ja', korean: 'ko', polish: 'pl', dutch: 'nl', chinese: 'zh' };
+// Nome honesto do programa: fingir ser o Chrome faz a proteção da Kick responder 403 (testado
+// em 18/11: "Mozilla/5.0 ... Chrome/131" = 403; "cortex-agente/1.8.0" = 200).
+const NAVEGADOR = 'cortex-agente/' + VERSAO;
+async function liveKick(v) {
+  const canal = v.ao_vivo_canal;
+  let r;
+  try {
+    r = await fetch(`https://kick.com/api/v2/channels/${encodeURIComponent(canal)}/videos`, {
+      headers: { 'user-agent': NAVEGADOR, accept: 'application/json' }, signal: AbortSignal.timeout(30000) });
+  } catch { throw new Error('sem resposta da Kick ao procurar a live'); }
+  if (r.status === 404) throw Object.assign(new Error(`canal "${canal}" não existe na Kick`), { definitivo: true });
+  if (!r.ok) throw new Error(`a Kick respondeu ${r.status} ao procurar a live`);
+  const lista = await r.json().catch(() => []);
+  const uuidAtual = (String(v.url).match(/videos\/([0-9a-f-]{36})/i) || [])[1];
+  // Já achado antes ("Puxar o resto"): o mesmo vídeo. Senão, a live que está no ar agora.
+  const item = (Array.isArray(lista) ? lista : []).find((x) => x && x.video && (uuidAtual ? x.video.uuid === uuidAtual : x.is_live));
+  if (!item) {
+    if (uuidAtual && v.fonte_m3u8) return { uuid: uuidAtual, fonte: v.fonte_m3u8, aoVivo: false, titulo: null, idioma: null };
+    throw Object.assign(new Error(`o canal ${canal} não está ao vivo agora. Para uma live que já acabou, cole o link do vídeo gravado (kick.com/${canal}/videos/...)`), { definitivo: true });
+  }
+  return { uuid: item.video.uuid, fonte: item.source, aoVivo: !!item.is_live, titulo: item.session_title || null,
+    idioma: IDIOMAS[String(item.language || '').toLowerCase()] || null };
+}
+
+// Legenda HLS (WebVTT em pedaços de 10 s) na língua pedida, só os pedaços entre "de" e "até".
+// Os tempos dentro dos arquivos já são do vídeo inteiro (conferido numa live real em 18/11).
+async function legendaHls(cfg, t, master, idioma, de, ate) {
+  const pegar = async (url) => {
+    for (let k = 0; ; k++) {
+      try {
+        const r = await fetch(url, { headers: { 'user-agent': NAVEGADOR }, signal: AbortSignal.timeout(30000) });
+        if (r.ok) return await r.text();
+        if (r.status === 404 || k >= 3) throw new Error(`${r.status} em ${url.split('/').slice(-2).join('/')}`);
+      } catch (e) { if (k >= 3 || /^404/.test(e.message)) throw e; }
+      await dorme(1500 * (k + 1));
+    }
+  };
+  const mestre = await pegar(master);
+  const linha = mestre.split(/\r?\n/).find((l) => l.startsWith('#EXT-X-MEDIA:TYPE=SUBTITLES') && new RegExp(`LANGUAGE="${idioma}(-[^"]*)?"`, 'i').test(l));
+  if (!linha) return [];
+  const lista = new URL(linha.match(/URI="([^"]+)"/)[1], master).href;
+  const pl = await pegar(lista);
+  const pedacos = [];
+  let t0 = 0, d = null;
+  for (const bruta of pl.split(/\r?\n/)) {
+    const x = bruta.trim();
+    if (x.startsWith('#EXTINF:')) d = parseFloat(x.slice(8));
+    else if (x && !x.startsWith('#') && d !== null) {
+      if (t0 + d > de && (!ate || t0 < ate)) pedacos.push(new URL(x, lista).href);
+      t0 += d; d = null;
+    }
+  }
+  const textos = new Array(pedacos.length);
+  let prox = 0, feitos = 0, aviso = 0;
+  await Promise.all(Array.from({ length: 12 }, async () => {
+    while (prox < pedacos.length && !parando) {
+      const k = prox++;
+      textos[k] = await pegar(pedacos[k]);
+      feitos++;
+      if (Date.now() - aviso > 15000) {
+        aviso = Date.now();
+        painel(cfg, `/tarefas/${t.id}/prorrogar`, { corpo: { progresso: `legenda da Kick ${Math.floor(feitos / pedacos.length * 100)}%` } }).catch(() => {});
+      }
+    }
+  }));
+  if (parando) throw new Error('desligando');
+  return lerVtt(textos.join('\n\n')).filter((s) => s.f > de && (!ate || s.i < ate));
 }
 
 function escolherLegenda(info) {
@@ -302,7 +413,8 @@ async function tarefaCorte(cfg, t) {
       ...(c.tipo === 'curto' ? ['--force-keyframes-at-cuts'] : []),
       '-f', 'bv*[height<=1080]+ba/b[height<=1080]/b',
       '--merge-output-format', 'mp4',
-      '-o', destino + '.%(ext)s', v.url,
+      // 1.8.0: vídeo de live da Kick baixa pelo m3u8 (o link normal falha enquanto a live roda).
+      '-o', destino + '.%(ext)s', v.fonte_m3u8 || v.url,
     ], { aoLer: prog.aoLer });
   } catch (e) {
     if (travou && !parando) throw new Error(`download parado há ${PARADO_MS / 60000} min sem avançar (internet ou site lento); vai tentar de novo`);

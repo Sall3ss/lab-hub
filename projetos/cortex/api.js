@@ -8,6 +8,7 @@
 //   GET    /quadro                 videos + cortes do Kanban e se o PC esta online
 //   POST   /videos                 { url, analisar_de_s?, analisar_ate_s? } -> cria o video e a tarefa "buscar texto" do PC
 //   POST   /videos/:id/trecho      { analisar_de_s, analisar_ate_s, confirmado? } muda o trecho analisado (16/11)
+//   POST   /videos/:id/continuar   "Puxar o resto" de uma live da Kick: so a parte nova (18/11)
 //   GET    /videos/:id             video + todos os cortes (linha do tempo)
 //   PATCH  /videos/:id             { titulo?, arquivado? }  arquivado = "Concluir video" (sai do quadro)
 //   GET    /concluidos             videos concluidos (arquivados), para reabrir
@@ -55,7 +56,7 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
     const [videos, cortes, pc] = await Promise.all([
       db(env).all(
         `SELECT v.id, v.url, v.plataforma, v.titulo, v.canal, v.duracao_s, v.etapa, v.erro, v.criado_em, v.atualizado_em,
-                v.analisar_de_s, v.analisar_ate_s,
+                v.analisar_de_s, v.analisar_ate_s, v.ao_vivo_canal, v.ao_vivo, v.capturado_ate_s, v.continuar_de_s,
                 (SELECT COUNT(*) FROM cortex_cortes c WHERE c.video_id = v.id AND c.estado <> 'descartado') AS cortes,
                 ${TAREFA_SQL('t.video_id = v.id AND t.tipo IN (\'texto\', \'roteiro\')')}
            FROM cortex_videos v WHERE v.usuario_id = ? AND v.arquivado = 0
@@ -93,14 +94,23 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
     if (link.erro) return json({ erro: link.erro }, 400);
     const tr = lerTrecho(corpo.analisar_de_s, corpo.analisar_ate_s, null);
     if (tr.erro) return json({ erro: tr.erro }, 400);
+    // Live colada de novo (o mesmo canal, ainda no ar ou ainda sendo descoberta pelo PC):
+    // o caminho certo e "Puxar o resto" no video que ja existe.
+    if (link.ao_vivo_canal) {
+      const live = await db(env).first(
+        `SELECT id, titulo FROM cortex_videos WHERE usuario_id = ? AND ao_vivo_canal = ? AND arquivado = 0
+            AND (ao_vivo = 1 OR id_externo LIKE 'live:%') ORDER BY id DESC LIMIT 1`, u.id, link.ao_vivo_canal);
+      if (live) return json({ erro: 'Essa live já está no quadro. Abra o vídeo e use "⟳ Puxar o resto" para pegar a parte nova.', video_id: live.id }, 409);
+    }
     const ja = await db(env).first(
       'SELECT id, arquivado FROM cortex_videos WHERE usuario_id = ? AND plataforma = ? AND id_externo = ?',
       u.id, link.plataforma, link.id_externo);
     if (ja) return json({ erro: ja.arquivado ? 'Esse vídeo já foi importado e está arquivado.' : 'Esse vídeo já está no quadro.', video_id: ja.id }, 409);
 
     const r = await db(env).run(
-      `INSERT INTO cortex_videos (usuario_id, url, plataforma, id_externo, etapa, analisar_de_s, analisar_ate_s, criado_em, atualizado_em)
-       VALUES (?, ?, ?, ?, 'entrada', ?, ?, ?, ?)`, u.id, link.url, link.plataforma, link.id_externo, tr.de, tr.ate, agora, agora);
+      `INSERT INTO cortex_videos (usuario_id, url, plataforma, id_externo, etapa, analisar_de_s, analisar_ate_s, ao_vivo_canal, ao_vivo, criado_em, atualizado_em)
+       VALUES (?, ?, ?, ?, 'entrada', ?, ?, ?, ?, ?, ?)`, u.id, link.url, link.plataforma, link.id_externo, tr.de, tr.ate,
+      link.ao_vivo_canal || null, link.ao_vivo_canal ? 1 : 0, agora, agora);
     const videoId = r.meta.last_row_id;
     await db(env).run(
       `INSERT INTO cortex_tarefas (usuario_id, tipo, video_id, criada_em, atualizada_em) VALUES (?, 'texto', ?, ?, ?)`,
@@ -124,6 +134,10 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
     await db(env).run(`UPDATE ${tabela} SET erro = NULL, atualizado_em = ? WHERE id = ?`, agora, dono.id);
     await auditar(env, { quem: u.email, acao: 'tentar-de-novo', entidade: tabela, entidade_id: dono.id, ip: data.ip });
     return json({ ok: true });
+  }
+
+  if (rota === 'videos' && id && partes[2] === 'continuar' && metodo === 'POST') {
+    return await puxarResto({ env, data, u, id, json, agora });
   }
 
   if (rota === 'videos' && id && partes[2] === 'trecho' && metodo === 'POST') {
@@ -287,6 +301,7 @@ async function mudarTrecho({ request, env, data, u, id, json, agora }) {
 
   const tarefas = await db(env).all(
     "SELECT id, tipo, estado FROM cortex_tarefas WHERE video_id = ? AND tipo IN ('texto', 'roteiro')", video.id);
+  if (video.continuar_de_s !== null) return json({ erro: 'O "Puxar o resto" ainda está buscando a parte nova. Espere terminar para mudar o trecho.' }, 409);
   if (tarefas.some((t) => t.estado === 'pega')) {
     return json({ erro: 'O PC está trabalhando neste vídeo agora. Espere terminar, ou desligue o PC pelo atalho (ele devolve a tarefa) e tente de novo.' }, 409);
   }
@@ -320,7 +335,7 @@ async function mudarTrecho({ request, env, data, u, id, json, agora }) {
   }
 
   const lotes = [
-    ['UPDATE cortex_videos SET analisar_de_s = ?, analisar_ate_s = ?, etapa = ?, erro = NULL, atualizado_em = ? WHERE id = ?',
+    ['UPDATE cortex_videos SET analisar_de_s = ?, analisar_ate_s = ?, etapa = ?, roteiro_de_s = NULL, erro = NULL, atualizado_em = ? WHERE id = ?',
       [tr.de, tr.ate, so === 'roteiro' ? 'roteiro' : 'entrada', agora, video.id]],
     ["DELETE FROM cortex_tarefas WHERE video_id = ? AND tipo IN ('texto', 'roteiro')", [video.id]],
     ['DELETE FROM cortex_roteiro_partes WHERE video_id = ?', [video.id]],
@@ -337,6 +352,33 @@ async function mudarTrecho({ request, env, data, u, id, json, agora }) {
   await db(env).batch(lotes);
   await auditoria();
   return json({ ok: true, refez: so });
+}
+
+// ---------- "Puxar o resto" (18/11) ----------
+// Live da Kick colada enquanto rolava: o texto foi ate capturado_ate_s. Aqui o PC busca so dali
+// em diante (com 30 s de folga para nao cortar uma frase na divisa), o texto antigo fica, e a IA
+// le so a parte nova. Os cortes que ja existem ficam como estao.
+async function puxarResto({ env, data, u, id, json, agora }) {
+  const video = await db(env).first('SELECT * FROM cortex_videos WHERE id = ? AND usuario_id = ?', Number(id), u.id);
+  if (!video) return json({ erro: 'vídeo não encontrado' }, 404);
+  if (!video.ao_vivo_canal) return json({ erro: 'Só vídeos importados pelo link da live (kick.com/canal) têm "Puxar o resto".' }, 400);
+  if (video.continuar_de_s !== null) return json({ erro: 'Já está puxando o resto deste vídeo. Espere o texto novo chegar.' }, 409);
+  if (!video.capturado_ate_s || !['roteiro', 'cortado'].includes(video.etapa)) {
+    return json({ erro: 'Espere a primeira captura terminar (o texto chegar) antes de puxar o resto.' }, 409);
+  }
+  const ocupado = await db(env).first(
+    "SELECT COUNT(*) AS n FROM cortex_tarefas WHERE video_id = ? AND tipo IN ('texto', 'roteiro') AND estado IN ('pega', 'pendente')", video.id);
+  if (ocupado.n) return json({ erro: 'Este vídeo ainda tem trabalho na fila do PC (texto ou IA). Espere terminar e puxe o resto depois.' }, 409);
+  const de = Math.max(0, video.capturado_ate_s - 30);
+  await db(env).batch([
+    ["UPDATE cortex_videos SET continuar_de_s = ?, analisar_ate_s = NULL, etapa = 'entrada', erro = NULL, arquivado = 0, atualizado_em = ? WHERE id = ?",
+      [de, agora, video.id]],
+    ["DELETE FROM cortex_tarefas WHERE video_id = ? AND tipo IN ('texto', 'roteiro') AND estado = 'falhou'", [video.id]],
+    ["INSERT INTO cortex_tarefas (usuario_id, tipo, video_id, criada_em, atualizada_em) VALUES (?, 'texto', ?, ?, ?)", [u.id, video.id, agora, agora]],
+  ]);
+  await auditar(env, { quem: u.email, acao: 'puxar-resto', entidade: 'cortex_videos', entidade_id: video.id,
+    antes: { capturado_ate_s: video.capturado_ate_s }, depois: { continuar_de_s: de }, ip: data.ip });
+  return json({ ok: true, de });
 }
 
 // Situacao da tarefa mais recente de um video/corte, para o cartao dizer o que o PC esta fazendo.
@@ -447,7 +489,14 @@ export function lerLink(bruto) {
     if (clipe && /^clip_[A-Za-z0-9]+$/.test(clipe)) {
       return { plataforma: 'kick', id_externo: 'c' + clipe, url: 'https://kick.com/' + caminho[0] + '/clips/' + clipe };
     }
-    return { erro: 'No Kick, cole o link do vídeo gravado (kick.com/canal/videos/...) ou de um clipe.' };
+    // 18/11: link do canal (kick.com/<canal>) = a live que esta rolando agora. O id de verdade
+    // (uuid do video gravado da live) quem descobre e o PC; ate la fica um id provisorio.
+    const RESERVADOS = ['video', 'videos', 'categories', 'category', 'browse', 'following', 'search', 'dashboard', 'clips', 'settings', 'login', 'signup', 'about', 'privacy-policy', 'terms-of-service'];
+    if (caminho.length === 1 && /^[A-Za-z0-9_-]{2,40}$/.test(caminho[0]) && !RESERVADOS.includes(caminho[0].toLowerCase())) {
+      const canal = caminho[0].toLowerCase();
+      return { plataforma: 'kick', id_externo: `live:${canal}:${Date.now()}`, url: 'https://kick.com/' + canal, ao_vivo_canal: canal };
+    }
+    return { erro: 'No Kick, cole o link da live (kick.com/canal), do vídeo gravado (kick.com/canal/videos/...) ou de um clipe.' };
   }
 
   return { erro: 'Por enquanto só YouTube, Twitch e Kick.' };

@@ -85,14 +85,16 @@ export class ErroRoteiro extends Error {
 export async function passoRoteiro(env, tarefa) {
   if (!env.GEMINI_API_KEY) throw new ErroRoteiro('Falta a chave GEMINI_API_KEY no Cloudflare (a mesma da Jean).', { definitivo: true });
   const base = db(env);
-  const video = await base.first('SELECT id, usuario_id, titulo, canal, plataforma, duracao_s, analisar_de_s FROM cortex_videos WHERE id = ?', tarefa.video_id);
+  const video = await base.first('SELECT id, usuario_id, titulo, canal, plataforma, duracao_s, analisar_de_s, roteiro_de_s FROM cortex_videos WHERE id = ?', tarefa.video_id);
   if (!video) throw new ErroRoteiro('vídeo não existe mais', { definitivo: true });
   const ext = await base.first('SELECT MAX(fim_s) AS fim, COUNT(*) AS n FROM cortex_transcricao WHERE video_id = ?', video.id);
   if (!ext || !ext.n) throw new ErroRoteiro('o vídeo não tem transcrição; use "Tentar de novo" na etapa de texto', { definitivo: true });
 
   // 16/11: com "analisar de" marcado, a transcricao comeca no meio do video; os trechos da IA
   // partem dali (nada de passos lendo horas vazias). `dur` = onde o texto termina.
-  const base0 = Math.max(0, Number(video.analisar_de_s) || 0);
+  // 18/11: depois de "Puxar o resto", roteiro_de_s = onde comeca a parte nova (so ela e lida).
+  const base0 = Math.max(0, Number(video.roteiro_de_s ?? video.analisar_de_s) || 0);
+  video.base0 = base0;
   const dur = Math.max(Number(ext.fim) || 0, base0 + 60);
   const span = dur - base0;
   const n = Math.max(1, Math.round(span / TRECHO_S));
@@ -169,7 +171,7 @@ ${texto || '(trecho sem fala)'}`;
   const assuntos = (Array.isArray(dados.assuntos) ? dados.assuntos : []).map((a) => ({
     i: seg(a.inicio), f: seg(a.fim), a: String(a.assunto || '').slice(0, 160), forca: limitar(a.forca),
   })).filter((a) => a.i !== null && a.f !== null && a.f > a.i && a.a).slice(0, 40);
-  const cortes = limpar(dados.curtos, 'curto', Math.max(Number(video.analisar_de_s) || 0, ini - 30), fim + 90)
+  const cortes = limpar(dados.curtos, 'curto', Math.max(video.base0 || 0, ini - 30), fim + 90)
     .filter((c, k, todos) => !todos.slice(0, k).some((o) => sobrepoe(o, c)));
   // Nao repetir um curto que ja saiu no trecho anterior (folga de 30 s na divisa).
   const ja = await db(env).all("SELECT inicio_s, fim_s FROM cortex_cortes WHERE video_id = ? AND tipo = 'curto' AND origem = 'ia'", video.id);

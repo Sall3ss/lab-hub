@@ -40,7 +40,7 @@
       <div class="ingest-campo">
         <span class="plat" id="plat" data-p="">LINK</span>
         <input id="link" name="link" type="url" inputmode="url" autocomplete="off" spellcheck="false"
-               placeholder="Link do YouTube, Twitch ou Kick" />
+               placeholder="Link do YouTube, Twitch ou Kick (vídeo ou live da Kick)" />
       </div>
       <button class="btn btn-fino btn-trecho" type="button" id="btn-trecho" aria-expanded="false" aria-controls="trecho-imp"
               title="Começar a análise num ponto do vídeo (e, se quiser, parar antes do fim)">⏱ Começar em…</button>
@@ -71,7 +71,8 @@
     <section class="linha" id="linha" aria-label="Linha do tempo">
       <div class="linha-topo">
         <h2 class="sec">Linha do tempo</h2>
-        <span class="linha-nome" id="linha-nome">Nenhum vídeo selecionado</span>
+        <button class="linha-nome" type="button" id="linha-nome" disabled>Nenhum vídeo selecionado</button>
+        <button class="btn btn-fino btn-ok" type="button" id="btn-resto" hidden>⟳ Puxar o resto</button>
         <button class="btn btn-fino" type="button" id="btn-marcar" hidden>+ Marcar corte</button>
         <button class="btn btn-fino" type="button" id="btn-concluir" hidden>Concluir vídeo</button>
       </div>

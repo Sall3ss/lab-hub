@@ -6,7 +6,8 @@
 //   POST /oi                              { versao, ferramentas } -> config do agente
 //   POST /proxima                         pega a proxima tarefa da fila (ou { tarefa: null })
 //   POST /tarefas/:id/prorrogar           { progresso? } estende o prazo (download longo)
-//   POST /tarefas/:id/meta                { titulo, canal, duracao_s }
+//   POST /tarefas/:id/meta                { titulo, canal, duracao_s, capturado_ate_s?, ao_vivo? }
+//   POST /tarefas/:id/live                { uuid, fonte, titulo, ao_vivo } o PC achou o video da live da Kick (18/11)
 //   POST /tarefas/:id/texto?parte&total&fonte=legenda   { segmentos: [{ i, f, t }] }
 //   POST /tarefas/:id/audio?parte&total&inicio          corpo = audio cru (ogg/opus) -> Groq
 //   POST /tarefas/:id/roteiro            um passo do roteiro com a IA (etapa 3); resposta chega aos poucos
@@ -21,10 +22,11 @@
 import { db } from '../../lib/db.js';
 import { passoRoteiro } from './roteiro.js';
 
-export const AGENTE_VERSAO = '1.7.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+export const AGENTE_VERSAO = '1.8.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
 const PRAZO_MIN = { texto: 30, baixar_corte: 60, roteiro: 20 };
 const VERSAO_ROTEIRO = [1, 3, 0];       // agente mais velho nao sabe fazer 'roteiro': nao recebe
 const VERSAO_TRECHO = [1, 7, 0];        // 16/11: so a 1.7.0+ respeita "analisar de/ate"; a velha buscaria a live inteira
+const VERSAO_LIVE = [1, 8, 0];          // 18/11: live da Kick (link do canal, m3u8, "Puxar o resto") so a 1.8.0+
 const MAX_TENTATIVAS = 3;
 const VISTO_A_CADA_MS = 60 * 1000;      // grava "visto_em" no maximo 1x por minuto (poupa escrita no D1)
 const GROQ_MODELO = 'whisper-large-v3-turbo';
@@ -76,8 +78,12 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     if (versaoMin(ag.versao, VERSAO_ROTEIRO)) lista.push('roteiro');
     const tipos = '(' + lista.map((x) => `'${x}'`).join(', ') + ')';
     // Agente antigo nao pega texto de video com trecho marcado (atualiza sozinho em ate 10 min).
-    const semTrecho = versaoMin(ag.versao, VERSAO_TRECHO) ? '' :
+    let semTrecho = versaoMin(ag.versao, VERSAO_TRECHO) ? '' :
       " AND NOT (tipo = 'texto' AND EXISTS (SELECT 1 FROM cortex_videos v WHERE v.id = video_id AND (v.analisar_de_s IS NOT NULL OR v.analisar_ate_s IS NOT NULL)))";
+    // Agente < 1.8.0 nao sabe achar a live nem baixar pelo m3u8 (o link normal falha enquanto a live roda).
+    if (!versaoMin(ag.versao, VERSAO_LIVE)) {
+      semTrecho += " AND NOT (tipo IN ('texto', 'baixar_corte') AND EXISTS (SELECT 1 FROM cortex_videos v WHERE v.id = video_id AND (v.ao_vivo_canal IS NOT NULL OR v.fonte_m3u8 IS NOT NULL)))";
+    }
     // Duas tentativas: se outro PC pegar a mesma tarefa no mesmo instante, tenta a seguinte.
     for (let i = 0; i < 2; i++) {
       const t = await db(env).first(
@@ -90,7 +96,8 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
         ag.id, prazo, iso, t.id);
       if (!r.meta.changes) continue;
       const video = await db(env).first(
-        'SELECT id, url, plataforma, titulo, canal, duracao_s, analisar_de_s, analisar_ate_s, criado_em FROM cortex_videos WHERE id = ?', t.video_id);
+        `SELECT id, url, plataforma, titulo, canal, duracao_s, analisar_de_s, analisar_ate_s, ao_vivo_canal, fonte_m3u8,
+                capturado_ate_s, continuar_de_s, criado_em FROM cortex_videos WHERE id = ?`, t.video_id);
       let corte = null;
       if (t.corte_id) {
         corte = await db(env).first(
@@ -129,10 +136,39 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
   if (acao === 'meta') {
     const c = await request.json().catch(() => ({}));
     const dur = Math.round(Number(c.duracao_s)) || null;
+    // 18/11: ate onde esta captura vai (live: o minuto em que o PC pediu) e se a live segue no ar.
+    const cap = Math.round(Number(c.capturado_ate_s)) || null;
+    const vivo = c.ao_vivo === undefined ? null : (c.ao_vivo ? 1 : 0);
     await db(env).run(
       `UPDATE cortex_videos SET titulo = COALESCE(titulo, ?), canal = COALESCE(?, canal), duracao_s = COALESCE(?, duracao_s),
-              atualizado_em = ? WHERE id = ?`,
-      c.titulo ? String(c.titulo).slice(0, 200) : null, c.canal ? String(c.canal).slice(0, 120) : null, dur, iso, tarefa.video_id);
+              capturado_ate_s = COALESCE(?, capturado_ate_s), ao_vivo = COALESCE(?, ao_vivo), atualizado_em = ? WHERE id = ?`,
+      c.titulo ? String(c.titulo).slice(0, 200) : null, c.canal ? String(c.canal).slice(0, 120) : null, dur, cap, vivo, iso, tarefa.video_id);
+    return json({ ok: true });
+  }
+
+  if (acao === 'live') {
+    // O PC achou, na Kick, o video gravado da live do canal colado. Troca o id provisorio
+    // (live:<canal>:<hora>) pelo de verdade e guarda o m3u8, que e por onde se baixa.
+    const c = await request.json().catch(() => ({}));
+    const uuid = String(c.uuid || '').toLowerCase();
+    const fonte = String(c.fonte || '');
+    if (!/^[0-9a-f-]{36}$/.test(uuid) || !/^https:\/\/[^\s]+\.m3u8(\?\S*)?$/.test(fonte)) return json({ erro: 'resposta da Kick fora do esperado (uuid/m3u8)', definitivo: true }, 400);
+    const video = await db(env).first('SELECT id, id_externo, ao_vivo_canal FROM cortex_videos WHERE id = ?', tarefa.video_id);
+    if (!video || !video.ao_vivo_canal) return json({ erro: 'este vídeo não veio de um link de live', definitivo: true }, 400);
+    const idExt = 'v' + uuid;
+    if (video.id_externo !== idExt) {
+      const ja = await db(env).first(
+        "SELECT id, titulo FROM cortex_videos WHERE usuario_id = ? AND plataforma = 'kick' AND id_externo = ? AND id <> ?",
+        ag.usuario_id, idExt, video.id);
+      if (ja) {
+        return json({ erro: `Essa live já está no quadro ("${String(ja.titulo || 'sem título').slice(0, 60)}"). Abra ela e use "Puxar o resto"; este cartão pode ser excluído.`, definitivo: true }, 409);
+      }
+    }
+    await db(env).run(
+      `UPDATE cortex_videos SET id_externo = ?, url = ?, fonte_m3u8 = ?, titulo = COALESCE(titulo, ?), canal = COALESCE(canal, ?),
+              ao_vivo = ?, atualizado_em = ? WHERE id = ?`,
+      idExt, `https://kick.com/${video.ao_vivo_canal}/videos/${uuid}`, fonte.slice(0, 500),
+      c.titulo ? String(c.titulo).slice(0, 200) : null, video.ao_vivo_canal, c.ao_vivo ? 1 : 0, iso, video.id);
     return json({ ok: true });
   }
 
@@ -163,8 +199,12 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
 
     const blocos = juntar(segmentos);
     const lotes = [];
+    // 18/11: "Puxar o resto" (continuar_de_s): o texto antigo fica; sai so o que vier dali em diante.
+    const vid = await db(env).first('SELECT continuar_de_s FROM cortex_videos WHERE id = ?', tarefa.video_id);
+    const cont = vid ? vid.continuar_de_s : null;
     if (parte === 0) {
-      lotes.push(['DELETE FROM cortex_transcricao WHERE video_id = ?', [tarefa.video_id]]);
+      if (cont !== null) lotes.push(['DELETE FROM cortex_transcricao WHERE video_id = ? AND inicio_s >= ?', [tarefa.video_id, cont]]);
+      else lotes.push(['DELETE FROM cortex_transcricao WHERE video_id = ?', [tarefa.video_id]]);
       lotes.push(["UPDATE cortex_videos SET etapa = 'transcricao', atualizado_em = ? WHERE id = ? AND etapa = 'entrada'", [iso, tarefa.video_id]]);
     }
     // D1 aceita ate 100 parametros por consulta: 20 linhas x 4 por INSERT.
@@ -177,7 +217,9 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     }
     const ultima = parte >= total - 1;
     if (ultima) {
-      lotes.push(["UPDATE cortex_videos SET etapa = 'roteiro', fonte_texto = ?, erro = NULL, atualizado_em = ? WHERE id = ?", [fonte, iso, tarefa.video_id]]);
+      // A IA le a partir de roteiro_de_s: no "Puxar o resto", so a parte nova (cortes antigos ficam).
+      lotes.push(["UPDATE cortex_videos SET etapa = 'roteiro', fonte_texto = ?, roteiro_de_s = ?, continuar_de_s = NULL, erro = NULL, atualizado_em = ? WHERE id = ?",
+        [fonte, cont, iso, tarefa.video_id]]);
       // Texto pronto: o roteiro com a IA entra na fila (refeito do zero se o texto foi refeito).
       lotes.push(['DELETE FROM cortex_roteiro_partes WHERE video_id = ?', [tarefa.video_id]]);
       lotes.push(["DELETE FROM cortex_tarefas WHERE video_id = ? AND tipo = 'roteiro' AND estado <> 'pega'", [tarefa.video_id]]);
