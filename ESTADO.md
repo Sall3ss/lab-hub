@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 16/11/2026 (hub: fundo trocado por HUD estilo Stark).**
+**Atualizado em 19/11/2026 (Cortex: foto e cena de cada curto, agente 2.1.0).**
 
 ## Pronto
 
@@ -119,7 +119,9 @@
    (agente 1.6.0). 16/11: analisar só um trecho ("a partir de 3 h"), agente 1.7.0. 18/11: live da Kick
    ainda rolando (link do canal) e "Puxar o resto", agente 1.8.0. 18/11: puxar aos poucos,
    pasta por PC na tela PCs, ficha .txt no "sem baixar" (1.9.0). 19/11: layouts verticais 9:16
-   dos curtos (tela Layouts; o PC gera o 1080x1920 com FFmpeg), agente 2.0.0. Arquitetura,
+   dos curtos (tela Layouts; o PC gera o 1080x1920 com FFmpeg), agente 2.0.0. 19/11: foto de cada curto + cena
+   detectada pelo Gemini (full cam / jogo com webcam / só o jogo) escolhendo o layout, agente 2.1.0;
+   falta o dono criar o depósito R2 `lab-hub-arquivos` para a foto aparecer. Arquitetura,
    modelo de dados e próximos passos em `projetos/cortex/PROJETO.md`.
 
 ## ClipStudio: arquivado em 15/10/2026

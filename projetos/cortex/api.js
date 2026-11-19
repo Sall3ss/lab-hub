@@ -19,6 +19,8 @@
 //   DELETE /cortes/:id
 //   POST   /videos/:id/tentar | /cortes/:id/tentar   devolve a tarefa que falhou para a fila
 //   POST   /cortes/:id/ficha       corte aprovado sem baixar: o PC grava (de novo) a ficha .txt (18/11)
+//   POST   /cortes/:id/foto        tirar de novo a foto do curto (cena + previa do vertical) (19/11)
+//   GET    /quadros/:corte_id      a foto do curto (JPEG do R2), para a gaveta
 //   GET    /layouts                layouts verticais (9:16) dos curtos; cria os 4 iniciais na 1a vez (19/11)
 //   POST   /layouts  PATCH/DELETE /layouts/:id    o editor de layout (tela "Layouts")
 //   GET    /agentes                lista os PCs conectados
@@ -34,6 +36,8 @@
 import { db } from '../../lib/db.js';
 import { auditar } from '../../lib/audit.js';
 import { hashChave, AGENTE_VERSAO } from './maquina.js';
+import { pedirFotos, apagarFotos } from './cena.js';
+import { arquivos, temDeposito } from '../../lib/arquivos.js';
 
 export { maquina } from './maquina.js';
 
@@ -67,7 +71,7 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
           ORDER BY v.atualizado_em DESC LIMIT 300`, u.id),
       db(env).all(
         `SELECT c.id, c.video_id, c.tipo, c.origem, c.inicio_s, c.fim_s, c.titulo, c.gancho, c.nota, c.estado,
-                c.erro, c.qualidade, c.baixar_fora, c.layout_id, v.layout_id AS video_layout_id, c.atualizado_em, v.titulo AS video_titulo, v.plataforma,
+                c.erro, c.qualidade, c.baixar_fora, c.cena, c.cena_conf, c.cena_auto, c.quadro_em, c.layout_id, v.layout_id AS video_layout_id, c.atualizado_em, v.titulo AS video_titulo, v.plataforma,
                 ${TAREFA_SQL('t.corte_id = c.id')}
            FROM cortex_cortes c JOIN cortex_videos v ON v.id = c.video_id
           WHERE c.usuario_id = ? AND c.estado <> 'descartado' AND v.arquivado = 0
@@ -123,6 +127,27 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
     return json({ ok: true, id: videoId, ...link }, 201);
   }
 
+  // 19/11: foto do curto (guardada no R2 pelo /maquina/.../quadro). Só o dono vê.
+  if (rota === 'quadros' && id && metodo === 'GET') {
+    const c = await db(env).first('SELECT quadro_chave FROM cortex_cortes WHERE id = ? AND usuario_id = ?', Number(id), u.id);
+    if (!c || !c.quadro_chave || !temDeposito(env)) return json({ erro: 'sem foto' }, 404);
+    const obj = await arquivos(env).ler(c.quadro_chave);
+    if (!obj) return json({ erro: 'sem foto' }, 404);
+    return new Response(obj.body, { headers: { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=86400' } });
+  }
+
+  if (rota === 'cortes' && id && partes[2] === 'foto' && metodo === 'POST') {
+    const c = await db(env).first('SELECT id, video_id, tipo, estado FROM cortex_cortes WHERE id = ? AND usuario_id = ?', Number(id), u.id);
+    if (!c) return json({ erro: 'corte não encontrado' }, 404);
+    if (c.tipo !== 'curto' || c.estado !== 'triagem') return json({ erro: 'A foto é só para corte curto na Triagem (é lá que se escolhe o layout).' }, 400);
+    await db(env).batch([
+      ['UPDATE cortex_cortes SET quadro_em = NULL WHERE id = ?', [c.id]],
+      pedirFotos(u.id, c.video_id, agora),
+    ]);
+    await auditar(env, { quem: u.email, acao: 'foto-de-novo', entidade: 'cortex_cortes', entidade_id: c.id, ip: data.ip });
+    return json({ ok: true });
+  }
+
   if (rota === 'layouts') return await rotasLayouts({ request, env, data, u, id, metodo, json, agora });
 
   if (rota === 'agentes') return await rotasAgentes({ request, env, data, u, id, metodo, json, agora });
@@ -175,15 +200,21 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
         const fila = await db(env).first(
           "SELECT COUNT(*) AS n FROM cortex_cortes WHERE video_id = ? AND estado = 'download'", video.id);
         if (fila.n) return json({ erro: `Tem ${fila.n} corte(s) na fila do PC. Espere baixar ou cancele antes de concluir.` }, 409);
+        // 19/11: concluido nao precisa mais das fotos (reabrindo, "Tirar foto de novo" refaz).
+        await apagarFotos(env, 'video_id = ?', [video.id]);
+        await db(env).run('UPDATE cortex_cortes SET quadro_chave = NULL, quadro_em = NULL WHERE video_id = ?', video.id);
       }
       await db(env).run('UPDATE cortex_videos SET titulo = ?, arquivado = ?, layout_id = ?, atualizado_em = ? WHERE id = ?',
         titulo, arquivado, layoutId, agora, video.id);
+      // Reaberto: as fotos tinham saido ao concluir; o PC tira de novo as dos curtos na Triagem.
+      if (!arquivado && video.arquivado) await db(env).batch([pedirFotos(u.id, video.id, agora)]);
       await auditar(env, { quem: u.email, acao: 'editar', entidade: 'cortex_videos', entidade_id: video.id,
         antes: { titulo: video.titulo, arquivado: video.arquivado, layout_id: video.layout_id }, depois: { titulo, arquivado, layout_id: layoutId }, ip: data.ip });
       return json({ ok: true });
     }
 
     if (metodo === 'DELETE') {
+      await apagarFotos(env, 'video_id = ?', [video.id]);
       await db(env).batch([
         ['DELETE FROM cortex_tarefas WHERE video_id = ?', [video.id]],
         ['DELETE FROM cortex_transcricao WHERE video_id = ?', [video.id]],
@@ -215,6 +246,7 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
        VALUES (?, ?, ?, 'manual', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'triagem', ?, ?)`,
       video.id, u.id, c.tipo, c.inicio_s, c.fim_s, c.titulo, c.descricao, JSON.stringify(c.tags), c.gancho,
       c.gancho_inicio_s, c.gancho_fim_s, layoutId, agora, agora);
+    if (c.tipo === 'curto') await db(env).batch([pedirFotos(u.id, video.id, agora)]);   // 19/11: foto + cena
     await auditar(env, { quem: u.email, acao: 'criar', entidade: 'cortex_cortes', entidade_id: r.meta.last_row_id, depois: c, ip: data.ip });
     return json({ ok: true, id: r.meta.last_row_id }, 201);
   }
@@ -250,7 +282,12 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
         if (layoutId !== null && layoutId !== 0 && !(await layoutDoDono(env, u.id, layoutId))) return json({ erro: 'layout não encontrado' }, 404);
       }
       if (novo.tipo !== 'curto') layoutId = null;           // longo nao tem vertical
-      if (layoutId !== corte.layout_id) extras.push(['UPDATE cortex_cortes SET layout_id = ? WHERE id = ?', [layoutId, corte.id]]);
+      // 19/11: escolha a mao vence a cena detectada (cena_auto = 0: a proxima foto nao troca mais).
+      if (layoutId !== corte.layout_id) extras.push(['UPDATE cortex_cortes SET layout_id = ?, cena_auto = 0 WHERE id = ?', [layoutId, corte.id]]);
+      // Curto na Triagem com tempo novo: a foto antiga pode ser de outra cena; o PC tira outra.
+      if (novo.tipo === 'curto' && corte.estado === 'triagem' && (novo.inicio_s !== corte.inicio_s || novo.fim_s !== corte.fim_s)) {
+        extras.push(['UPDATE cortex_cortes SET quadro_em = NULL WHERE id = ?', [corte.id]], pedirFotos(u.id, corte.video_id, agora));
+      }
       if (corpo.estado !== undefined && corpo.estado !== corte.estado) {
         if (!(TRANSICOES[corte.estado] || []).includes(corpo.estado)) {
           return json({ erro: `não dá para passar de "${corte.estado}" para "${corpo.estado}"` }, 400);
@@ -307,6 +344,7 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
     }
 
     if (metodo === 'DELETE') {
+      await apagarFotos(env, 'id = ?', [corte.id]);
       await db(env).batch([
         ['DELETE FROM cortex_tarefas WHERE corte_id = ?', [corte.id]],
         ['DELETE FROM cortex_cortes WHERE id = ?', [corte.id]],
@@ -384,6 +422,7 @@ async function mudarTrecho({ request, env, data, u, id, json, agora }) {
     return json({ erro: 'confirmar', confirmar: txt, refaz: so }, 409);
   }
 
+  await apagarFotos(env, "video_id = ? AND origem = 'ia' AND estado IN ('triagem', 'descartado')", [video.id]);
   const lotes = [
     ['UPDATE cortex_videos SET analisar_de_s = ?, analisar_ate_s = ?, etapa = ?, roteiro_de_s = NULL, erro = NULL, atualizado_em = ? WHERE id = ?',
       [tr.de, tr.ate, so === 'roteiro' ? 'roteiro' : 'entrada', agora, video.id]],
@@ -462,11 +501,15 @@ function layoutsIniciais() {
     comCam('Webcam topo-esquerda', 0.01, 0.02),
     comCam('Webcam baixo-esquerda', 0.01, +(0.98 - camH).toFixed(4)),
     { nome: 'Sem webcam', tipo: 'sem_webcam', cam_x: null, cam_y: null, cam_w: null, cam_h: null, cam_altura: null,
-      jogo_x: +((1 - jogoSem) / 2).toFixed(4), jogo_y: 0, jogo_w: +jogoSem.toFixed(4), jogo_h: 1, proporcao: +P.toFixed(4) },
-  ];
+      jogo_x: +((1 - jogoSem) / 2).toFixed(4), jogo_y: 0, jogo_w: +jogoSem.toFixed(4), jogo_h: 1, proporcao: +P.toFixed(4), cena: 'jogo' },
+    // 19/11: só a câmera (a live em "full cam"): recorte 9:16 no centro; a IA escolhe sozinha
+    { nome: 'Full cam', tipo: 'sem_webcam', cam_x: null, cam_y: null, cam_w: null, cam_h: null, cam_altura: null,
+      jogo_x: +((1 - jogoSem) / 2).toFixed(4), jogo_y: 0, jogo_w: +jogoSem.toFixed(4), jogo_h: 1, proporcao: +P.toFixed(4), cena: 'fullcam' },
+  ].map((L) => ({ cena: null, ...L }));
 }
 
-const CAMPOS_LAYOUT = ['nome', 'tipo', 'cam_x', 'cam_y', 'cam_w', 'cam_h', 'cam_altura', 'jogo_x', 'jogo_y', 'jogo_w', 'jogo_h', 'proporcao'];
+// cena (19/11): 'fullcam' | 'jogo' | null = o layout que entra sozinho quando a IA vê essa cena na foto do corte
+const CAMPOS_LAYOUT = ['nome', 'tipo', 'cam_x', 'cam_y', 'cam_w', 'cam_h', 'cam_altura', 'jogo_x', 'jogo_y', 'jogo_w', 'jogo_h', 'proporcao', 'cena'];
 function lerLayout(c) {
   const nome = String(c.nome || '').trim().slice(0, 60);
   if (!nome) return { erro: 'Dê um nome ao layout.' };
@@ -475,7 +518,8 @@ function lerLayout(c) {
   const n = (v) => (v === null || v === undefined || v === '' ? NaN : Number(v));
   const caixa = (x, y, w, h) => [x, y, w, h].every(Number.isFinite) && x >= -0.001 && y >= -0.001 && w > 0.02 && h > 0.02
     && x + w <= 1.001 && y + h <= 1.001;
-  const L = { nome, tipo, proporcao: Number(c.proporcao) > 0.5 && Number(c.proporcao) < 4 ? +Number(c.proporcao).toFixed(4) : 1.7778 };
+  const L = { nome, tipo, proporcao: Number(c.proporcao) > 0.5 && Number(c.proporcao) < 4 ? +Number(c.proporcao).toFixed(4) : 1.7778,
+    cena: c.cena === 'fullcam' || c.cena === 'jogo' ? c.cena : null };
   for (const k of ['jogo_x', 'jogo_y', 'jogo_w', 'jogo_h']) L[k] = +n(c[k]).toFixed(4);
   if (!caixa(L.jogo_x, L.jogo_y, L.jogo_w, L.jogo_h)) return { erro: 'O recorte da gameplay saiu do quadro.' };
   if (tipo === 'webcam') {
@@ -504,6 +548,7 @@ async function rotasLayouts({ request, env, data, u, id, metodo, json, agora }) 
   if (!id && metodo === 'POST') {
     const L = lerLayout(await request.json().catch(() => ({})));
     if (L.erro) return json({ erro: L.erro }, 400);
+    if (L.cena) await db(env).run('UPDATE cortex_layouts SET cena = NULL WHERE usuario_id = ? AND cena = ?', u.id, L.cena);   // uma cena, um layout
     const r = await db(env).run(
       `INSERT INTO cortex_layouts (usuario_id, ${CAMPOS_LAYOUT.join(', ')}, criado_em, atualizado_em)
        VALUES (?, ${CAMPOS_LAYOUT.map(() => '?').join(', ')}, ?, ?)`, u.id, ...CAMPOS_LAYOUT.map((k) => L[k]), agora, agora);
@@ -515,6 +560,7 @@ async function rotasLayouts({ request, env, data, u, id, metodo, json, agora }) 
   if (metodo === 'PATCH') {
     const L = lerLayout({ ...atual, ...(await request.json().catch(() => ({}))) });
     if (L.erro) return json({ erro: L.erro }, 400);
+    if (L.cena) await db(env).run('UPDATE cortex_layouts SET cena = NULL WHERE usuario_id = ? AND cena = ? AND id <> ?', u.id, L.cena, atual.id);
     await db(env).run(`UPDATE cortex_layouts SET ${CAMPOS_LAYOUT.map((k) => k + ' = ?').join(', ')}, atualizado_em = ? WHERE id = ?`,
       ...CAMPOS_LAYOUT.map((k) => L[k]), agora, atual.id);
     await auditar(env, { quem: u.email, acao: 'editar', entidade: 'cortex_layouts', entidade_id: atual.id, antes: atual, depois: L, ip: data.ip });

@@ -10,6 +10,9 @@
 //     de edição, com um .txt ao lado (título, gancho, descrição, tags) para publicar.
 //     2.0.0: curto com layout escolhido no painel ganha também o VERTICAL 1080x1920 pronto
 //     (FFmpeg: recorte da webcam e da gameplay + escala + empilhamento) na pasta "Shorts".
+//   - "quadros" (2.1.0): UMA foto pequena do meio de cada curto da Triagem, tirada direto do
+//     endereço do vídeo (não baixa o vídeo). O painel guarda e a IA diz a cena (full cam, jogo
+//     com webcam, só o jogo), para o corte já chegar com o layout vertical certo.
 //
 // Uso (o painel mostra os comandos prontos na tela "PCs"):
 //   node cortex-agente.mjs conectar <endereço do painel> <chave>   grava config.json
@@ -33,7 +36,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '2.0.0';
+const VERSAO = '2.1.0';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -597,6 +600,59 @@ async function tarefaRoteiro(cfg, t) {
   }
 }
 
+// ---------------------------------------------------------------- tarefa "quadros" (2.1.0)
+// Uma foto (640 px, JPEG ~30 KB) do meio de cada curto. O yt-dlp só descobre o endereço do
+// vídeo (até 720p: a foto é pequena); o ffmpeg pula direto para o segundo e tira 1 quadro.
+async function tarefaQuadros(cfg, t, pasta) {
+  const v = t.video, lista = t.cortes || [];
+  if (!lista.length) { log('Fotos: nenhum curto esperando foto.'); return; }
+  log(`Fotos dos curtos (${lista.length}): ${v.titulo || v.url}`);
+  const alvo = v.fonte_m3u8 || v.url;
+  const endereco = ultimaLinha(await rodar('yt-dlp', ['-g', '--no-playlist', '--no-warnings',
+    '-f', 'bv*[height<=720]/b[height<=720]/bv*/b', alvo])).trim();
+  if (!/^https?:\/\//.test(endereco)) throw new Error('o yt-dlp não devolveu o endereço do vídeo para a foto');
+  let feitas = 0, falhas = 0;
+  for (let i = 0; i < lista.length && !parando; i++) {
+    const c = lista[i], arq = join(pasta, `quadro-${c.id}.jpg`);
+    try {
+      // -ss ANTES do -i: pula direto (só lê o pedaço daquele segundo). Prazo de 2 min por foto.
+      const relogio = setTimeout(() => matarFilhos(), 120000);
+      try {
+        await rodar('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-ss', String(c.s), '-i', endereco,
+          '-frames:v', '1', '-vf', 'scale=640:-2', '-q:v', '5', arq]);
+      } finally { clearTimeout(relogio); }
+      if (!existsSync(arq)) throw new Error('o ffmpeg não gerou a foto');
+      const bytes = readFileSync(arq);
+      for (let tent = 0; ; tent++) {
+        try {
+          const r = await painel(cfg, `/tarefas/${t.id}/quadro?corte=${c.id}&s=${c.s}&progresso=${encodeURIComponent(`fotos ${i + 1}/${lista.length}`)}`,
+            { bruto: bytes, tipo: 'image/jpeg', prazo: 120000 });
+          feitas++;
+          log(`Foto ${i + 1}/${lista.length} (${tc(c.s)}): ${r.cena ? NOMES_CENA[r.cena] + ' ' + r.confianca + '%' : 'sem cena' + (r.aviso ? ' (' + r.aviso + ')' : '')}${r.layout_trocado ? ' · layout trocado' : ''}`);
+          break;
+        } catch (e) {
+          if (e instanceof ErroPainel && e.dados.perdida) throw e;
+          if (e instanceof ErroPainel && e.dados.pular) { log(`Foto ${i + 1}: ${e.message} (pulando)`); break; }
+          if (e instanceof ErroPainel && e.dados.esperar_s && tent < 6) {
+            const sEsp = Math.min(Math.max(Number(e.dados.esperar_s) || 60, 20), 900);
+            log(`Limite do Gemini grátis: tento a foto ${i + 1} de novo em ${sEsp} s.`);
+            await painel(cfg, `/tarefas/${t.id}/prorrogar`, { corpo: { progresso: `fotos ${i + 1}/${lista.length} · limite do Gemini, retoma em ${minutos(sEsp)}` } }).catch(() => {});
+            await dorme(sEsp * 1000); continue;
+          }
+          throw e;
+        }
+      }
+    } catch (e) {
+      if (parando || (e instanceof ErroPainel && e.dados.perdida)) throw e;
+      falhas++;
+      log(`Foto ${i + 1}/${lista.length} falhou: ${e.message}`);
+    }
+  }
+  if (!feitas && falhas) throw new Error(`nenhuma foto saiu (${falhas} falhas); vai tentar de novo`);
+  log(`Fotos prontas: ${feitas} de ${lista.length}${falhas ? ` (${falhas} falharam)` : ''}.`);
+}
+const NOMES_CENA = { fullcam: 'Full cam', jogo_webcam: 'Jogo com webcam', jogo: 'Só o jogo' };
+
 // ---------------------------------------------------------------- laço principal
 async function executar(cfg, t) {
   const pasta = join(tmpdir(), 'cortex-' + t.id + '-' + Date.now());
@@ -608,7 +664,10 @@ async function executar(cfg, t) {
   try {
     if (t.tipo === 'texto') await tarefaTexto(cfg, t, pasta);
     else if (t.tipo === 'roteiro') await tarefaRoteiro(cfg, t);
-    else {
+    else if (t.tipo === 'quadros') {
+      await tarefaQuadros(cfg, t, pasta);
+      await painel(cfg, `/tarefas/${t.id}/concluir`, { corpo: {} });
+    } else {
       const { caminho, qualidade, soFicha } = await tarefaCorte(cfg, t);
       await painel(cfg, `/tarefas/${t.id}/concluir`, { corpo: { arquivo_local: caminho, qualidade, so_ficha: !!soFicha } });
     }

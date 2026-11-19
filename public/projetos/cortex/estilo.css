@@ -314,7 +314,8 @@ button, input, textarea { font: inherit; color: inherit; }
 .lay-item.on { border-color: var(--cor); box-shadow: 0 0 0 2px var(--cor-fraca); }
 .lay-vazio { color: var(--suave); font-size: .85rem; }
 .lay-editor { padding: 1rem; overflow-y: auto; display: flex; flex-direction: column; gap: .8rem; }
-.lay-campos { display: grid; grid-template-columns: minmax(10rem, 1fr) auto minmax(10rem, 1fr); gap: .8rem; align-items: end; }
+.lay-campos { display: grid; grid-template-columns: minmax(10rem, 1fr) auto minmax(12rem, 1fr) minmax(10rem, 1fr); gap: .8rem; align-items: end; }
+.lay-campos select { width: 100%; background: #08090b; color: var(--texto); border: 1px solid var(--fio); border-radius: 6px; padding: .55rem .6rem; font: inherit; }
 .lay-campos input[type=range] { width: 100%; accent-color: var(--cor); }
 .lay-area { display: grid; grid-template-columns: 1fr 15rem; gap: 1rem; align-items: start; }
 .lay-dica { margin: 0 0 .5rem; font-size: .8rem; color: var(--metal); }
@@ -345,3 +346,21 @@ button, input, textarea { font: inherit; color: inherit; }
   #lay-previa { max-width: 11rem; }
 }
 #lay-tipo button.on { border-color: var(--cor); color: var(--cor); background: var(--cor-fraca); }
+
+/* 19/11: foto do corte com o recorte do layout por cima + prévia do vertical. Autoria: Claude (Opus 5.5). */
+.cena { display: grid; gap: .4rem; margin-bottom: .45rem; }
+.cena-fotos { display: flex; gap: .5rem; align-items: flex-start; }
+.cena-quadro { position: relative; flex: 1; min-width: 0; border-radius: 6px; overflow: hidden; border: 1px solid var(--fio); background: #000; line-height: 0; }
+.cena-quadro img { width: 100%; display: block; }
+.cena-caixa { position: absolute; border: 2px solid; box-sizing: border-box; pointer-events: none; }
+.cena-caixa span { position: absolute; left: 2px; top: 2px; font: 600 .56rem/1.3 var(--mono); padding: 0 .25rem; color: #000; }
+.cena-caixa.jogo { border-color: var(--curto); }
+.cena-caixa.jogo span { background: var(--curto); }
+.cena-caixa.cam { border-color: var(--longo); }
+.cena-caixa.cam span { background: var(--longo); }
+.cena-previa { flex: none; width: 4.6rem; height: auto; aspect-ratio: 9 / 16; border-radius: 6px; border: 1px solid var(--fio); background: #000; }
+.cena-linha { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; font: .72rem var(--mono); color: var(--suave); }
+.cena-linha > span { flex: 1 1 12rem; }
+.cena-linha b { color: var(--texto); }
+.cena-msg { margin: 0; font-size: .78rem; color: var(--suave); }
+.c-auto { color: var(--suave); font-weight: 400; }

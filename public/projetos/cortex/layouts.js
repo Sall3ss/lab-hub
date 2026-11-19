@@ -108,7 +108,8 @@
   function desenharLista() {
     $('lay-itens').innerHTML = lista.map(function (l) {
       return '<button type="button" class="lay-item' + (atual && atual.id === l.id ? ' on' : '') + '" data-lay="' + l.id + '">' +
-        '<b>' + dep.esc(l.nome) + '</b><span>' + (l.tipo === 'webcam' ? 'webcam ' + Math.round(l.cam_altura * 100) + '% + gameplay' : 'só gameplay') + '</span></button>';
+        '<b>' + dep.esc(l.nome) + '</b><span>' + (l.tipo === 'webcam' ? 'webcam ' + Math.round(l.cam_altura * 100) + '% + gameplay' : 'só gameplay') +
+          (l.cena ? ' · auto: ' + (l.cena === 'fullcam' ? 'full cam' : 'só o jogo') : '') + '</span></button>';
     }).join('') || '<p class="lay-vazio">Nenhum layout ainda.</p>';
     $('lay-itens').querySelectorAll('[data-lay]').forEach(function (b) {
       b.onclick = function () {
@@ -132,6 +133,10 @@
       '<div class="lay-campos">' +
       '<label class="campo"><span>Nome</span><input id="lay-nome" maxlength="60" value="' + dep.esc(L.nome) + '"></label>' +
       '<div class="campo"><span>Tipo</span><div class="escolha" id="lay-tipo"><button type="button" data-v="webcam">Com webcam</button><button type="button" data-v="sem_webcam">Sem webcam</button></div></div>' +
+      // 19/11: a IA olha a foto de cada curto; o layout marcado aqui entra sozinho quando a cena bate.
+      '<label class="campo"><span>Usar sozinho quando a foto do corte mostrar</span><select id="lay-cena">' +
+        '<option value="">Nada (só quando eu escolher)</option><option value="fullcam">Full cam (só a câmera)</option>' +
+        '<option value="jogo">Só o jogo (sem webcam)</option></select></label>' +
       '<label class="campo" id="lay-alt-campo"><span>Webcam ocupa <b id="lay-alt-txt"></b> da altura</span><input type="range" id="lay-alt" min="20" max="60" step="1"></label>' +
       '</div>' +
       '<div class="lay-area">' +
@@ -148,6 +153,8 @@
       (L.id ? '<button class="btn btn-perigo btn-fino" type="button" id="lay-excluir" style="margin-left:auto">Excluir</button>' : '') + '</div>';
 
     $('lay-nome').oninput = function () { L.nome = this.value; sujo = true; };
+    $('lay-cena').value = L.cena || '';
+    $('lay-cena').onchange = function () { L.cena = this.value || null; sujo = true; };
     $('lay-tipo').onclick = function (ev) {
       var b = ev.target.closest('button'); if (!b || b.dataset.v === L.tipo) return;
       L.tipo = b.dataset.v; if (L.tipo === 'webcam' && !L.cam_altura) L.cam_altura = 0.35;
@@ -230,7 +237,7 @@
   }
 
   function corpoDe(L) {
-    var c = { nome: (L.nome || '').trim(), tipo: L.tipo, proporcao: L.proporcao, jogo_x: L.jogo_x, jogo_y: L.jogo_y, jogo_w: L.jogo_w, jogo_h: L.jogo_h };
+    var c = { nome: (L.nome || '').trim(), tipo: L.tipo, proporcao: L.proporcao, jogo_x: L.jogo_x, jogo_y: L.jogo_y, jogo_w: L.jogo_w, jogo_h: L.jogo_h, cena: L.cena || null };
     if (L.tipo === 'webcam') { c.cam_x = L.cam_x; c.cam_y = L.cam_y; c.cam_w = L.cam_w; c.cam_h = L.cam_h; c.cam_altura = L.cam_altura; }
     return c;
   }

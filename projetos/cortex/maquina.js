@@ -11,6 +11,7 @@
 //   POST /tarefas/:id/texto?parte&total&fonte=legenda   { segmentos: [{ i, f, t }] }
 //   POST /tarefas/:id/audio?parte&total&inicio          corpo = audio cru (ogg/opus) -> Groq
 //   POST /tarefas/:id/roteiro            um passo do roteiro com a IA (etapa 3); resposta chega aos poucos
+//   POST /tarefas/:id/quadro?corte&s     corpo = foto JPEG crua do meio do curto -> R2 + cena pelo Gemini (19/11)
 //   POST /tarefas/:id/concluir            { arquivo_local? }
 //   POST /tarefas/:id/falhar              { erro, definitivo? }
 //   POST /tarefas/:id/devolver            o dono desligou o PC no meio: volta para a fila sem contar falha
@@ -21,13 +22,15 @@
 
 import { db } from '../../lib/db.js';
 import { passoRoteiro } from './roteiro.js';
+import { receberFoto, MAX_FOTO } from './cena.js';
 
-export const AGENTE_VERSAO = '2.0.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
-const PRAZO_MIN = { texto: 30, baixar_corte: 60, roteiro: 20 };
+export const AGENTE_VERSAO = '2.1.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+const PRAZO_MIN = { texto: 30, baixar_corte: 60, roteiro: 20, quadros: 15 };
 const VERSAO_ROTEIRO = [1, 3, 0];       // agente mais velho nao sabe fazer 'roteiro': nao recebe
 const VERSAO_TRECHO = [1, 7, 0];        // 16/11: so a 1.7.0+ respeita "analisar de/ate"; a velha buscaria a live inteira
 const VERSAO_VERTICAL = [2, 0, 0];      // 19/11: curto com layout vertical 9:16 (o agente velho entregaria so o horizontal)
 const VERSAO_FICHA = [1, 9, 0];         // 18/11: ficha .txt de corte "sem baixar"; o agente velho BAIXARIA o video
+const VERSAO_QUADROS = [2, 1, 0];      // 19/11: foto de cada curto (cena + previa do vertical)
 const VERSAO_LIVE = [1, 8, 2];          // 18/11: live da Kick (link do canal, m3u8, "Puxar o resto" com "ate") so a 1.8.2+
 const MAX_TENTATIVAS = 3;
 const VISTO_A_CADA_MS = 60 * 1000;      // grava "visto_em" no maximo 1x por minuto (poupa escrita no D1)
@@ -80,6 +83,7 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     const lista = ['texto'];
     if (ag.baixa_cortes) lista.push('baixar_corte');
     if (versaoMin(ag.versao, VERSAO_ROTEIRO)) lista.push('roteiro');
+    if (versaoMin(ag.versao, VERSAO_QUADROS)) lista.push('quadros');
     const tipos = '(' + lista.map((x) => `'${x}'`).join(', ') + ')';
     // Agente antigo nao pega texto de video com trecho marcado (atualiza sozinho em ate 10 min).
     let semTrecho = versaoMin(ag.versao, VERSAO_TRECHO) ? '' :
@@ -130,11 +134,18 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
           corte.numero = (n ? n.n : 0) + 1;
         }
       }
-      if (t.tipo !== 'baixar_corte') {
+      if (t.tipo !== 'baixar_corte' && t.tipo !== 'quadros') {
         await db(env).run("UPDATE cortex_videos SET erro = NULL, atualizado_em = ? WHERE id = ?", iso, t.video_id);
       }
+      // 19/11: fotos - os curtos da Triagem ainda sem foto, com o segundo do meio de cada um.
+      let cortes;
+      if (t.tipo === 'quadros') {
+        cortes = (await db(env).all(
+          `SELECT id, inicio_s, fim_s FROM cortex_cortes WHERE video_id = ? AND tipo = 'curto' AND estado = 'triagem' AND quadro_em IS NULL
+            ORDER BY inicio_s LIMIT 80`, t.video_id)).map((c) => ({ id: c.id, s: Math.round((c.inicio_s + c.fim_s) / 2) }));
+      }
       // pasta: a escolhida no painel vale ja neste download (sem esperar o proximo "oi").
-      return json({ tarefa: { id: t.id, tipo: t.tipo, tentativa: t.tentativas + 1, prazo, video, corte, pasta: ag.pasta || null } });
+      return json({ tarefa: { id: t.id, tipo: t.tipo, tentativa: t.tentativas + 1, prazo, video, corte, cortes, pasta: ag.pasta || null } });
     }
     return json({ tarefa: null });
   }
@@ -277,6 +288,29 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     return new Response(readable, { headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
   }
 
+  if (acao === 'quadro') {
+    if (tarefa.tipo !== 'quadros') return json({ erro: 'tarefa não é de fotos' }, 400);
+    const url = new URL(request.url);
+    const corte = await db(env).first(
+      "SELECT id, tipo, estado, layout_id, cena_auto, inicio_s, fim_s FROM cortex_cortes WHERE id = ? AND video_id = ? AND usuario_id = ?",
+      Number(url.searchParams.get('corte')), tarefa.video_id, ag.usuario_id);
+    if (!corte) return json({ erro: 'corte não existe mais (apagado no painel)', pular: true }, 404);
+    const bytes = new Uint8Array(await request.arrayBuffer());
+    if (bytes.length < 500 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return json({ erro: 'a foto não é um JPEG', pular: true }, 400);
+    if (bytes.length > MAX_FOTO) return json({ erro: 'foto maior que 1,5 MB', pular: true }, 413);
+    const s = Math.round(Number(url.searchParams.get('s')));
+    try {
+      const r = await receberFoto(env, { usuarioId: ag.usuario_id, corte, segundo: Number.isFinite(s) ? s : null, bytes, agora: iso });
+      const prog = url.searchParams.get('progresso');
+      await db(env).run('UPDATE cortex_tarefas SET pega_ate = ?, progresso = ?, atualizada_em = ? WHERE id = ?',
+        new Date(agora.getTime() + PRAZO_MIN.quadros * 60000).toISOString(), prog ? String(prog).slice(0, 80) : tarefa.progresso, iso, tarefa.id);
+      return json({ ok: true, ...r });
+    } catch (e) {
+      if (e.esperar_s) return json({ erro: e.message, esperar_s: e.esperar_s }, 429);
+      return json({ erro: String(e.message || e).slice(0, 200) }, 502);
+    }
+  }
+
   if (acao === 'concluir') {
     const corpo = await request.json().catch(() => ({}));
     const lotes = [["UPDATE cortex_tarefas SET estado = 'feita', progresso = NULL, erro = NULL, atualizada_em = ? WHERE id = ?", [iso, tarefa.id]]];
@@ -311,7 +345,8 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
       [fim ? 'falhou' : 'pendente', tentativas, erro, iso, tarefa.id]]];
     if (fim) {
       const msg = `${ag.nome}: ${erro}`;
-      if (tarefa.tipo !== 'baixar_corte') lotes.push(['UPDATE cortex_videos SET erro = ?, atualizado_em = ? WHERE id = ?', [msg, iso, tarefa.video_id]]);
+      // Foto que falhou nao e erro do video (o corte segue sem foto; "Tirar foto de novo" na gaveta).
+      if (tarefa.tipo !== 'baixar_corte' && tarefa.tipo !== 'quadros') lotes.push(['UPDATE cortex_videos SET erro = ?, atualizado_em = ? WHERE id = ?', [msg, iso, tarefa.video_id]]);
       else if (tarefa.corte_id) lotes.push(['UPDATE cortex_cortes SET erro = ?, atualizado_em = ? WHERE id = ?', [msg, iso, tarefa.corte_id]]);
     }
     await db(env).batch(lotes);

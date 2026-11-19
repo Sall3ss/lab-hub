@@ -258,7 +258,8 @@
       '<div class="c-sub">' + esc(c.video_titulo || NOME_PLAT[c.plataforma]) + '</div>' +
       (c.baixar_fora && c.estado === 'edicao' ? '<div class="c-fora">↗ BAIXAR FORA · ' + tc(c.inicio_s) + ' → ' + tc(c.fim_s) + '</div>' : '') +
       (layoutEfetivo(c, c.video_layout_id) && nomeLayout(layoutEfetivo(c, c.video_layout_id)) && !c.baixar_fora
-        ? '<div class="c-layout" title="Vertical 9:16 gerado no PC com este layout">▦ ' + esc(nomeLayout(layoutEfetivo(c, c.video_layout_id))) + '</div>' : '') +
+        ? '<div class="c-layout" title="Vertical 9:16 gerado no PC com este layout">▦ ' + esc(nomeLayout(layoutEfetivo(c, c.video_layout_id))) +
+          (c.cena_auto && c.estado === 'triagem' ? ' <span class="c-auto" title="Escolhido pela cena que a IA viu na foto">· auto</span>' : '') + '</div>' : '') +
       (c.qualidade ? '<div class="c-qual" title="' + esc(c.qualidade) + '">▣ ' + esc(c.qualidade.split(' · ').slice(0, 2).join(' · ')) + '</div>' : '') + st +
       (acoes ? '<div class="c-acoes">' + acoes + '</div>' : '') + '</div>';
   }
@@ -392,6 +393,45 @@
       estado.layouts.map(function (l) { return '<option value="' + l.id + '"' + (valor === l.id ? ' selected' : '') + '>' + esc(l.nome) + '</option>'; }).join('') +
       '<option value="0"' + (valor === 0 ? ' selected' : '') + '>Nenhum (só o horizontal)</option>';
   }
+  // ---------- foto e cena do corte curto (19/11) ----------
+  var CENAS = { fullcam: 'Full cam', jogo_webcam: 'Jogo com webcam', jogo: 'Só o jogo' };
+  function blocoCena(c) {
+    if (c.tipo !== 'curto') return '<div id="cena-vazia"></div>';
+    var podeRefazer = c.estado === 'triagem';
+    var txt = c.cena ? 'IA: <b>' + CENAS[c.cena] + '</b>' + (c.cena_conf != null ? ' (' + c.cena_conf + '%)' : '') +
+        (c.cena_auto && c.estado === 'triagem' ? ' · layout escolhido pela cena' : '') : '';
+    var quando = c.quadro_s != null ? 'Foto em ' + tc(c.quadro_s) : '';
+    var corpo;
+    if (c.quadro_chave) {
+      corpo = '<div class="cena-fotos" id="cena-img"><div class="cena-quadro"><img id="cena-foto" alt="Foto do corte" src="' + API + '/quadros/' + c.id + '?v=' + encodeURIComponent(c.quadro_em || '') + '">' +
+        '<div class="cena-caixa jogo" id="cena-jogo"><span>GAMEPLAY</span></div><div class="cena-caixa cam" id="cena-cam"><span>WEBCAM</span></div></div>' +
+        '<canvas class="cena-previa" id="cena-previa" width="135" height="240" title="Como fica o vertical"></canvas></div>';
+    } else if (c.quadro_em) {
+      corpo = '<p class="cena-msg">Sem foto guardada (o depósito de arquivos ainda não está ligado), mas a IA já viu a cena.</p>';
+    } else {
+      corpo = '<p class="cena-msg">' + (c.estado === 'triagem' ? 'A foto ainda não chegou: o PC tira depois do roteiro (programa 2.1.0 ou mais novo).' : 'Sem foto (a foto é tirada enquanto o corte está na Triagem).') + '</p>';
+    }
+    return '<div class="cena">' + corpo +
+      ((txt || quando || podeRefazer) ? '<div class="cena-linha"><span>' + [quando, txt].filter(Boolean).join(' · ') + '</span>' +
+        (podeRefazer ? '<button type="button" class="mini" id="c-foto">📷 Tirar foto de novo</button>' : '') + '</div>' : '') + '</div>';
+  }
+  function desenharCena(box, L) {
+    var img = box.querySelector('#cena-foto'); if (!img) return;
+    var j = box.querySelector('#cena-jogo'), cam = box.querySelector('#cena-cam'), cv = box.querySelector('#cena-previa');
+    function pos(el, x, y, w, h) { el.hidden = false; el.style.left = x * 100 + '%'; el.style.top = y * 100 + '%'; el.style.width = w * 100 + '%'; el.style.height = h * 100 + '%'; }
+    j.hidden = cam.hidden = true;
+    var g = cv.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, 135, 240);
+    if (!L) { g.fillStyle = 'rgba(255,255,255,.6)'; g.font = '600 11px system-ui, sans-serif'; g.textAlign = 'center'; g.fillText('sem vertical', 67, 124); return; }
+    pos(j, L.jogo_x, L.jogo_y, L.jogo_w, L.jogo_h);
+    j.querySelector('span').textContent = L.tipo === 'webcam' ? 'GAMEPLAY' : 'RECORTE';
+    if (L.tipo === 'webcam') pos(cam, L.cam_x, L.cam_y, L.cam_w, L.cam_h);
+    if (!img.naturalWidth) return;
+    var W = img.naturalWidth, H = img.naturalHeight;
+    var hc = L.tipo === 'webcam' ? Math.round((1920 * (L.cam_altura || 0.35)) / 2) * 2 / 8 : 0;   // 1080x1920 / 8
+    if (L.tipo === 'webcam') g.drawImage(img, L.cam_x * W, L.cam_y * H, L.cam_w * W, L.cam_h * H, 0, 0, 135, hc);
+    g.drawImage(img, L.jogo_x * W, L.jogo_y * H, L.jogo_w * W, L.jogo_h * H, 0, hc, 135, 240 - hc);
+  }
+
   if (window.CortexLayouts) {
     CortexLayouts.iniciar({ api: api, aviso: aviso, confirmar: confirmar, esc: esc,
       aoMudar: function (l) { estado.layouts = l; desenharQuadro(); } });
@@ -708,7 +748,7 @@
       '<form class="bloco" id="f-corte" novalidate>' +
       '<div class="campo"><span>Tipo</span><div class="escolha" id="esc-tipo"><button type="button" data-v="curto">Curto · 45-90 s</button><button type="button" data-v="longo">Longo · 30-40 min</button></div></div>' +
       // 19/11: layout do vertical 9:16 (só curto). O PC gera o 1080x1920 pronto na pasta Shorts.
-      '<div class="campo" id="campo-layout"><span>Vertical 9:16 (layout)</span><div class="linha-layout"><select name="layout">' +
+      '<div class="campo" id="campo-layout"><span>Vertical 9:16 (layout)</span>' + (novo ? '' : blocoCena(c)) + '<div class="linha-layout"><select name="layout">' +
         opcoesLayout(c.layout_id == null ? null : c.layout_id, 'Padrão do vídeo' + (v.layout_id ? ' (' + (nomeLayout(v.layout_id) || 'layout') + ')' : ' (nenhum)')) +
         '</select><button type="button" class="mini" id="c-layouts">Editar layouts</button></div>' +
         '<small class="dica-layout">' + (c.estado === 'edicao' && !fora ? 'Mudou o layout? Use <b>Baixar de novo</b> para gerar o vertical com ele.' : 'O PC baixa o corte e já gera o vídeo vertical pronto, na pasta Shorts.') + '</small></div>' +
@@ -743,6 +783,22 @@
           box.querySelector('#campo-layout').hidden = tipo !== 'curto';     // vertical só para curto
         }
         box.querySelector('#c-layouts').onclick = function () { CortexLayouts.abrir(Number(f.layout.value) || null); };
+        // 19/11: foto do corte com o recorte do layout escolhido por cima + prévia do vertical
+        function layoutDoSelect() {
+          var val = f.layout.value, id = val === '' ? v.layout_id : Number(val);
+          return id ? estado.layouts.find(function (l) { return l.id === id; }) || null : null;
+        }
+        f.layout.addEventListener('change', function () { desenharCena(box, layoutDoSelect()); });
+        var foto = box.querySelector('#cena-foto');
+        if (foto) { if (foto.complete) desenharCena(box, layoutDoSelect()); else foto.onload = function () { desenharCena(box, layoutDoSelect()); }; foto.onerror = function () { box.querySelector('#cena-img').hidden = true; }; }
+        var bfo = box.querySelector('#c-foto');
+        if (bfo) bfo.onclick = function () {
+          bfo.disabled = true;
+          api('/cortes/' + c.id + '/foto', { metodo: 'POST' }).then(function () {
+            aviso(estado.pc.online ? 'O PC já vai tirar a foto de novo.' : 'Na fila: quando o PC ligar, ele tira a foto.');
+            bfo.textContent = 'Foto na fila do PC';
+          }).catch(function (e) { bfo.disabled = false; aviso(e.message, true); });
+        };
         function layoutEscolhido() { return tipo !== 'curto' ? undefined : f.layout.value === '' ? null : Number(f.layout.value); }
         marcarTipo();
         box.querySelector('#esc-tipo').onclick = function (ev) { var b = ev.target.closest('button'); if (b) { tipo = b.dataset.v; marcarTipo(); mostrarDur(); } };

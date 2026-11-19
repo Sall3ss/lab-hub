@@ -348,7 +348,37 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   2.0.0 com FFmpeg real (vertical 1080x1920 com áudio na pasta Shorts), editor com print e arrasto,
   gaveta do corte, PC e celular.
 
+- 19/11: **foto e cena de cada curto** (pedido do dono: a live troca de tela - full cam, jogo
+  com webcam - e o layout certo muda junto; ver o corte antes de aprovar). Opção A escolhida pelo
+  dono. Migration 0016, agente 2.1.0, `projetos/cortex/cena.js`.
+  - Tarefa nova `quadros` (uma por vídeo): depois do roteiro (e ao reabrir um vídeo, criar curto
+    à mão, mudar o tempo de um curto na Triagem ou "📷 Tirar foto de novo"), o PC tira UMA foto
+    640 px do meio de cada curto da Triagem sem foto: `yt-dlp -g` (até 720p) dá o endereço e o
+    `ffmpeg -ss` pula direto para o segundo. Não baixa o vídeo.
+  - Nuvem (`/maquina/tarefas/:id/quadro`): guarda no R2 (`ARQUIVOS`, chave `<dono>/<corte>-cortex-quadro.jpg`)
+    e pergunta ao Gemini grátis a cena: `fullcam`, `jogo_webcam` ou `jogo` (+ certeza). Limite do
+    plano grátis: o PC espera e manda a mesma foto de novo.
+  - Layout pela cena: na tela Layouts, "Usar sozinho quando a foto do corte mostrar" (Full cam /
+    Só o jogo; um layout por cena). Nasce o layout **Full cam** (recorte 9:16 no centro), marcado
+    para `fullcam`; "Sem webcam" fica para `jogo`. `jogo_webcam` = padrão do vídeo. Só troca
+    curto na Triagem e só se o dono não escolheu à mão (`cena_auto`); escolher à mão vence.
+  - Tela: gaveta do curto mostra a foto com as caixas do layout escolhido por cima (mudam junto
+    com o seletor), a prévia do vertical (o mesmo recorte do FFmpeg), "IA: Full cam (90%)" e
+    "📷 Tirar foto de novo". Cartão: "▦ Full cam · auto".
+  - Fotos saem do R2 ao excluir o corte/vídeo, ao refazer o trecho (cortes da IA) e ao concluir
+    o vídeo (reabrir tira de novo). `GET /quadros/:id` só com login.
+  - **Sem o depósito R2 ligado, a cena é detectada igual** (só não há foto para ver). A ligação
+    `[[r2_buckets]]` no `wrangler.toml` entra DEPOIS que o dono criar o depósito `lab-hub-arquivos`
+    na Cloudflare dele (ligar antes derruba o deploy).
+  Testado local (R2 simulado, Google de mentira, vídeo de 80 min servido por HTTP, ffmpeg real):
+  20 fotos e cenas, layout trocado só onde devia, escolha manual preservada, limite do Gemini com
+  espera, fila sem duplicar, limpeza do R2 (excluir, concluir), reabrir refaz, foto exige login,
+  tela no PC e no celular sem erro. Falta: depósito criado e teste com live de verdade.
+
 ## Decisões
+
+- 19/11: foto do corte **no R2, não no D1** (regra da base: arquivo mora no depósito, o banco
+  guarda a chave). Pequena (640 px, ~15-30 KB) e apagada quando o vídeo é concluído.
 
 - 19/11: no vertical a **webcam fica em cima** e a gameplay embaixo (padrão dos shorts de live);
   o "topo-direita/baixo-esquerda" do layout é onde a webcam está na LIVE, não no vertical.

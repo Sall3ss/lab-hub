@@ -15,6 +15,7 @@
 // Autoria: Claude (Opus 5.5), Lab Hub, 14/11/2026.
 
 import { db } from '../../lib/db.js';
+import { pedirFotos } from './cena.js';
 
 const URL_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
 const TRECHO_S = 45 * 60;          // tamanho alvo do trecho lido por chamada
@@ -129,6 +130,8 @@ export async function passoRoteiro(env, tarefa) {
     await base.batch([
       ["UPDATE cortex_videos SET etapa = 'cortado', erro = NULL, atualizado_em = ? WHERE id = ? AND etapa = 'roteiro'", [agora, video.id]],
       ["UPDATE cortex_tarefas SET estado = 'feita', progresso = NULL, erro = NULL, atualizada_em = ? WHERE id = ?", [agora, tarefa.id]],
+      // 19/11: roteiro pronto -> o PC tira a foto de cada curto (cena + previa do vertical)
+      pedirFotos(video.usuario_id, video.id, agora),
     ]);
     return { concluido: true, cortes: cortesAte, progresso: `roteiro pronto: ${cortesAte} cortes` };
   }
@@ -268,7 +271,9 @@ export function seg(t) {
 // CORTEX_GEMINI_URL so existe para o teste local com um Google de mentira.
 // Configuracoes da mais completa para a mais simples: se o Google recusar uma (400), cai
 // para a seguinte em vez de falhar.
-async function perguntar(env, pedido, esquema) {
+// 19/11: `opc.sistema` troca o papel da IA e `opc.imagem` ({ tipo, base64 }) manda uma foto
+// junto (cena.js: qual e a cena do corte). Sem `opc`, e o roteiro de sempre.
+export async function perguntar(env, pedido, esquema, opc = {}) {
   const modelos = [env.CORTEX_MODELO || 'gemini-3.8-flash', env.CORTEX_MODELO_RESERVA || 'gemini-3.5-flash-lite'];
   const configs = [
     { responseMimeType: 'application/json', responseSchema: esquema, maxOutputTokens: 8192, thinkingConfig: { thinkingLevel: 'LOW' } },
@@ -281,8 +286,10 @@ async function perguntar(env, pedido, esquema) {
   for (const modelo of modelos) {
     for (let c = 0; c < configs.length; c++) {
       const corpo = {
-        systemInstruction: { parts: [{ text: SISTEMA }] },
-        contents: [{ role: 'user', parts: [{ text: pedido + (c === 2 ? '\n\nResponda SÓ com o JSON, no formato: ' + JSON.stringify(esquema) : '') }] }],
+        systemInstruction: { parts: [{ text: opc.sistema || SISTEMA }] },
+        contents: [{ role: 'user', parts: [
+          ...(opc.imagem ? [{ inlineData: { mimeType: opc.imagem.tipo, data: opc.imagem.base64 } }] : []),
+          { text: pedido + (c === 2 ? '\n\nResponda SÓ com o JSON, no formato: ' + JSON.stringify(esquema) : '') }] }],
         generationConfig: configs[c],
       };
       let r;
