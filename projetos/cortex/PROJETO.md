@@ -485,3 +485,9 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   baixa a logo uma vez (`logo-<data>.png` ao lado do programa, troca quando o dono troca) e faz
   `overlay` por cima do vertical e por baixo da legenda. Excluir a logo apaga o objeto do R2 e
   desliga em todos os layouts. A ficha .txt ganhou `HASHTAGS:` (as tags com #, sem espaço).
+- 19/11 (agente 2.6.1, pedido do dono: "tudo estruturado para só copiar e colar"): a ficha .txt
+  abre com **PARA PUBLICAR** (TÍTULO / DESCRIÇÃO pronta / TAGS do Studio) e depois **PARA EDITAR**
+  (qualidade, opções de título, gancho, thumbnail, origem). Descrição pronta = texto da IA sem a
+  linha de hashtags do fim + uma linha só de hashtags (as da descrição primeiro, depois as das
+  tags), sem repetir, no máximo 8 (mais de 15 o YouTube ignora todas). Tags do Studio limitadas a
+  500 caracteres. A gaveta do corte tem os mesmos 3 botões "Copiar" (usam o que está nos campos).

@@ -710,7 +710,7 @@
     function linha(rot, val, mono) {
       return '<div class="fora-item"><span>' + rot + '</span><code' + (mono ? '' : ' class="txt"') + '>' + esc(val) + '</code><button type="button" class="mini" data-copia="' + esc(val) + '">Copiar</button></div>';
     }
-    var textos = c.titulo + '\n\n' + (c.descricao || '') + ((c.tags || []).length ? '\n\n' + c.tags.map(function (t) { return '#' + t.replace(/\s+/g, ''); }).join(' ') : '');
+    var textos = c.titulo + '\n\n' + descricaoPronta(c.descricao, c.tags || []) + ((c.tags || []).length ? '\n\nTAGS: ' + tagsStudio(c.tags) : '');
     return '<div class="caixa-fora"><b>BAIXAR FORA DO CORTEX</b>' +
       linha('Início', tc(c.inicio_s), true) + linha('Fim', tc(c.fim_s), true) +
       linha('Duração', duracao(c.fim_s - c.inicio_s), true) +
@@ -830,6 +830,31 @@
     return { salvarSePreciso: function () { return sujo && frases ? salvar() : Promise.resolve(true); } };
   }
 
+  // ---------- pronto para colar (19/11): o mesmo que a ficha .txt do PC monta ----------
+  function hashtagsDe(tags) {
+    var vistas = {};
+    return (tags || []).map(function (t) { return '#' + String(t).replace(/^#/, '').replace(/[^\p{L}\p{N}_]+/gu, ''); })
+      .filter(function (h) { var k = h.toLowerCase(); if (h.length < 2 || vistas[k]) return false; vistas[k] = 1; return true; });
+  }
+  // descrição sem a linha de hashtags do fim + uma linha só de hashtags (as da descrição primeiro), sem repetir, até 8
+  function descricaoPronta(desc, tags) {
+    var linhas = String(desc || '').replace(/\r/g, '').split('\n'), daDesc = [];
+    while (linhas.length && (!linhas[linhas.length - 1].trim() || /^(#[\p{L}\p{N}_]+[\s,]*)+$/u.test(linhas[linhas.length - 1].trim()))) {
+      var l = linhas.pop().trim(); if (l) daDesc = l.split(/[\s,]+/).filter(Boolean).concat(daDesc);
+    }
+    var vistas = {}, hs = [];
+    daDesc.concat(hashtagsDe(tags)).forEach(function (h) { var k = h.toLowerCase(); if (h.length > 1 && !vistas[k] && hs.length < 8) { vistas[k] = 1; hs.push(h); } });
+    var corpo = linhas.join('\n').trim();
+    return (corpo + (hs.length ? (corpo ? '\n\n' : '') + hs.join(' ') : '')).trim();
+  }
+  // campo Tags do YouTube Studio: vírgulas, até 500 caracteres (tag com espaço conta +2)
+  function tagsStudio(tags) {
+    var out = [], n = 0;
+    (tags || []).some(function (t) { var c = t.length + (/\s/.test(t) ? 2 : 0) + (out.length ? 1 : 0); if (n + c > 500) return true; out.push(t); n += c; return false; });
+    return out.join(', ');
+  }
+  function listaTags(txt) { return String(txt || '').split(',').map(function (t) { return t.replace(/^#/, '').trim(); }).filter(Boolean); }
+
   // ---------- textos de publicação no padrão do canal (19/11) ----------
   function lerLista(x) { if (Array.isArray(x)) return x; try { var a = JSON.parse(x || 'null'); return Array.isArray(a) ? a : null; } catch (e) { return null; } }
   function blocoTextosIA(c) {
@@ -895,6 +920,11 @@
       '<p class="dica-gancho" id="dica-gancho"></p>' +
       '<label class="campo"><span>Descrição</span><textarea name="descricao" maxlength="5000">' + esc(c.descricao || '') + '</textarea></label>' +
       '<label class="campo"><span>Tags (separadas por vírgula)</span><input name="tags" value="' + esc((c.tags || []).join(', ')) + '" placeholder="gta 6, trailer, rockstar"></label>' +
+      // 19/11: pronto para colar no YouTube (o que está nos campos agora, mesmo antes de salvar)
+      (novo ? '' : '<div class="pub"><b class="pub-tit">PARA PUBLICAR · COPIE E COLE</b>' +
+        '<div class="pub-linha"><span>Título</span><button type="button" class="mini" data-pub="titulo">Copiar</button></div>' +
+        '<div class="pub-linha"><span>Descrição <small>com as hashtags (até 8, sem repetir)</small></span><button type="button" class="mini" data-pub="descricao">Copiar</button></div>' +
+        '<div class="pub-linha"><span>Tags <small>campo "Tags" do YouTube Studio</small></span><button type="button" class="mini" data-pub="tags">Copiar</button></div></div>') +
       '<p class="msg-form" id="msg-corte"></p>' +
       '<div class="acoes"><button class="btn btn-cor" type="submit">Salvar</button><button class="btn btn-fino" type="button" id="c-cancelar">Cancelar</button>' +
       (novo ? '' : '<button class="btn btn-perigo" type="button" id="c-excluir" style="margin-left:auto">Excluir</button>') + '</div></form>',
@@ -944,6 +974,12 @@
           };
         }
         ligarTextos();
+        box.querySelectorAll('[data-pub]').forEach(function (b) {
+          b.onclick = function () {
+            var tg = listaTags(f.tags.value), q = b.dataset.pub;
+            copiar(b, q === 'titulo' ? f.titulo.value.trim() : q === 'tags' ? tagsStudio(tg) : descricaoPronta(f.descricao.value, tg));
+          };
+        });
         // 19/11: foto do corte com o recorte do layout escolhido por cima + prévia do vertical
         function layoutDoSelect() {
           var val = f.layout.value, id = val === '' ? v.layout_id : Number(val);

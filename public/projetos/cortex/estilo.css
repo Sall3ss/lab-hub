@@ -398,3 +398,9 @@ button, input, textarea { font: inherit; color: inherit; }
 .lay-logo-faixa input { width: 100%; min-width: 0; margin: 0; box-sizing: border-box; }
 .lay-logo-acoes { display: flex; flex-wrap: wrap; gap: .4rem; }
 .lay-logo-acoes label.mini, .lay-logo-env { cursor: pointer; }
+
+/* 19/11: pronto para colar no YouTube */
+.pub { display: grid; gap: .35rem; padding: .7rem .8rem; border: 1px solid var(--fio-2); border-radius: var(--raio); background: var(--painel-2); }
+.pub-tit { font: 700 .64rem/1.3 var(--mono); letter-spacing: .08em; color: var(--ok); }
+.pub-linha { display: flex; align-items: center; justify-content: space-between; gap: .6rem; font-size: .84rem; }
+.pub-linha small { display: block; font-size: .7rem; color: var(--suave); }

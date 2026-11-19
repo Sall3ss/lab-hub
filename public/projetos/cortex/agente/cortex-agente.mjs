@@ -22,6 +22,8 @@
 //     transcrito de novo sozinho; a ficha .txt leva as 3 opções de título e a thumbnail.
 //     2.6.0: a LOGO do canal (enviada no painel) entra no vertical, no lugar marcado no layout;
 //     a ficha .txt ganha a linha HASHTAGS (as tags com #).
+//     2.6.1: a ficha abre com o bloco PARA PUBLICAR: título, descrição pronta (hashtags juntas,
+//     sem repetir, no máximo 8) e as tags do YouTube Studio, cada um pronto para copiar e colar.
 //   - "quadros" (2.1.0): UMA foto pequena do meio de cada curto da Triagem, tirada direto do
 //     endereço do vídeo (não baixa o vídeo). O painel guarda e a IA diz a cena (full cam, jogo
 //     com webcam, só o jogo), para o corte já chegar com o layout vertical certo.
@@ -48,7 +50,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '2.6.0';
+const VERSAO = '2.6.1';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -583,27 +585,61 @@ function hashtags(tags) {
     .filter((h) => h.length > 1 && !vistas.has(h.toLowerCase()) && vistas.add(h.toLowerCase())).join(' ');
 }
 
-// Ficha .txt ao lado do corte: tudo o que precisa na hora de editar e publicar.
+// 2.6.1 (pedido do dono): descrição PRONTA para colar - o texto da IA sem a linha de hashtags do
+// fim, e uma linha só de hashtags juntando as da descrição (primeiro) e as das tags, sem repetir e
+// no máximo 8 (mais de 15 o YouTube ignora todas; ele mostra as 3 primeiras acima do título).
+function descricaoPronta(desc, tags) {
+  const linhas = String(desc || '').replace(/\r/g, '').split('\n');
+  const daDesc = [];
+  while (linhas.length && (!linhas[linhas.length - 1].trim() || /^(#[\p{L}\p{N}_]+[\s,]*)+$/u.test(linhas[linhas.length - 1].trim()))) {
+    const l = linhas.pop().trim(); if (l) daDesc.unshift(...l.split(/[\s,]+/).filter(Boolean));
+  }
+  const vistas = new Set(), hs = [];
+  for (const h of [...daDesc, ...hashtags(tags || []).split(' ')]) {
+    const k = h.toLowerCase();
+    if (h.length > 1 && !vistas.has(k) && hs.length < 8) { vistas.add(k); hs.push(h); }
+  }
+  const corpo = linhas.join('\n').trim();
+  return (corpo + (hs.length ? (corpo ? '\n\n' : '') + hs.join(' ') : '')).trim();
+}
+// Tags para o campo do YouTube Studio: separadas por vírgula, até 500 caracteres (limite dele;
+// tag com espaço conta 2 a mais pelas aspas).
+function tagsStudio(tags) {
+  const out = []; let n = 0;
+  for (const t of tags || []) {
+    const custo = t.length + (/\s/.test(t) ? 2 : 0) + (out.length ? 1 : 0);
+    if (n + custo > 500) break;
+    out.push(t); n += custo;
+  }
+  return out.join(', ');
+}
+
+// Ficha .txt ao lado do corte. 2.6.1: em cima, o bloco PARA PUBLICAR (cada parte pronta para
+// copiar e colar); embaixo, o que serve na edição.
 function escreverFicha(arquivo, v, c, qualidade) {
-  writeFileSync(arquivo, [
+  const barra = (t) => `==================== ${t} ====================`;
+  const gancho = c.gancho_inicio_s != null && c.gancho_fim_s != null
+    ? `GANCHO NO CORTE: ${tc(c.gancho_inicio_s - c.inicio_s)} → ${tc(c.gancho_fim_s - c.inicio_s)}` +
+      ` (no vídeo original: ${tc(c.gancho_inicio_s)} → ${tc(c.gancho_fim_s)})` : '';
+  const partes = [
     // 1.9.0: corte aprovado sem baixar - os tempos para baixar por fora vêm primeiro
-    c.baixar_fora ? `BAIXAR POR FORA: ${tc(c.inicio_s)} → ${tc(c.fim_s)} (${tempoExato(c.fim_s - c.inicio_s)})\nLINK: ${v.url}\n` : '',
-    qualidade ? `QUALIDADE: ${qualidade}\n` : '',
-    `TÍTULO: ${c.titulo}`,
-    // 2.5.0: as 3 opções da IA (padrão do canal), o porquê e a direção da thumbnail
+    c.baixar_fora ? `BAIXAR POR FORA: ${tc(c.inicio_s)} → ${tc(c.fim_s)} (${tempoExato(c.fim_s - c.inicio_s)})\nLINK: ${v.url}\n` : null,
+    barra('PARA PUBLICAR (copie e cole)'), '',
+    'TÍTULO', c.titulo, '',
+    'DESCRIÇÃO', descricaoPronta(c.descricao, c.tags) || '(sem descrição)', '',
+    'TAGS (campo "Tags" do YouTube Studio)', tagsStudio(c.tags) || '(sem tags)', '',
+    barra('PARA EDITAR'), '',
+    qualidade ? `QUALIDADE: ${qualidade}` : null,
+    // 2.5.0: as 3 opções da IA (padrão do canal) e o porquê
     Array.isArray(c.titulos) && c.titulos.length ? 'OPÇÕES DE TÍTULO:\n' + c.titulos.map((x, k) => `  ${k + 1}. ${x}`).join('\n') +
-      (c.titulo_porque ? `\n  Por quê: ${c.titulo_porque}` : '') : '',
-    '', c.gancho ? `GANCHO: ${c.gancho}\n` : '',
+      (c.titulo_porque ? `\n  Por quê: ${c.titulo_porque}` : '') : null,
+    c.gancho ? `GANCHO: ${c.gancho}` : null,
     // 1.6.0: onde o gancho está DENTRO deste arquivo (o tempo que o Movavi mostra) e no original.
-    c.gancho_inicio_s != null && c.gancho_fim_s != null
-      ? `GANCHO NO CORTE: ${tc(c.gancho_inicio_s - c.inicio_s)} → ${tc(c.gancho_fim_s - c.inicio_s)}` +
-        ` (no vídeo original: ${tc(c.gancho_inicio_s)} → ${tc(c.gancho_fim_s)})\n` : '',
-    'DESCRIÇÃO:', c.descricao || '', '', `TAGS: ${(c.tags || []).join(', ')}`,
-    // 2.6.0: as mesmas tags como hashtags (para descrição/legenda das redes)
-    (c.tags || []).length ? `HASHTAGS: ${hashtags(c.tags)}` : '', '',
-    c.thumb ? `THUMBNAIL: ${c.thumb}\n` : '',
+    gancho || null,
+    c.thumb ? `THUMBNAIL: ${c.thumb}` : null,
     `ORIGEM: ${v.url} (${tc(c.inicio_s)} → ${tc(c.fim_s)})`,
-  ].join('\n'), 'utf8');
+  ];
+  writeFileSync(arquivo, partes.filter((x) => x !== null).join('\n').replace(/\n{3,}/g, '\n\n') + '\n', 'utf8');
 }
 
 async function tarefaCorte(cfg, t, pasta) {
