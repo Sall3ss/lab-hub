@@ -603,6 +603,9 @@
           '<option value=""' + (!v.layout_id ? ' selected' : '') + '>Nenhum (só o horizontal)</option></select>' +
           '<button type="button" class="mini" id="v-layouts">Editar layouts</button></div>' +
           '<small class="dica-layout">Vale para todos os curtos deste vídeo (dá para trocar em cada corte). O próximo vídeo do mesmo canal já vem com ele.</small></div>' +
+        // 19/11: contexto da live - a IA usa nos títulos/descrições e o Whisper acerta os nomes
+        '<label class="campo"><span>Contexto da live (quem participa, o que está rolando)</span><textarea name="contexto" maxlength="1500" rows="3" placeholder="Ex.: Coringa e Tainá Costa numa live IRL com amigos provando os drinks do casamento. Convidados: Fulano, Ciclano.">' + esc(v.contexto || '') + '</textarea>' +
+          '<small class="dica-layout">A IA usa nos títulos, descrições e tags, e a legenda passa a escrever esses nomes certo. Vale para os próximos textos e legendas (use "Refazer textos" no corte para aplicar já).</small></label>' +
         '<p class="msg-form" id="msg-video"></p><div class="acoes"><button class="btn btn-cor" type="submit">Salvar</button>' +
         '<button class="btn" type="button" id="v-marcar">+ Marcar corte</button></div></form>' +
         '<form class="bloco" id="f-trecho" novalidate><div class="dupla">' +
@@ -615,7 +618,7 @@
           box.querySelector('#f-video').onsubmit = function (ev) {
             ev.preventDefault();
             var titulo = this.titulo.value.trim(), lay = this.layout.value === '' ? null : Number(this.layout.value);
-            api('/videos/' + v.id, { metodo: 'PATCH', corpo: { titulo: titulo, layout_id: lay } }).then(function () { aviso('Salvo.'); fecharGaveta(); carregar(); })
+            api('/videos/' + v.id, { metodo: 'PATCH', corpo: { titulo: titulo, layout_id: lay, contexto: this.contexto.value } }).then(function () { aviso('Salvo.'); fecharGaveta(); carregar(); })
               .catch(function (e) { $('msg-video').textContent = e.message; });
           };
           box.querySelector('#v-marcar').onclick = function () { formCorte(null); };
@@ -762,8 +765,16 @@
       }
       el.innerHTML = '<p class="leg-msg">' + (j.editada ? '✓ Corrigida por você' : 'Texto do Whisper') + ' · corrija nomes e gírias; o tempo de cada frase continua o mesmo. No vídeo sai em MAIÚSCULAS.</p>' +
         '<div class="leg-lista">' + frases.map(function (g, k) {
-          return '<label class="leg-linha"><span class="leg-tc">' + seg(g[0].i) + '</span><input data-k="' + k + '" value="' + esc(textoDe(g)) + '" maxlength="200"></label>';
-        }).join('') + '</div>' +
+          // 19/11: buraco de 3,5 s ou mais sem texto (o Whisper pulou ou não há fala): dá para escrever ali
+          var ant = k ? frases[k - 1][frases[k - 1].length - 1].f : 0, buraco = g[0].i - ant >= 3.5 ? '<label class="leg-linha leg-buraco"><span class="leg-tc">' + seg(ant) + '</span>' +
+            '<input data-buraco="' + k + '" placeholder="⚠ ' + Math.round(g[0].i - ant) + ' s sem legenda: escreva o que é falado aqui (ou deixe vazio)" maxlength="200"></label>' : '';
+          return buraco + '<label class="leg-linha"><span class="leg-tc">' + seg(g[0].i) + '</span><input data-k="' + k + '" value="' + esc(textoDe(g)) + '" maxlength="200"></label>';
+        }).join('') + (function () {
+          // buraco no FIM do corte (depois da última frase)
+          var ult = frases[frases.length - 1], fimU = ult[ult.length - 1].f, durC = c.fim_s - c.inicio_s;
+          return durC - fimU >= 3.5 ? '<label class="leg-linha leg-buraco"><span class="leg-tc">' + seg(fimU) + '</span><input data-buraco="' + frases.length + '" placeholder="⚠ ' +
+            Math.round(durC - fimU) + ' s sem legenda no fim: escreva o que é falado aqui (ou deixe vazio)" maxlength="200"></label>' : '';
+        })() + '</div>' +
         '<p class="leg-msg erro" id="leg-erro" hidden></p>' +
         '<div class="leg-acoes"><button type="button" class="mini sim" id="leg-salvar" disabled>Salvar legenda</button>' +
         '<button type="button" class="mini" id="leg-refazer">Transcrever de novo</button></div>';
@@ -782,13 +793,24 @@
     function juntar() {
       var out = [];
       el.querySelectorAll('.leg-lista input').forEach(function (inp) {
-        var g = frases[Number(inp.dataset.k)], txt = inp.value.replace(/[{}\\]/g, '').replace(/\s+/g, ' ').trim();
+        var txt = inp.value.replace(/[{}\\]/g, '').replace(/\s+/g, ' ').trim();
+        if (inp.dataset.buraco !== undefined) {
+          // texto escrito num buraco: ocupa o espaço entre a frase anterior e a próxima
+          var kb = Number(inp.dataset.buraco), a0 = kb ? frases[kb - 1][frases[kb - 1].length - 1].f + 0.15 : 0,
+            b0 = kb < frases.length ? frases[kb][0].i - 0.15 : (c.fim_s - c.inicio_s) - 0.3;
+          if (txt) repartir(txt, a0, b0, out);
+          return;
+        }
+        var g = frases[Number(inp.dataset.k)];
         if (txt === textoDe(g)) { out.push.apply(out, g); return; }
         if (!txt) return;
-        var ps = txt.split(' '), ini = g[0].i, fim = g[g.length - 1].f, total = ps.reduce(function (n, x) { return n + x.length + 1; }, 0), t = ini;
-        ps.forEach(function (p) { var d = (fim - ini) * (p.length + 1) / total; out.push({ p: p.slice(0, 40), i: +t.toFixed(2), f: +(t + d).toFixed(2) }); t += d; });
+        repartir(txt, g[0].i, g[g.length - 1].f, out);
       });
       return out;
+    }
+    function repartir(txt, ini, fim, out) {
+      var ps = txt.split(' '), total = ps.reduce(function (n, x) { return n + x.length + 1; }, 0), t = ini;
+      ps.forEach(function (p) { var d = (fim - ini) * (p.length + 1) / total; out.push({ p: p.slice(0, 40), i: +t.toFixed(2), f: +(t + d).toFixed(2) }); t += d; });
     }
     function salvar() {
       var b = el.querySelector('#leg-salvar'), er = el.querySelector('#leg-erro'), palavras = juntar();
@@ -800,6 +822,19 @@
     }
     carregarLeg();
     return { salvarSePreciso: function () { return sujo && frases ? salvar() : Promise.resolve(true); } };
+  }
+
+  // ---------- textos de publicação no padrão do canal (19/11) ----------
+  function lerLista(x) { if (Array.isArray(x)) return x; try { var a = JSON.parse(x || 'null'); return Array.isArray(a) ? a : null; } catch (e) { return null; } }
+  function blocoTextosIA(c) {
+    var ts = lerLista(c.titulos) || [];
+    return (ts.length ? '<div class="tit-opcoes"><span class="tit-rot">Opções da IA (toque para usar)</span>' +
+        ts.map(function (t, k) { return '<button type="button" class="tit-op' + (t === c.titulo ? ' on' : '') + '" data-tit="' + k + '">' + (k + 1) + '. ' + esc(t) + '</button>'; }).join('') +
+        (c.titulo_porque ? '<p class="tit-porque"><b>Melhor:</b> ' + esc(c.titulo_porque) + '</p>' : '') + '</div>' : '') +
+      (c.duvida ? '<p class="tit-duvida">⚠ A IA ficou com dúvida: ' + esc(c.duvida) + ' Escreva no "Contexto da live" (gaveta do vídeo) e refaça os textos.</p>' : '') +
+      (c.thumb ? '<div class="tit-thumb"><b>THUMBNAIL</b>' + esc(c.thumb) + '</div>' : '') +
+      '<div class="tit-acoes"><button type="button" class="mini" id="c-textos">✨ Refazer textos com a IA</button>' +
+      '<small>Título (3 opções), descrição, tags e thumbnail no padrão do canal. Só grava ao apertar Salvar.</small></div>';
   }
 
   // Formulário de corte: novo (c = null) ou existente.
@@ -845,6 +880,8 @@
       (c.estado === 'edicao' ? '<p style="margin:-.2rem 0 0;font-size:.78rem;color:var(--suave)">' + (fora ? 'Sem arquivo no PC: ajuste o tempo e aperte <b>Salvar</b>.' : 'Mudou o tempo? Use <b>Baixar de novo</b>: o PC baixa com o tempo novo.') + '</p>' : '') +
       '<p style="margin:-.2rem 0 0;font:.74rem var(--mono);color:var(--suave)" id="dur-corte"></p>' +
       '<label class="campo"><span>Título</span><input name="titulo" maxlength="150" value="' + esc(c.titulo) + '" placeholder="Título de alto clique"></label>' +
+      // 19/11: padrão do canal - 3 opções de título da IA, o porquê, thumbnail e "Refazer textos"
+      (novo ? '' : '<div id="textos-ia">' + blocoTextosIA(c) + '</div>') +
       '<label class="campo"><span>Gancho (primeiros segundos)</span><input name="gancho" maxlength="300" value="' + esc(c.gancho || '') + '" placeholder="A frase que segura quem está rolando o feed"></label>' +
       // 15/11: onde o gancho é dito (tempo do vídeo original); abaixo, o tempo dentro do arquivo do corte.
       '<div class="dupla"><label class="campo"><span>Gancho começa</span><input class="tc-campo" name="g_inicio" inputmode="numeric" placeholder="00:00:00" value="' + (c.gancho_inicio_s == null ? '' : tc(c.gancho_inicio_s)) + '">' + ajustes('g_inicio', true, 1) + '</label>' +
@@ -876,6 +913,31 @@
           CortexLayouts.abrir(lid, ft && ft.naturalWidth ? { foto: ft.src, rotulo: 'foto do corte (' + tc(c.quadro_s) + ')' } : null);
         };
         var leg = box.querySelector('#campo-legenda') ? editorLegenda(box.querySelector('#leg-corpo'), c) : null;
+        // 19/11: textos da IA. `extrasIA` vai junto no Salvar/Aprovar quando o dono refez os textos.
+        var extrasIA = null, cTextos = { titulos: c.titulos, titulo_porque: c.titulo_porque, thumb: c.thumb, duvida: c.duvida, titulo: c.titulo };
+        function ligarTextos() {
+          var areaT = box.querySelector('#textos-ia'); if (!areaT) return;
+          areaT.querySelectorAll('[data-tit]').forEach(function (b) {
+            b.onclick = function () {
+              f.titulo.value = (lerLista(cTextos.titulos) || [])[Number(b.dataset.tit)] || f.titulo.value;
+              areaT.querySelectorAll('[data-tit]').forEach(function (x) { x.classList.toggle('on', x === b); });
+            };
+          });
+          var bt = areaT.querySelector('#c-textos');
+          bt.onclick = function () {
+            bt.disabled = true; bt.textContent = '✨ A IA está escrevendo…';
+            api('/cortes/' + c.id + '/textos', { metodo: 'POST' }).then(function (r) {
+              extrasIA = { titulos: r.titulos || [], titulo_porque: r.titulo_porque, thumb: r.thumb, duvida: r.duvida, motivo: r.motivo };
+              cTextos = Object.assign({}, extrasIA, { titulo: r.titulo });
+              if (r.titulo) f.titulo.value = r.titulo;
+              if (r.descricao) f.descricao.value = r.descricao;
+              if (r.tags && r.tags.length) f.tags.value = r.tags.join(', ');
+              areaT.innerHTML = blocoTextosIA(cTextos); ligarTextos();
+              aviso('Textos novos no formulário. Confira e aperte Salvar.');
+            }).catch(function (e) { bt.disabled = false; bt.textContent = '✨ Refazer textos com a IA'; aviso(e.message, true); });
+          };
+        }
+        ligarTextos();
         // 19/11: foto do corte com o recorte do layout escolhido por cima + prévia do vertical
         function layoutDoSelect() {
           var val = f.layout.value, id = val === '' ? v.layout_id : Number(val);
@@ -952,7 +1014,7 @@
               if (ini == null || fim == null) { msg.textContent = 'Preencha início e fim no formato 00:00:00.'; return; }
               var tg = tempoGancho(); if (tg.erro) { msg.textContent = tg.erro; return; }
               extra = Object.assign({ tipo: tipo, inicio_s: ini, fim_s: fim, titulo: f.titulo.value.trim(), gancho: f.gancho.value.trim(),
-                descricao: f.descricao.value.trim(), tags: f.tags.value, layout_id: layoutEscolhido() }, tg);
+                descricao: f.descricao.value.trim(), tags: f.tags.value, layout_id: layoutEscolhido() }, tg, extrasIA || {});
             }
             (leg && b.dataset.ir === 'download' ? leg.salvarSePreciso() : Promise.resolve(true)).then(function (seguir) {
               if (seguir) return mudarEstado(c.id, b.dataset.ir, b, extra).then(function (ok) { if (ok) fecharGaveta(); });
@@ -974,7 +1036,7 @@
           if (ini == null || fim == null) { msg.textContent = 'Preencha início e fim no formato 00:00:00.'; return; }
           var tg = tempoGancho(); if (tg.erro) { msg.textContent = tg.erro; return; }
           var corpo = Object.assign({ tipo: tipo, inicio_s: ini, fim_s: fim, titulo: f.titulo.value.trim(), gancho: f.gancho.value.trim(),
-            descricao: f.descricao.value.trim(), tags: f.tags.value, layout_id: layoutEscolhido() }, tg);
+            descricao: f.descricao.value.trim(), tags: f.tags.value, layout_id: layoutEscolhido() }, tg, novo ? {} : extrasIA || {});
           if (novo) corpo.video_id = v.id;
           var btn = f.querySelector('[type=submit]'); btn.disabled = true; msg.textContent = '';
           api(novo ? '/cortes' : '/cortes/' + c.id, { metodo: novo ? 'POST' : 'PATCH', corpo: corpo }).then(function () {

@@ -374,3 +374,17 @@ button, input, textarea { font: inherit; color: inherit; }
 .leg-tc { font: .7rem/1 var(--mono); color: var(--suave); text-align: right; }
 .leg-linha input { width: 100%; min-width: 0; font-size: .86rem; padding: .4rem .5rem; }
 .leg-acoes { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .5rem; }
+
+.leg-buraco input { border-style: dashed; background: transparent; }
+.leg-buraco input::placeholder { color: #e0a040; }
+/* 19/11: textos no padrão do canal (opções de título, thumbnail, refazer) */
+.tit-opcoes { display: grid; gap: .3rem; margin-top: -.3rem; }
+.tit-rot { font: .66rem/1.2 var(--mono); letter-spacing: .06em; color: var(--suave); text-transform: uppercase; }
+.tit-op { text-align: left; font-size: .8rem; line-height: 1.35; padding: .45rem .6rem; border-radius: 8px; border: 1px solid var(--fio-2); background: transparent; color: var(--texto); cursor: pointer; }
+.tit-op.on { border-color: var(--curto); color: var(--curto); }
+.tit-porque, .tit-duvida { margin: .1rem 0 0; font-size: .76rem; color: var(--suave); line-height: 1.45; }
+.tit-duvida { color: #e0a040; }
+.tit-thumb { margin-top: .4rem; font-size: .78rem; line-height: 1.45; color: var(--texto); border-left: 3px solid var(--curto); padding: .35rem .6rem; background: rgba(255,176,32,.06); }
+.tit-thumb b { display: block; font: .64rem/1.4 var(--mono); letter-spacing: .08em; color: var(--curto); }
+.tit-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: .45rem; }
+.tit-acoes small { font-size: .72rem; color: var(--suave); flex: 1 1 14rem; }

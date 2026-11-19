@@ -24,6 +24,7 @@
 //   GET    /cortes/:id/legenda     palavras da legenda do curto (para revisar) + se esta na fila do PC (19/11)
 //   POST   /cortes/:id/legenda     pede ao PC a transcricao do trecho (so o audio) para revisar antes de baixar
 //   PUT    /cortes/:id/legenda     { palavras: [{ p, i, f }] } grava o texto corrigido pelo dono
+//   POST   /cortes/:id/textos      a IA refaz título (3 opções), descrição, tags e thumbnail (não grava)
 //   GET    /layouts                layouts verticais (9:16) dos curtos; cria os 4 iniciais na 1a vez (19/11)
 //   POST   /layouts  PATCH/DELETE /layouts/:id    o editor de layout (tela "Layouts")
 //   GET    /agentes                lista os PCs conectados
@@ -39,6 +40,7 @@
 import { db } from '../../lib/db.js';
 import { auditar } from '../../lib/audit.js';
 import { hashChave, AGENTE_VERSAO } from './maquina.js';
+import { refazerTextos } from './roteiro.js';
 import { pedirFotos, apagarFotos } from './cena.js';
 import { arquivos, temDeposito } from '../../lib/arquivos.js';
 
@@ -193,6 +195,8 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
       const corpo = await request.json().catch(() => ({}));
       const titulo = corpo.titulo !== undefined ? String(corpo.titulo).trim().slice(0, 200) || null : video.titulo;
       const arquivado = corpo.arquivado !== undefined ? (corpo.arquivado ? 1 : 0) : video.arquivado;
+      // 19/11: contexto da live (quem participa, o que está rolando) - vai para a IA e para a legenda
+      const contexto = corpo.contexto !== undefined ? String(corpo.contexto || '').replace(/\s+\n/g, '\n').trim().slice(0, 1500) || null : video.contexto;
       let layoutId = video.layout_id;
       if (corpo.layout_id !== undefined) {
         layoutId = corpo.layout_id === null || corpo.layout_id === '' ? null : Number(corpo.layout_id);
@@ -207,12 +211,12 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
         await apagarFotos(env, 'video_id = ?', [video.id]);
         await db(env).run('UPDATE cortex_cortes SET quadro_chave = NULL, quadro_em = NULL WHERE video_id = ?', video.id);
       }
-      await db(env).run('UPDATE cortex_videos SET titulo = ?, arquivado = ?, layout_id = ?, atualizado_em = ? WHERE id = ?',
-        titulo, arquivado, layoutId, agora, video.id);
+      await db(env).run('UPDATE cortex_videos SET titulo = ?, arquivado = ?, layout_id = ?, contexto = ?, atualizado_em = ? WHERE id = ?',
+        titulo, arquivado, layoutId, contexto, agora, video.id);
       // Reaberto: as fotos tinham saido ao concluir; o PC tira de novo as dos curtos na Triagem.
       if (!arquivado && video.arquivado) await db(env).batch([pedirFotos(u.id, video.id, agora)]);
       await auditar(env, { quem: u.email, acao: 'editar', entidade: 'cortex_videos', entidade_id: video.id,
-        antes: { titulo: video.titulo, arquivado: video.arquivado, layout_id: video.layout_id }, depois: { titulo, arquivado, layout_id: layoutId }, ip: data.ip });
+        antes: { titulo: video.titulo, arquivado: video.arquivado, layout_id: video.layout_id }, depois: { titulo, arquivado, layout_id: layoutId, contexto: contexto !== video.contexto ? 'alterado' : undefined }, ip: data.ip });
       return json({ ok: true });
     }
 
@@ -252,6 +256,21 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
     if (c.tipo === 'curto') await db(env).batch([pedirFotos(u.id, video.id, agora)]);   // 19/11: foto + cena
     await auditar(env, { quem: u.email, acao: 'criar', entidade: 'cortex_cortes', entidade_id: r.meta.last_row_id, depois: c, ip: data.ip });
     return json({ ok: true, id: r.meta.last_row_id }, 201);
+  }
+
+  // 19/11: "Refazer textos" - a IA reescreve título (3 opções), descrição, tags e thumbnail deste
+  // corte no padrão do canal. Só DEVOLVE: o dono revisa na gaveta e decide se salva.
+  if (rota === 'cortes' && id && partes[2] === 'textos' && metodo === 'POST') {
+    const c = await db(env).first('SELECT * FROM cortex_cortes WHERE id = ? AND usuario_id = ?', Number(id), u.id);
+    if (!c) return json({ erro: 'corte não encontrado' }, 404);
+    const v = await db(env).first('SELECT id, titulo, canal, plataforma, contexto FROM cortex_videos WHERE id = ?', c.video_id);
+    try {
+      const tx = await refazerTextos(env, c, v);
+      await auditar(env, { quem: u.email, acao: 'refazer-textos', entidade: 'cortex_cortes', entidade_id: c.id, ip: data.ip });
+      return json({ ok: true, ...tx });
+    } catch (e) {
+      return json({ erro: e.esperar_s ? 'O Gemini grátis está no limite agora. Tente de novo em ' + Math.ceil(e.esperar_s / 60) + ' min.' : String(e.message || e).slice(0, 300) }, e.esperar_s ? 429 : 502);
+    }
   }
 
   // 19/11: legenda do curto revisada no painel antes de baixar (pedido do dono: o Whisper erra nomes).
@@ -337,6 +356,14 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
       // 19/11: escolha a mao vence a cena detectada (cena_auto = 0: a proxima foto nao troca mais).
       if (layoutId !== corte.layout_id) extras.push(['UPDATE cortex_cortes SET layout_id = ?, cena_auto = 0 WHERE id = ?', [layoutId, corte.id]]);
       // Curto na Triagem com tempo novo: a foto antiga pode ser de outra cena; o PC tira outra.
+      // 19/11: opções de título / porquê / thumbnail vindas do "Refazer textos" (o dono salvou)
+      if (corpo.titulos !== undefined) {
+        const ts = Array.isArray(corpo.titulos) ? corpo.titulos.map((t) => String(t).trim().slice(0, 120)).filter(Boolean).slice(0, 3) : [];
+        extras.push(['UPDATE cortex_cortes SET titulos = ?, titulo_porque = ?, thumb = ?, duvida = ? WHERE id = ?',
+          [ts.length ? JSON.stringify(ts) : null, corpo.titulo_porque ? String(corpo.titulo_porque).slice(0, 400) : null,
+           corpo.thumb ? String(corpo.thumb).slice(0, 800) : null, corpo.duvida ? String(corpo.duvida).slice(0, 300) : null, corte.id]]);
+        if (corpo.motivo) extras.push(['UPDATE cortex_cortes SET motivo = ? WHERE id = ?', [String(corpo.motivo).slice(0, 400), corte.id]]);
+      }
       // 19/11: tempo novo = a legenda revisada deixa de bater (as palavras contam do início do corte).
       if (corte.legenda && (novo.inicio_s !== corte.inicio_s || novo.fim_s !== corte.fim_s || novo.tipo !== 'curto')) {
         extras.push(['UPDATE cortex_cortes SET legenda = NULL, legenda_em = NULL, legenda_editada = 0 WHERE id = ?', [corte.id]]);
@@ -787,7 +814,7 @@ function validarCorte(c, video) {
   const titulo = String(c.titulo || '').trim().slice(0, 150);
   if (!titulo) return { erro: 'Dê um título ao corte.' };
   const tags = (Array.isArray(c.tags) ? c.tags : String(c.tags || '').split(','))
-    .map((t) => String(t).trim().toLowerCase()).filter(Boolean).slice(0, 30);
+    .map((t) => String(t).replace(/^#/, '').trim().slice(0, 40)).filter(Boolean).slice(0, 30);   // 19/11: grafia normal ("GTA 6"), pronta para o Studio
   // Tempo do gancho (15/11): opcional; se vier, os dois juntos e dentro do corte.
   const vazio = (x) => x === undefined || x === null || x === '';
   let gi = null, gf = null;

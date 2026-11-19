@@ -460,3 +460,16 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   novo"). Tempo do corte mudou = legenda apagada. Cartão mostra "· legenda ✓".
 - 19/11: "Editar layouts" na gaveta do corte abre o editor com a **foto daquele corte** de fundo
   (não é gravada como print do layout).
+- 19/11 (agente 2.5.0): **legenda que "parou" no meio** = o Whisper pulando um pedaço (áudio
+  ruim/música), não limite da Groq (limite falha a legenda inteira). Agora o PC acha buracos de
+  3,5 s+ sem palavra e manda só aquele pedaço de novo (até 3 rodadas, máx. 10 pedidos); o painel
+  tira palavras de segmento que o próprio Whisper marca como "sem fala" e frases-fantasma
+  ("legendas pela comunidade Amara.org"...). Buraco que sobrar aparece na revisão com um campo
+  para o dono escrever. O "contexto da live" vai como prompt do Whisper (nomes certos).
+- 19/11: **padrão de títulos/descrições/tags do canal** (texto do dono, resumido sem perder regra
+  em `PADRAO`, roteiro.js): 3 títulos em MAIÚSCULAS com ângulos diferentes + o melhor e por quê,
+  descrição (2 primeiras linhas de contexto, complemento breve, hashtags), 8-15 tags na grafia
+  normal, direção de thumbnail, "dúvida" quando falta informação, sem emoji (tirado no código
+  também), sem repetir estrutura dos títulos já usados na live. Campo **Contexto da live** na
+  gaveta do vídeo (migration 0019). Botão **"✨ Refazer textos com a IA"** no corte (não grava;
+  o dono confere e Salva). A ficha .txt leva as 3 opções e a thumbnail.

@@ -18,6 +18,8 @@
 //     real do áudio. Sem layout ("Nenhum") e longos: só o horizontal + .txt, sem legenda.
 //   - "legenda" (2.4.0): só o ÁUDIO do trecho de um curto (não baixa o vídeo) -> Whisper, para o
 //     dono revisar o texto no painel antes de aprovar. No download, o texto revisado é usado.
+//     2.5.0: buraco na legenda (o Whisper às vezes pula um pedaço com áudio ruim/música) é
+//     transcrito de novo sozinho; a ficha .txt leva as 3 opções de título e a thumbnail.
 //   - "quadros" (2.1.0): UMA foto pequena do meio de cada curto da Triagem, tirada direto do
 //     endereço do vídeo (não baixa o vídeo). O painel guarda e a IA diz a cena (full cam, jogo
 //     com webcam, só o jogo), para o corte já chegar com o layout vertical certo.
@@ -44,7 +46,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '2.4.0';
+const VERSAO = '2.5.0';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -438,17 +440,54 @@ async function palavrasDoCorte(cfg, t, arquivo, pasta) {
   const audio = join(pasta, 'legenda.ogg');
   const atraso = await atrasoDoAudio(arquivo);
   await rodar('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', arquivo, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'libopus', '-b:a', '24k', audio]);
-  const palavras = await enviarAudioLegenda(cfg, t, audio);
+  const palavras = await transcreverCompleto(cfg, t, audio, pasta);
   if (atraso) log(`Legenda: áudio começa ${atraso.toFixed(2)} s depois do vídeo; tempos ajustados.`);
   return palavras.map((w) => ({ ...w, i: w.i + atraso, f: w.f + atraso }));
 }
+// 2.5.0: transcreve o áudio inteiro e, onde ficou um BURACO de 3,5 s ou mais sem palavra (o
+// Whisper às vezes pula um pedaço inteiro quando o áudio fica ruim ou entra música), manda só
+// aquele pedaço de novo. Silêncio de verdade volta vazio e o buraco fica. No fim, o painel guarda
+// a versão juntada (para revisar).
+async function transcreverCompleto(cfg, t, audio, pasta) {
+  let palavras = await enviarAudioLegenda(cfg, t, audio, true);
+  const dur = await duracaoDe(audio, palavras.length ? palavras[palavras.length - 1].f : 1);
+  let achadas = 0, chamadas = 0, refeitos = 0;
+  // Até 3 rodadas (no máximo 10 pedidos): um buraco refeito pode ainda deixar um pedaço sem texto.
+  for (let rodada = 0; rodada < 3 && chamadas < 10; rodada++) {
+  const buracos = [];
+  let ant = 0, novasRodada = 0;
+  for (const w of [...palavras, { i: dur || ant, f: dur || ant }]) {
+    if (w.i - ant >= 3.5) buracos.push([Math.max(0, ant - 0.2), w.i + 0.2]);
+    ant = Math.max(ant, w.f);
+  }
+  for (const [a, b] of buracos.slice(0, 10 - chamadas)) {
+    chamadas++; refeitos++;
+    if (parando) break;
+    const parte = join(pasta, 'buraco.ogg');
+    try {
+      await rodar('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-ss', a.toFixed(2), '-i', audio, '-t', (b - a).toFixed(2), '-c:a', 'libopus', '-b:a', '24k', parte]);
+      const novas = (await enviarAudioLegenda(cfg, t, parte, true))
+        .map((w) => ({ p: w.p, i: +(w.i + a).toFixed(2), f: +(w.f + a).toFixed(2) }))
+        .filter((w) => w.i >= a + 0.1 && w.f <= b + 0.3);
+      if (novas.length) { achadas += novas.length; novasRodada += novas.length; palavras = palavras.concat(novas).sort((x, y) => x.i - y.i); }
+    } catch (e) {
+      if (parando || (e instanceof ErroPainel && e.dados.perdida)) throw e;
+      log(`Legenda: o buraco ${tc(a)}-${tc(b)} não deu para refazer (${e.message}).`);
+    }
+  }
+  if (!novasRodada) break;
+  }
+  if (refeitos) log(`Legenda: ${refeitos} trecho(s) sem texto refeito(s); ${achadas ? achadas + ' palavras recuperadas' : 'sem fala neles'}.`);
+  await painel(cfg, `/tarefas/${t.id}/legenda_final`, { corpo: { palavras } }).catch((e) => log('Legenda: não consegui guardar no painel:', e.message));
+  return palavras;
+}
 // Manda o áudio (ogg) para o painel -> Whisper. Volta [{ p, i, f }] contado do início do áudio.
-async function enviarAudioLegenda(cfg, t, audio) {
+async function enviarAudioLegenda(cfg, t, audio, parcial) {
   const bytes = readFileSync(audio);
   if (bytes.length > 24 * 1024 * 1024) throw new Error('áudio do corte grande demais para a legenda');
   for (let tent = 0; ; tent++) {
     try {
-      const r = await painel(cfg, `/tarefas/${t.id}/palavras?idioma=pt`, { bruto: bytes, tipo: 'audio/ogg', prazo: 5 * 60000 });
+      const r = await painel(cfg, `/tarefas/${t.id}/palavras?idioma=pt${parcial ? '&parcial=1' : ''}`, { bruto: bytes, tipo: 'audio/ogg', prazo: 5 * 60000 });
       return r.palavras || [];
     } catch (e) {
       const esp = e instanceof ErroPainel && Number(e.dados.esperar_s);
@@ -516,12 +555,17 @@ function escreverFicha(arquivo, v, c, qualidade) {
     // 1.9.0: corte aprovado sem baixar - os tempos para baixar por fora vêm primeiro
     c.baixar_fora ? `BAIXAR POR FORA: ${tc(c.inicio_s)} → ${tc(c.fim_s)} (${tempoExato(c.fim_s - c.inicio_s)})\nLINK: ${v.url}\n` : '',
     qualidade ? `QUALIDADE: ${qualidade}\n` : '',
-    `TÍTULO: ${c.titulo}`, '', c.gancho ? `GANCHO: ${c.gancho}\n` : '',
+    `TÍTULO: ${c.titulo}`,
+    // 2.5.0: as 3 opções da IA (padrão do canal), o porquê e a direção da thumbnail
+    Array.isArray(c.titulos) && c.titulos.length ? 'OPÇÕES DE TÍTULO:\n' + c.titulos.map((x, k) => `  ${k + 1}. ${x}`).join('\n') +
+      (c.titulo_porque ? `\n  Por quê: ${c.titulo_porque}` : '') : '',
+    '', c.gancho ? `GANCHO: ${c.gancho}\n` : '',
     // 1.6.0: onde o gancho está DENTRO deste arquivo (o tempo que o Movavi mostra) e no original.
     c.gancho_inicio_s != null && c.gancho_fim_s != null
       ? `GANCHO NO CORTE: ${tc(c.gancho_inicio_s - c.inicio_s)} → ${tc(c.gancho_fim_s - c.inicio_s)}` +
         ` (no vídeo original: ${tc(c.gancho_inicio_s)} → ${tc(c.gancho_fim_s)})\n` : '',
     'DESCRIÇÃO:', c.descricao || '', '', `TAGS: ${(c.tags || []).join(', ')}`, '',
+    c.thumb ? `THUMBNAIL: ${c.thumb}\n` : '',
     `ORIGEM: ${v.url} (${tc(c.inicio_s)} → ${tc(c.fim_s)})`,
   ].join('\n'), 'utf8');
 }
@@ -829,7 +873,7 @@ async function tarefaLegenda(cfg, t, pasta) {
       '-t', String(c.fim_s - c.inicio_s), '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'libopus', '-b:a', '24k', audio]);
   } finally { clearTimeout(relogio); }
   if (!existsSync(audio)) throw new Error('o ffmpeg não gerou o áudio do trecho');
-  const palavras = await enviarAudioLegenda(cfg, t, audio);
+  const palavras = await transcreverCompleto(cfg, t, audio, pasta);
   log(`Legenda pronta para revisar: ${palavras.length} palavras.`);
 }
 

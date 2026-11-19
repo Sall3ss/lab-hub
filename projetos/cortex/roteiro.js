@@ -22,45 +22,108 @@ const TRECHO_S = 45 * 60;          // tamanho alvo do trecho lido por chamada
 const MIN_LONGOS_S = 35 * 60;      // video menor que isso nao ganha corte longo
 const PRAZO_GEMINI_MS = 150000;
 
-const SISTEMA = `Você é editor-chefe de um canal brasileiro de CORTES de lives e vídeos de games
-(YouTube, TikTok, Shorts, Reels), com foco no lançamento do GTA 6 e no que bomba na comunidade.
-Seu trabalho: ler a transcrição com tempos e marcar os trechos que viram cortes com alto CTR e
-alta retenção.
+// 19/11/2026: padrão de títulos, descrições e tags do canal, escrito pelo dono (resumido aqui sem
+// perder regra). Vale para o roteiro (cortes novos) e para "Refazer textos" de um corte.
+const PADRAO = `PADRÃO DE TÍTULOS, DESCRIÇÕES E TAGS DO CANAL (siga à risca):
+Público: quem encontra o vídeo na página inicial e nas recomendações do YouTube. A pessoa clica
+porque reconhece o criador ou se interessa pela situação. O objetivo é despertar curiosidade
+suficiente para ela querer assistir, sem distorcer o conteúdo.
 
-Regras:
+ANTES DE ESCREVER, analise: quem é a personalidade principal; quem mais participa; qual é o
+acontecimento central; qual é o momento mais interessante; o que desperta curiosidade; se é Short
+ou longo; que contexto da live importa; se algum título sugeriria algo que NÃO acontece.
+
+TÍTULOS ("titulos": exatamente 3 opções, em MAIÚSCULAS):
+- Comece pelo nome da personalidade ou do assunto principal (ex.: "CORINGA COMPROU UM CARRO NOVO
+  E MOSTROU TUDO NA LIVE IRL", "TAINÁ NÃO ACEITOU A OPINIÃO DO CORINGA SOBRE OS SALGADOS").
+- Curiosidade vinda do acontecimento REAL: reação inesperada, situação engraçada, momento
+  inusitado, discussão/opinião, descoberta no jogo, jogada impressionante, tensão ou surpresa.
+- NUNCA invente: conversa sobre aposta não é aposta cumprida; discussão não é briga; jogada boa não
+  é vitória; "primeira vez" só se for confirmado no trecho.
+- Curto e fácil de entender no celular: sem explicação desnecessária, sem repetir informação, sem
+  vários assuntos no mesmo título, sem palavra que não acrescenta. Até 70 caracteres.
+- As 3 opções exploram ÂNGULOS DIFERENTES (a reação de alguém, o inesperado, o resultado, uma fala
+  engraçada ou polêmica, uma jogada/descoberta, a interação entre duas pessoas).
+- "melhor" (1, 2 ou 3) = a mais forte; "porque_titulo" = o motivo em uma frase. Não escolha a mais
+  exagerada: priorize clique COM fidelidade ao vídeo.
+- Short: um acontecimento específico; o título funciona sozinho para quem não viu a live, nada
+  genérico. Longo: pode apresentar a experiência/atividade principal sem listar tudo.
+- Cortes da mesma live: cada um destaca o PRÓPRIO acontecimento; não repita a estrutura de título
+  dos outros cortes desta live (a lista vem no pedido, quando houver).
+
+DESCRIÇÃO ("descricao"):
+- As 2 primeiras linhas são as mais importantes e explicam com naturalidade: quem participa, o
+  jogo (se houver), a situação/assunto e o contexto da live original.
+- Depois, um complemento breve (contextualiza, não conta tudo). Nada de texto longo, palavra-chave
+  repetida, informação que não está no corte ou frase genérica que serviria para qualquer vídeo.
+- Termine com uma linha de 3 a 6 hashtags relevantes (ex.: #Coringa #GTA6 #Loud). Nada aleatório.
+
+TAGS ("tags"): de 8 a 15, cada uma um item da lista, sem #, na grafia normal (ex.: "Coringa",
+"Loud Coringa", "GTA 6", "GTA VI", "Coringa GTA 6", "GTA 6 gameplay", "cortes Coringa",
+"melhores momentos Coringa", "Shorts GTA 6"). Priorize: criador principal, quem aparece, o jogo,
+o evento/atividade, o assunto do corte, termos do acontecimento e o formato (Shorts, cortes de
+live). Só o que tem relação com o conteúdo.
+
+THUMBNAIL ("thumbnail"): direção curta que COMPLEMENTA o título (não repete a frase): expressão
+facial forte e natural, rosto do criador principal em destaque (os outros visíveis quando forem
+importantes), elementos do acontecimento, poucos elementos, contraste, no máximo 2 ou 3 pontos
+focais. Texto opcional com poucas palavras, complementar ao título.
+
+TOM: português do Brasil natural, direto; chamativo sem exagero; sem frase artificial ou de
+enchimento. NENHUM emoji em título, descrição, tags ou thumbnail.
+
+"analise": em uma ou duas frases, qual é o acontecimento principal e o melhor gancho para o
+público. "duvida": se faltar algo essencial (ex.: não dá para saber quem é o convidado), diga o
+que falta em vez de inventar; se não faltar nada, deixe vazio.`;
+
+const SISTEMA = `Você é editor-chefe de um canal brasileiro de CORTES de lives e vídeos de criadores
+(YouTube, Shorts, TikTok, Reels). Seu trabalho: ler a transcrição com tempos, marcar os trechos
+que viram cortes com alto CTR e alta retenção e escrever os textos de publicação de cada um.
+
+Regras dos cortes:
 - Use só o que está na transcrição. Os tempos que você devolve têm que existir nela.
 - Um corte precisa se sustentar sozinho: quem não viu a live entende.
 - Prefira: momentos engraçados, reações fortes, revelações, polêmicas, jogadas épicas, falhas,
-  histórias com começo/meio/fim, opiniões fortes, informação nova sobre GTA 6.
+  histórias com começo/meio/fim, opiniões fortes, interações entre as pessoas.
 - Evite: silêncio, leitura de chat sem contexto, propaganda, pausas, papo arrastado.
 - Qualidade acima de quantidade. Se o trecho não tem nada bom, devolva lista vazia.
-- Título em português do Brasil, chamativo e honesto (sem prometer o que o corte não entrega),
-  até 90 caracteres, sem ser tudo em maiúsculas.
 - Gancho: a frase falada ou situação dos primeiros 3 segundos que segura quem está rolando o feed.
   "gancho_inicio" e "gancho_fim" = onde essa frase é dita no vídeo (HH:MM:SS, dentro do corte,
   de 2 a 20 segundos), tirados da transcrição.
-- Descrição: 1 a 3 frases para a plataforma. Tags: 5 a 12, minúsculas, sem #.
 - Nota de 0 a 100 = potencial real do corte. Seja exigente: 80+ só para o que é muito forte.
-- Tempos no formato HH:MM:SS, contados desde o começo do vídeo.`;
+- Tempos no formato HH:MM:SS, contados desde o começo do vídeo.
+- Personalidade principal: o dono do canal, salvo se o contexto/transcrição mostrar outra.
 
+${PADRAO}`;
+
+// Campos de texto de publicação (iguais no roteiro e no "Refazer textos").
+const TEXTOS = {
+  analise: { type: 'STRING', description: 'acontecimento principal e melhor gancho, 1-2 frases' },
+  titulos: { type: 'ARRAY', items: { type: 'STRING' }, description: 'exatamente 3 títulos em MAIÚSCULAS, ângulos diferentes' },
+  melhor: { type: 'INTEGER', description: '1, 2 ou 3' },
+  porque_titulo: { type: 'STRING' },
+  descricao: { type: 'STRING' },
+  tags: { type: 'ARRAY', items: { type: 'STRING' } },
+  thumbnail: { type: 'STRING' },
+  duvida: { type: 'STRING' },
+};
+const REQ_TEXTOS = ['analise', 'titulos', 'melhor', 'porque_titulo', 'descricao', 'tags', 'thumbnail'];
 const CORTE = {
   type: 'OBJECT',
   properties: {
     inicio: { type: 'STRING', description: 'HH:MM:SS' },
     fim: { type: 'STRING', description: 'HH:MM:SS' },
-    titulo: { type: 'STRING' },
     gancho: { type: 'STRING' },
     gancho_inicio: { type: 'STRING', description: 'HH:MM:SS em que o gancho começa a ser dito' },
     gancho_fim: { type: 'STRING', description: 'HH:MM:SS em que o gancho termina' },
-    descricao: { type: 'STRING' },
-    tags: { type: 'ARRAY', items: { type: 'STRING' } },
-    motivo: { type: 'STRING', description: 'por que vale cortar, em uma frase' },
+    ...TEXTOS,
     nota: { type: 'INTEGER' },
   },
   // 17/11: gancho_inicio/gancho_fim passaram a ser obrigatorios: opcionais, o Gemini quase
   // sempre deixava de fora (cortes chegavam sem o tempo do gancho).
-  required: ['inicio', 'fim', 'titulo', 'gancho', 'gancho_inicio', 'gancho_fim', 'descricao', 'tags', 'motivo', 'nota'],
+  required: ['inicio', 'fim', 'gancho', 'gancho_inicio', 'gancho_fim', ...REQ_TEXTOS, 'nota'],
 };
+const ESQ_TEXTOS = { type: 'OBJECT', properties: TEXTOS, required: REQ_TEXTOS };
 const ESQ_TRECHO = {
   type: 'OBJECT',
   properties: {
@@ -86,7 +149,7 @@ export class ErroRoteiro extends Error {
 export async function passoRoteiro(env, tarefa) {
   if (!env.GEMINI_API_KEY) throw new ErroRoteiro('Falta a chave GEMINI_API_KEY no Cloudflare (a mesma da Jean).', { definitivo: true });
   const base = db(env);
-  const video = await base.first('SELECT id, usuario_id, titulo, canal, plataforma, duracao_s, analisar_de_s, roteiro_de_s FROM cortex_videos WHERE id = ?', tarefa.video_id);
+  const video = await base.first('SELECT id, usuario_id, titulo, canal, plataforma, duracao_s, analisar_de_s, roteiro_de_s, contexto FROM cortex_videos WHERE id = ?', tarefa.video_id);
   if (!video) throw new ErroRoteiro('vídeo não existe mais', { definitivo: true });
   const ext = await base.first('SELECT MAX(fim_s) AS fim, COUNT(*) AS n FROM cortex_transcricao WHERE video_id = ?', video.id);
   if (!ext || !ext.n) throw new ErroRoteiro('o vídeo não tem transcrição; use "Tentar de novo" na etapa de texto', { definitivo: true });
@@ -149,17 +212,19 @@ async function gravar(env, video, parte, ini, fim, r, agora) {
     [video.id, parte, ini, fim, JSON.stringify(r.assuntos || []), r.cortes.length, r.modelo, agora]]];
   for (const c of r.cortes) {
     lotes.push([
-      `INSERT INTO cortex_cortes (video_id, usuario_id, tipo, origem, inicio_s, fim_s, titulo, descricao, tags, gancho, gancho_inicio_s, gancho_fim_s, motivo, nota, estado, criado_em, atualizado_em)
-       VALUES (?, ?, ?, 'ia', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'triagem', ?, ?)`,
+      `INSERT INTO cortex_cortes (video_id, usuario_id, tipo, origem, inicio_s, fim_s, titulo, descricao, tags, gancho, gancho_inicio_s, gancho_fim_s, motivo, nota,
+                                  titulos, titulo_porque, thumb, duvida, estado, criado_em, atualizado_em)
+       VALUES (?, ?, ?, 'ia', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'triagem', ?, ?)`,
       [video.id, video.usuario_id, c.tipo, c.inicio_s, c.fim_s, c.titulo, c.descricao, JSON.stringify(c.tags), c.gancho,
-       c.gancho_inicio_s, c.gancho_fim_s, c.motivo, c.nota, agora, agora]]);
+       c.gancho_inicio_s, c.gancho_fim_s, c.motivo, c.nota, JSON.stringify(c.titulos), c.titulo_porque, c.thumb, c.duvida, agora, agora]]);
   }
   await db(env).batch(lotes);
 }
 
 async function lerTrecho(env, video, linhas, ini, fim, i, n) {
   const texto = linhas.map((l) => `[${hms(l.inicio_s)}] ${l.texto}`).join('\n');
-  const pedido = `${cabecalho(video)}
+  const usados = await titulosDaLive(env, video.id);
+  const pedido = `${cabecalho(video)}${usados}
 Trecho ${i + 1} de ${n}: de ${hms(ini)} a ${hms(fim)}.
 
 Tarefa:
@@ -184,8 +249,9 @@ ${texto || '(trecho sem fala)'}`;
 async function escolherLongos(env, video, assuntos, ini, dur) {
   if (!assuntos.length) return { assuntos: [], cortes: [], modelo: null };
   const max = Math.max(1, Math.min(6, Math.floor((dur - ini) / (40 * 60))));
+  const usados = await titulosDaLive(env, video.id);
   const linhas = assuntos.map((a) => `[${hms(a.i)} - ${hms(a.f)}] (força ${a.forca}) ${a.a}`).join('\n');
-  const pedido = `${cabecalho(video)}
+  const pedido = `${cabecalho(video)}${usados}
 ${ini > 0 ? `Parte analisada: de ${hms(ini)} a ${hms(dur)} (o começo do vídeo ficou de fora, de propósito).` : `Duração total: ${hms(dur)}.`}
 
 Abaixo está o mapa de assuntos ${ini > 0 ? 'dessa parte' : 'do vídeo inteiro'} (já resumido por trechos).
@@ -203,7 +269,72 @@ ${linhas}`;
 
 function cabecalho(v) {
   return `Vídeo: ${v.titulo || '(sem título)'}
-Canal: ${v.canal || '(desconhecido)'} · Plataforma: ${v.plataforma}`;
+Canal: ${v.canal || '(desconhecido)'} · Plataforma: ${v.plataforma}` +
+    (v.contexto ? `\nContexto da live (escrito pelo dono do canal, confie nele para nomes e situação): ${v.contexto}` : '');
+}
+// 19/11: títulos já usados nesta live, para a IA não repetir a mesma estrutura (padrão do dono).
+async function titulosDaLive(env, videoId, menos) {
+  const l = await db(env).all("SELECT titulo FROM cortex_cortes WHERE video_id = ? AND estado <> 'descartado' AND id <> ? ORDER BY inicio_s LIMIT 40", videoId, menos || 0);
+  return l.length ? '\nTítulos já usados em outros cortes desta live (não repita a estrutura):\n' + l.map((x) => '- ' + x.titulo).join('\n') : '';
+}
+
+// Textos de publicação vindos da IA -> campos do corte (sem emoji, título da opção "melhor").
+const EMOJI = /[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu;
+function semEmoji(t) { return String(t || '').replace(EMOJI, '').replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').trim(); }
+export function lerTextos(c) {
+  const titulos = (Array.isArray(c.titulos) ? c.titulos : []).map((t) => semEmoji(t).replace(/\s+/g, ' ').toLocaleUpperCase('pt-BR').slice(0, 120)).filter(Boolean).slice(0, 3);
+  const k = Math.min(titulos.length, Math.max(1, Math.round(Number(c.melhor)) || 1)) - 1;
+  return {
+    titulo: titulos[k] || semEmoji(c.titulo).slice(0, 120) || null,
+    titulos: titulos.length ? titulos : null,
+    titulo_porque: semEmoji(c.porque_titulo).slice(0, 400) || null,
+    descricao: semEmoji(c.descricao).slice(0, 3000) || null,
+    tags: (Array.isArray(c.tags) ? c.tags : []).map((t) => semEmoji(t).replace(/^#/, '').replace(/\s+/g, ' ').slice(0, 40)).filter(Boolean)
+      .filter((t, i, a) => a.findIndex((x) => x.toLowerCase() === t.toLowerCase()) === i).slice(0, 15),
+    thumb: semEmoji(c.thumbnail).slice(0, 800) || null,
+    duvida: semEmoji(c.duvida).slice(0, 300) || null,
+    motivo: semEmoji(c.analise || c.motivo).slice(0, 400) || null,
+  };
+}
+
+// 19/11: "Refazer textos" de UM corte (botão na gaveta): lê a fala do trecho e devolve título(s),
+// descrição, tags e thumbnail no padrão do canal. NÃO grava: o dono revisa e aperta Salvar.
+export async function refazerTextos(env, corte, video) {
+  if (!env.GEMINI_API_KEY) throw new ErroRoteiro('Falta a chave GEMINI_API_KEY no Cloudflare (a mesma da Jean).', { definitivo: true });
+  let fala = '';
+  try {
+    const ps = corte.legenda ? JSON.parse(corte.legenda) : null;
+    if (Array.isArray(ps) && ps.length) {
+      // legenda do corte (palavra a palavra): frases com o tempo do vídeo original
+      let linha = [], ini = null; const out = [];
+      for (const w of ps) {
+        if (ini === null) ini = w.i;
+        linha.push(w.p);
+        if (linha.length >= 14 || /[.!?…]$/.test(w.p)) { out.push(`[${hms(corte.inicio_s + ini)}] ${linha.join(' ')}`); linha = []; ini = null; }
+      }
+      if (linha.length) out.push(`[${hms(corte.inicio_s + ini)}] ${linha.join(' ')}`);
+      fala = out.join('\n');
+    }
+  } catch { fala = ''; }
+  if (!fala) {
+    const linhas = await db(env).all(
+      'SELECT inicio_s, texto FROM cortex_transcricao WHERE video_id = ? AND fim_s > ? AND inicio_s < ? ORDER BY inicio_s',
+      video.id, corte.inicio_s, corte.fim_s);
+    fala = linhas.map((l) => `[${hms(l.inicio_s)}] ${l.texto}`).join('\n');
+  }
+  if (!fala) throw new ErroRoteiro('Não há texto deste trecho para a IA ler (use "Transcrever para revisar" na legenda).');
+  const usados = await titulosDaLive(env, video.id, corte.id);
+  const pedido = `${cabecalho(video)}${usados}
+
+Corte ${corte.tipo === 'longo' ? 'LONGO (vídeo horizontal no YouTube)' : 'CURTO (Short vertical)'} de ${hms(corte.inicio_s)} a ${hms(corte.fim_s)}.
+Título atual (sugestão inicial; não troque à toa um título que já é bom): ${corte.titulo}
+${corte.gancho ? 'Gancho: ' + corte.gancho + '\n' : ''}
+Escreva os textos de publicação deste corte seguindo o padrão do canal.
+
+Fala do trecho (cada linha começa com o tempo):
+${fala.slice(0, 60000)}`;
+  const { dados } = await perguntar(env, pedido, ESQ_TEXTOS);
+  return lerTextos(dados);
 }
 
 // Valida o que veio da IA: tempo dentro do trecho, duracao dentro da faixa, campos aparados.
@@ -214,16 +345,13 @@ function limpar(lista, tipo, min, max) {
     if (i === null || f === null) return null;
     i = Math.max(min, Math.round(i)); f = Math.min(max, Math.round(f));
     if (f - i < dMin || f - i > dMax) return null;
-    const titulo = String(c.titulo || '').replace(/\s+/g, ' ').trim().slice(0, 120);
-    if (!titulo) return null;
+    const tx = lerTextos(c);
+    if (!tx.titulo) return null;
     const { gi, gf } = tempoGancho(c, tipo, i, f);
     return {
       gancho_inicio_s: gi, gancho_fim_s: gf,
-      tipo, inicio_s: i, fim_s: f, titulo,
-      gancho: String(c.gancho || '').trim().slice(0, 300) || null,
-      descricao: String(c.descricao || '').trim().slice(0, 1500) || null,
-      tags: (Array.isArray(c.tags) ? c.tags : []).map((t) => String(t).replace(/^#/, '').trim().toLowerCase().slice(0, 40)).filter(Boolean).slice(0, 15),
-      motivo: String(c.motivo || '').trim().slice(0, 400) || null,
+      tipo, inicio_s: i, fim_s: f, ...tx,
+      gancho: semEmoji(c.gancho).slice(0, 300) || null,
       nota: limitar(c.nota),
     };
   }).filter(Boolean);

@@ -26,7 +26,7 @@ import { db } from '../../lib/db.js';
 import { passoRoteiro } from './roteiro.js';
 import { receberFoto, MAX_FOTO } from './cena.js';
 
-export const AGENTE_VERSAO = '2.4.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+export const AGENTE_VERSAO = '2.5.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
 const PRAZO_MIN = { texto: 30, baixar_corte: 60, roteiro: 20, quadros: 15, legenda: 15 };
 const VERSAO_ROTEIRO = [1, 3, 0];       // agente mais velho nao sabe fazer 'roteiro': nao recebe
 const VERSAO_TRECHO = [1, 7, 0];        // 16/11: so a 1.7.0+ respeita "analisar de/ate"; a velha buscaria a live inteira
@@ -122,7 +122,7 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
       let corte = null;
       if (t.corte_id) {
         corte = await db(env).first(
-          `SELECT id, tipo, inicio_s, fim_s, titulo, descricao, tags, gancho, gancho_inicio_s, gancho_fim_s, baixar_fora, arquivo_local, layout_id, legenda, legenda_editada
+          `SELECT id, tipo, inicio_s, fim_s, titulo, descricao, tags, gancho, gancho_inicio_s, gancho_fim_s, baixar_fora, arquivo_local, layout_id, legenda, legenda_editada, titulos, titulo_porque, thumb
              FROM cortex_cortes WHERE id = ?`, t.corte_id);
         if (corte) {
           // 19/11: layout vertical do curto (o do corte; senao o do video; 0 = nenhum).
@@ -134,6 +134,7 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
           delete corte.layout_id;
           // 19/11: legenda revisada no painel (o PC usa em vez de transcrever de novo)
           try { corte.legenda = corte.legenda ? JSON.parse(corte.legenda) : null; } catch { corte.legenda = null; }
+          try { corte.titulos = corte.titulos ? JSON.parse(corte.titulos) : null; } catch { corte.titulos = null; }   // 19/11: vão para a ficha .txt
           try { corte.tags = JSON.parse(corte.tags || '[]'); } catch { corte.tags = []; }
           // numero do corte dentro do video (01, 02...) para o nome do arquivo seguir a ordem do tempo
           const n = await db(env).first(
@@ -331,17 +332,36 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     // legenda em ingles, com o tempo das palavras errado junto.
     const url = new URL(request.url);
     const idioma = /^[a-z]{2}$/.test(url.searchParams.get('idioma') || '') ? url.searchParams.get('idioma') : 'pt';
-    const r = await transcreverGroq(env, audio, request.headers.get('content-type') || 'audio/ogg', { palavras: true, idioma });
+    // 19/11: o contexto da live (escrito pelo dono) vai como "prompt" do Whisper: os nomes saem certos.
+    const vid = await db(env).first('SELECT contexto FROM cortex_videos WHERE id = ?', tarefa.video_id);
+    const r = await transcreverGroq(env, audio, request.headers.get('content-type') || 'audio/ogg', { palavras: true, idioma, contexto: vid && vid.contexto });
     if (r.erro) return json({ erro: r.erro, esperar_s: r.esperar_s, definitivo: !!r.definitivo }, r.status || 502);
     // 19/11: guarda para o dono revisar. Pedido de revisao ('legenda') sobrescreve; o do download
     // so preenche se ainda nao ha legenda (nunca apaga uma correcao do dono).
-    if (tarefa.corte_id && r.palavras && r.palavras.length) {
+    // 2.5.0: "parcial" = o PC ainda vai juntar pedaços (buracos transcritos de novo) e grava no fim (legenda_final).
+    if (tarefa.corte_id && r.palavras && r.palavras.length && !url.searchParams.get('parcial')) {
       await db(env).run(
         `UPDATE cortex_cortes SET legenda = ?, legenda_em = ?, legenda_editada = 0, legenda_erro = NULL
           WHERE id = ?${tarefa.tipo === 'legenda' ? '' : ' AND legenda IS NULL'}`,
         JSON.stringify(r.palavras), iso, tarefa.corte_id);
     }
     return json({ ok: true, palavras: r.palavras, idioma: r.idioma || null });
+  }
+
+  // 19/11 (2.5.0): o PC juntou a legenda (com os buracos transcritos de novo) e manda a versão final.
+  if (acao === 'legenda_final') {
+    if ((tarefa.tipo !== 'baixar_corte' && tarefa.tipo !== 'legenda') || !tarefa.corte_id) return json({ erro: 'tarefa não é de corte' }, 400);
+    const corpo = await request.json().catch(() => ({}));
+    const palavras = (Array.isArray(corpo.palavras) ? corpo.palavras : []).slice(0, 20000)
+      .map((w) => ({ p: String((w && w.p) || '').trim().slice(0, 40), i: Math.round(Number(w && w.i) * 100) / 100, f: Math.round(Number(w && w.f) * 100) / 100 }))
+      .filter((w) => w.p && Number.isFinite(w.i) && Number.isFinite(w.f) && w.f >= w.i && w.i >= 0);
+    if (palavras.length) {
+      await db(env).run(
+        `UPDATE cortex_cortes SET legenda = ?, legenda_em = ?, legenda_editada = 0, legenda_erro = NULL
+          WHERE id = ?${tarefa.tipo === 'legenda' ? '' : ' AND legenda IS NULL'}`,
+        JSON.stringify(palavras), iso, tarefa.corte_id);
+    }
+    return json({ ok: true, palavras: palavras.length });
   }
 
   if (acao === 'concluir') {
@@ -444,7 +464,10 @@ async function transcreverGroq(env, audio, tipo, opc = {}) {
     form.append('file', new Blob([audio], { type: tipo }), 'parte.' + ext);
     form.append('model', opc.palavras ? GROQ_MODELO_LEGENDA : GROQ_MODELO);
     if (opc.idioma) form.append('language', opc.idioma);
-    if (opc.idioma === 'pt') form.append('prompt', 'Transcrição em português do Brasil de um trecho de live, com pontuação.');
+    if (opc.idioma === 'pt') {
+      const nomes = opc.contexto ? ' Contexto e nomes: ' + String(opc.contexto).replace(/\s+/g, ' ').slice(0, 500) : '';
+      form.append('prompt', 'Transcrição em português do Brasil de um trecho de live, com pontuação.' + nomes);
+    }
     form.append('response_format', 'verbose_json');
     form.append('temperature', '0');
     if (comPalavras) { form.append('timestamp_granularities[]', 'word'); form.append('timestamp_granularities[]', 'segment'); }
@@ -472,6 +495,12 @@ async function transcreverGroq(env, audio, tipo, opc = {}) {
   if (!opc.palavras) return { segmentos };
   let palavras = (j.words || []).map((w) => ({ p: String(w.word || '').trim(), i: Number(w.start), f: Number(w.end) }))
     .filter((w) => w.p && Number.isFinite(w.i) && Number.isFinite(w.f));
+  // 19/11: o Whisper "inventa" frase em trecho sem fala (música, barulho): tira as palavras de
+  // segmento que ele mesmo acha que não tem fala, e as frases-fantasma conhecidas.
+  const FANTASMA = /amara\.org|legendas? (pela|por) comunidade|legendado por|transcri[çc][ãa]o (por|de) |subt[ií]tulos? (por|realizados)/i;
+  const ruins = (j.segments || []).filter((s) => (Number(s.no_speech_prob) > 0.6 && Number(s.avg_logprob) < -0.8) || FANTASMA.test(String(s.text || '')))
+    .map((s) => [Number(s.start), Number(s.end)]);
+  if (ruins.length) palavras = palavras.filter((w) => !ruins.some(([a, b]) => w.i >= a - 0.05 && w.f <= b + 0.05));
   if (!palavras.length) {
     // sem tempo por palavra: reparte o tempo da frase pelo tamanho de cada palavra
     for (const s of segmentos) {
