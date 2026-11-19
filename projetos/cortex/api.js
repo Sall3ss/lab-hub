@@ -21,6 +21,9 @@
 //   POST   /cortes/:id/ficha       corte aprovado sem baixar: o PC grava (de novo) a ficha .txt (18/11)
 //   POST   /cortes/:id/foto        tirar de novo a foto do curto (cena + previa do vertical) (19/11)
 //   GET    /quadros/:corte_id      a foto do curto (JPEG do R2), para a gaveta
+//   GET    /cortes/:id/legenda     palavras da legenda do curto (para revisar) + se esta na fila do PC (19/11)
+//   POST   /cortes/:id/legenda     pede ao PC a transcricao do trecho (so o audio) para revisar antes de baixar
+//   PUT    /cortes/:id/legenda     { palavras: [{ p, i, f }] } grava o texto corrigido pelo dono
 //   GET    /layouts                layouts verticais (9:16) dos curtos; cria os 4 iniciais na 1a vez (19/11)
 //   POST   /layouts  PATCH/DELETE /layouts/:id    o editor de layout (tela "Layouts")
 //   GET    /agentes                lista os PCs conectados
@@ -71,8 +74,8 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
           ORDER BY v.atualizado_em DESC LIMIT 300`, u.id),
       db(env).all(
         `SELECT c.id, c.video_id, c.tipo, c.origem, c.inicio_s, c.fim_s, c.titulo, c.gancho, c.nota, c.estado,
-                c.erro, c.qualidade, c.baixar_fora, c.cena, c.cena_conf, c.cena_auto, c.quadro_em, c.layout_id, v.layout_id AS video_layout_id, c.atualizado_em, v.titulo AS video_titulo, v.plataforma,
-                ${TAREFA_SQL('t.corte_id = c.id')}
+                c.erro, c.qualidade, c.baixar_fora, c.cena, c.cena_conf, c.cena_auto, c.quadro_em, c.layout_id, c.legenda IS NOT NULL AS tem_legenda, c.legenda_editada, v.layout_id AS video_layout_id, c.atualizado_em, v.titulo AS video_titulo, v.plataforma,
+                ${TAREFA_SQL('t.corte_id = c.id AND t.tipo = \'baixar_corte\'')}
            FROM cortex_cortes c JOIN cortex_videos v ON v.id = c.video_id
           WHERE c.usuario_id = ? AND c.estado <> 'descartado' AND v.arquivado = 0
           ORDER BY c.atualizado_em DESC LIMIT 500`, u.id),
@@ -157,7 +160,7 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
     const tabela = rota === 'videos' ? 'cortex_videos' : 'cortex_cortes';
     const dono = await db(env).first(`SELECT id FROM ${tabela} WHERE id = ? AND usuario_id = ?`, Number(id), u.id);
     if (!dono) return json({ erro: 'não encontrado' }, 404);
-    const filtroTipo = rota === 'videos' ? " AND tipo IN ('texto', 'roteiro')" : '';
+    const filtroTipo = rota === 'videos' ? " AND tipo IN ('texto', 'roteiro')" : " AND tipo = 'baixar_corte'";
     const r = await db(env).run(
       `UPDATE cortex_tarefas SET estado = 'pendente', tentativas = 0, erro = NULL, atualizada_em = ?
         WHERE ${campo} = ? AND estado = 'falhou'${filtroTipo}`, agora, dono.id);
@@ -251,11 +254,60 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
     return json({ ok: true, id: r.meta.last_row_id }, 201);
   }
 
+  // 19/11: legenda do curto revisada no painel antes de baixar (pedido do dono: o Whisper erra nomes).
+  if (rota === 'cortes' && id && partes[2] === 'legenda') {
+    const c = await db(env).first(
+      `SELECT c.id, c.video_id, c.tipo, c.estado, c.baixar_fora, c.inicio_s, c.fim_s, c.legenda, c.legenda_em, c.legenda_editada, c.legenda_erro
+         FROM cortex_cortes c WHERE c.id = ? AND c.usuario_id = ?`, Number(id), u.id);
+    if (!c) return json({ erro: 'corte não encontrado' }, 404);
+    const naFila = async () => (await db(env).first(
+      "SELECT estado, progresso FROM cortex_tarefas WHERE corte_id = ? AND tipo = 'legenda' AND estado IN ('pendente', 'pega') ORDER BY id DESC LIMIT 1", c.id)) || null;
+    if (metodo === 'GET') {
+      let palavras = null;
+      try { palavras = c.legenda ? JSON.parse(c.legenda) : null; } catch { palavras = null; }
+      return json({ palavras, editada: !!c.legenda_editada, em: c.legenda_em, erro: c.legenda_erro, tarefa: await naFila() });
+    }
+    if (c.tipo !== 'curto' || c.baixar_fora || !['triagem', 'edicao'].includes(c.estado)) {
+      return json({ erro: 'A legenda é do corte curto, na Triagem ou na Edição (antes de publicar).' }, 400);
+    }
+    if (metodo === 'POST') {
+      if (await naFila()) return json({ ok: true, ja: true });
+      await db(env).batch([
+        ['UPDATE cortex_cortes SET legenda_erro = NULL WHERE id = ?', [c.id]],
+        [`INSERT INTO cortex_tarefas (usuario_id, tipo, video_id, corte_id, criada_em, atualizada_em) VALUES (?, 'legenda', ?, ?, ?, ?)`,
+          [u.id, c.video_id, c.id, agora, agora]],
+      ]);
+      await auditar(env, { quem: u.email, acao: 'pedir-legenda', entidade: 'cortex_cortes', entidade_id: c.id, ip: data.ip });
+      return json({ ok: true });
+    }
+    if (metodo === 'PUT') {
+      const corpo = await request.json().catch(() => ({}));
+      const lim = c.fim_s - c.inicio_s + 5;
+      const lista = Array.isArray(corpo.palavras) ? corpo.palavras : null;
+      if (!lista || !lista.length || lista.length > 3000) return json({ erro: 'Legenda vazia ou grande demais.' }, 400);
+      const palavras = [];
+      for (const w of lista) {
+        const p = String((w && w.p) || '').replace(/[{}\\]/g, '').trim().slice(0, 40);
+        const i = Math.round(Number(w && w.i) * 100) / 100, f = Math.round(Number(w && w.f) * 100) / 100;
+        if (!p) continue;
+        if (!Number.isFinite(i) || !Number.isFinite(f) || i < 0 || f < i || f > lim) return json({ erro: 'Tempo de palavra fora do corte.' }, 400);
+        palavras.push({ p, i, f });
+      }
+      if (!palavras.length) return json({ erro: 'Legenda vazia.' }, 400);
+      await db(env).run('UPDATE cortex_cortes SET legenda = ?, legenda_em = ?, legenda_editada = 1, legenda_erro = NULL WHERE id = ?',
+        JSON.stringify(palavras), agora, c.id);
+      await auditar(env, { quem: u.email, acao: 'corrigir-legenda', entidade: 'cortex_cortes', entidade_id: c.id,
+        depois: { palavras: palavras.length }, ip: data.ip });
+      return json({ ok: true, palavras: palavras.length });
+    }
+    return json({ erro: 'método não permitido' }, 405);
+  }
+
   if (rota === 'cortes' && id && partes[2] === 'ficha' && metodo === 'POST') {
     const corte = await db(env).first('SELECT id, video_id, estado, baixar_fora FROM cortex_cortes WHERE id = ? AND usuario_id = ?', Number(id), u.id);
     if (!corte) return json({ erro: 'corte não encontrado' }, 404);
     if (!corte.baixar_fora || !['edicao', 'publicado'].includes(corte.estado)) return json({ erro: 'A ficha avulsa é só para corte aprovado sem baixar (quem baixa pelo PC já ganha o .txt junto).' }, 400);
-    const pega = await db(env).first("SELECT id FROM cortex_tarefas WHERE corte_id = ? AND estado = 'pega'", corte.id);
+    const pega = await db(env).first("SELECT id FROM cortex_tarefas WHERE corte_id = ? AND tipo = 'baixar_corte' AND estado = 'pega'", corte.id);
     if (pega) return json({ erro: 'O PC já está gravando a ficha desse corte.' }, 409);
     await db(env).batch(fichaNaFila(u.id, corte, agora));
     await auditar(env, { quem: u.email, acao: 'ficha-no-pc', entidade: 'cortex_cortes', entidade_id: corte.id, ip: data.ip });
@@ -285,6 +337,10 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
       // 19/11: escolha a mao vence a cena detectada (cena_auto = 0: a proxima foto nao troca mais).
       if (layoutId !== corte.layout_id) extras.push(['UPDATE cortex_cortes SET layout_id = ?, cena_auto = 0 WHERE id = ?', [layoutId, corte.id]]);
       // Curto na Triagem com tempo novo: a foto antiga pode ser de outra cena; o PC tira outra.
+      // 19/11: tempo novo = a legenda revisada deixa de bater (as palavras contam do início do corte).
+      if (corte.legenda && (novo.inicio_s !== corte.inicio_s || novo.fim_s !== corte.fim_s || novo.tipo !== 'curto')) {
+        extras.push(['UPDATE cortex_cortes SET legenda = NULL, legenda_em = NULL, legenda_editada = 0 WHERE id = ?', [corte.id]]);
+      }
       if (novo.tipo === 'curto' && corte.estado === 'triagem' && (novo.inicio_s !== corte.inicio_s || novo.fim_s !== corte.fim_s)) {
         extras.push(['UPDATE cortex_cortes SET quadro_em = NULL WHERE id = ?', [corte.id]], pedirFotos(u.id, corte.video_id, agora));
       }
@@ -304,7 +360,7 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
                         VALUES (?, 'baixar_corte', ?, ?, ?, ?)`, [u.id, corte.video_id, corte.id, agora, agora]]);
         } else if (corte.estado === 'download') {
           const pega = await db(env).first(
-            "SELECT id FROM cortex_tarefas WHERE corte_id = ? AND estado = 'pega'", corte.id);
+            "SELECT id FROM cortex_tarefas WHERE corte_id = ? AND tipo = 'baixar_corte' AND estado = 'pega'", corte.id);
           if (pega) return json({ erro: 'O PC já está baixando esse corte. Espere terminar.' }, 409);
           extras.push(["DELETE FROM cortex_tarefas WHERE corte_id = ? AND estado IN ('pendente', 'falhou')", [corte.id]]);
         }

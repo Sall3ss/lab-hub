@@ -365,3 +365,12 @@ button, input, textarea { font: inherit; color: inherit; }
 .cena-linha b { color: var(--texto); }
 .cena-msg { margin: 0; font-size: .78rem; color: var(--suave); }
 .c-auto { color: var(--suave); font-weight: 400; }
+
+/* 19/11: legenda do curto para revisar antes de baixar */
+.leg-msg { margin: .2rem 0 .45rem; font-size: .78rem; color: var(--suave); line-height: 1.45; }
+.leg-msg.erro { color: var(--perigo); }
+.leg-lista { display: grid; gap: .3rem; max-height: 22rem; overflow-y: auto; padding-right: .2rem; }
+.leg-linha { display: grid; grid-template-columns: 2.6rem 1fr; gap: .4rem; align-items: center; }
+.leg-tc { font: .7rem/1 var(--mono); color: var(--suave); text-align: right; }
+.leg-linha input { width: 100%; min-width: 0; font-size: .86rem; padding: .4rem .5rem; }
+.leg-acoes { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .5rem; }

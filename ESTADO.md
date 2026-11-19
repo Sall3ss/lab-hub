@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 19/11/2026 (Cortex: legenda em português só nos Shorts, agente 2.3.0).**
+**Atualizado em 19/11/2026 (Cortex: legenda revisada no painel antes de baixar, agente 2.4.0).**
 
 ## Pronto
 
@@ -123,7 +123,7 @@
    detectada pelo Gemini (full cam / jogo com webcam / só o jogo) escolhendo o layout, agente 2.1.0;
    depósito R2 `lab-hub-arquivos` criado pelo dono e ligado (binding `ARQUIVOS`).
    19/11: legenda automática estilo Shorts gravada no vertical (Whisper da Groq palavra a
-   palavra), agente 2.2.0; 2.3.0: legenda em português e só no vertical (Shorts). Arquitetura,
+   palavra), agente 2.2.0; 2.3.0: legenda em português e só no vertical (Shorts); 2.4.0: legenda revisada no painel antes de baixar. Arquitetura,
    modelo de dados e próximos passos em `projetos/cortex/PROJETO.md`.
 
 ## ClipStudio: arquivado em 15/10/2026

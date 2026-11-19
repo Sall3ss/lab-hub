@@ -259,7 +259,8 @@
       (c.baixar_fora && c.estado === 'edicao' ? '<div class="c-fora">↗ BAIXAR FORA · ' + tc(c.inicio_s) + ' → ' + tc(c.fim_s) + '</div>' : '') +
       (layoutEfetivo(c, c.video_layout_id) && nomeLayout(layoutEfetivo(c, c.video_layout_id)) && !c.baixar_fora
         ? '<div class="c-layout" title="Vertical 9:16 gerado no PC com este layout">▦ ' + esc(nomeLayout(layoutEfetivo(c, c.video_layout_id))) +
-          (c.cena_auto && c.estado === 'triagem' ? ' <span class="c-auto" title="Escolhido pela cena que a IA viu na foto">· auto</span>' : '') + '</div>'
+          (c.cena_auto && c.estado === 'triagem' ? ' <span class="c-auto" title="Escolhido pela cena que a IA viu na foto">· auto</span>' : '') +
+          (c.legenda_editada ? ' <span class="c-auto" title="Legenda revisada no painel">· legenda ✓</span>' : '') + '</div>'
         // 19/11: curto sem layout sai só horizontal (sem vertical e sem legenda no vídeo): avisa antes de aprovar
         : c.tipo === 'curto' && !c.baixar_fora && c.estado !== 'publicado'
           ? '<div class="c-layout sem" title="Abra o corte e escolha um layout para o PC gerar o vertical legendado">▭ só horizontal · sem layout</div>' : '') +
@@ -720,6 +721,87 @@
     return 'Ficha .txt ainda não gravada no PC.';
   }
 
+  // ---------- legenda do curto: revisar e corrigir antes de baixar (19/11) ----------
+  // As palavras vêm com o tempo de cada uma. Aqui elas aparecem em FRASES; trocar o texto de uma
+  // frase mantém o tempo dela (o novo texto é repartido no mesmo intervalo).
+  function frasesDe(palavras) {
+    var out = [], atual = [];
+    palavras.forEach(function (w) {
+      var ant = atual[atual.length - 1], tam = atual.reduce(function (n, x) { return n + x.p.length + 1; }, 0) + w.p.length;
+      if (atual.length && (atual.length >= 8 || tam > 42 || w.i - ant.f > 0.8 || /[.!?…]$/.test(ant.p))) { out.push(atual); atual = []; }
+      atual.push(w);
+    });
+    if (atual.length) out.push(atual);
+    return out;
+  }
+  function textoDe(g) { return g.map(function (w) { return w.p; }).join(' '); }
+  function seg(s) { s = Math.max(0, Math.floor(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+  function editorLegenda(el, c) {
+    var frases = null, sujo = false, vivo = true, extra = null;
+    function carregarLeg() {
+      if (!el.isConnected) return;
+      api('/cortes/' + c.id + '/legenda').then(function (j) {
+        frases = j.palavras && j.palavras.length ? frasesDe(j.palavras) : null; sujo = false;
+        desenhar(j);
+        if (j.tarefa && el.isConnected) setTimeout(carregarLeg, 6000);   // o PC está transcrevendo: confere de novo
+      }).catch(function (e) { el.innerHTML = '<p class="leg-msg erro">' + esc(e.message) + '</p>'; });
+    }
+    function desenhar(j) {
+      var pedir = '<button type="button" class="mini" id="leg-pedir">📝 Transcrever para revisar</button>';
+      if (j.tarefa) {
+        el.innerHTML = '<p class="leg-msg">⏳ ' + (j.tarefa.estado === 'pega' ? 'O PC está transcrevendo o áudio deste trecho…' :
+          (estado.pc.online ? 'Na fila do PC: começa em instantes.' : 'Na fila: começa quando o PC ligar.')) + '</p>';
+        return;
+      }
+      if (!frases) {
+        el.innerHTML = (j.erro ? '<p class="leg-msg erro">A transcrição falhou: ' + esc(j.erro) + '</p>' : '') +
+          '<p class="leg-msg">Leia e corrija a legenda <b>antes de aprovar</b>: o PC busca só o áudio deste trecho e o texto aparece aqui em ~1 min. ' +
+          'Sem isso, o PC transcreve sozinho na hora de baixar.</p><div class="leg-acoes">' + pedir + '</div>';
+        el.querySelector('#leg-pedir').onclick = pedirLeg;
+        return;
+      }
+      el.innerHTML = '<p class="leg-msg">' + (j.editada ? '✓ Corrigida por você' : 'Texto do Whisper') + ' · corrija nomes e gírias; o tempo de cada frase continua o mesmo. No vídeo sai em MAIÚSCULAS.</p>' +
+        '<div class="leg-lista">' + frases.map(function (g, k) {
+          return '<label class="leg-linha"><span class="leg-tc">' + seg(g[0].i) + '</span><input data-k="' + k + '" value="' + esc(textoDe(g)) + '" maxlength="200"></label>';
+        }).join('') + '</div>' +
+        '<p class="leg-msg erro" id="leg-erro" hidden></p>' +
+        '<div class="leg-acoes"><button type="button" class="mini sim" id="leg-salvar" disabled>Salvar legenda</button>' +
+        '<button type="button" class="mini" id="leg-refazer">Transcrever de novo</button></div>';
+      el.querySelectorAll('.leg-lista input').forEach(function (i) { i.oninput = function () { sujo = true; el.querySelector('#leg-salvar').disabled = false; }; });
+      el.querySelector('#leg-salvar').onclick = function () { salvar(); };
+      el.querySelector('#leg-refazer').onclick = function () {
+        confirmar('Transcrever de novo? ' + (j.editada || sujo ? 'As suas correções nesta legenda se perdem.' : 'O texto atual é trocado pelo novo.'), 'Transcrever').then(function (sim) { if (sim) pedirLeg(); });
+      };
+    }
+    function pedirLeg() {
+      api('/cortes/' + c.id + '/legenda', { metodo: 'POST' }).then(function () { carregarLeg(); })
+        .catch(function (e) { aviso(e.message, true); });
+    }
+    // Junta o que está nos campos: frase igual mantém as palavras (e o tempo de cada uma); frase
+    // mudada reparte o intervalo dela entre as palavras novas, pelo tamanho de cada uma.
+    function juntar() {
+      var out = [];
+      el.querySelectorAll('.leg-lista input').forEach(function (inp) {
+        var g = frases[Number(inp.dataset.k)], txt = inp.value.replace(/[{}\\]/g, '').replace(/\s+/g, ' ').trim();
+        if (txt === textoDe(g)) { out.push.apply(out, g); return; }
+        if (!txt) return;
+        var ps = txt.split(' '), ini = g[0].i, fim = g[g.length - 1].f, total = ps.reduce(function (n, x) { return n + x.length + 1; }, 0), t = ini;
+        ps.forEach(function (p) { var d = (fim - ini) * (p.length + 1) / total; out.push({ p: p.slice(0, 40), i: +t.toFixed(2), f: +(t + d).toFixed(2) }); t += d; });
+      });
+      return out;
+    }
+    function salvar() {
+      var b = el.querySelector('#leg-salvar'), er = el.querySelector('#leg-erro'), palavras = juntar();
+      if (!palavras.length) { er.hidden = false; er.textContent = 'A legenda ficou vazia. Para tirar a legenda, escolha o layout "Nenhum".'; return Promise.resolve(false); }
+      b.disabled = true; er.hidden = true;
+      return api('/cortes/' + c.id + '/legenda', { metodo: 'PUT', corpo: { palavras: palavras } }).then(function () {
+        aviso('Legenda salva.'); carregarLeg(); return true;
+      }).catch(function (e) { b.disabled = false; er.hidden = false; er.textContent = e.message; return false; });
+    }
+    carregarLeg();
+    return { salvarSePreciso: function () { return sujo && frases ? salvar() : Promise.resolve(true); } };
+  }
+
   // Formulário de corte: novo (c = null) ou existente.
   function formCorte(c) {
     var v = detalhe.video, novo = !c;
@@ -756,6 +838,8 @@
         opcoesLayout(c.layout_id == null ? null : c.layout_id, 'Padrão do vídeo' + (v.layout_id ? ' (' + (nomeLayout(v.layout_id) || 'layout') + ')' : ' (nenhum)')) +
         '</select><button type="button" class="mini" id="c-layouts">Editar layouts</button></div>' +
         '<small class="dica-layout">' + (c.estado === 'edicao' && !fora ? 'Mudou o layout? Use <b>Baixar de novo</b> para gerar o vertical com ele.' : 'Com layout, o corte sai só na pasta Shorts: vertical pronto e legendado. Com "Nenhum", sai horizontal em Curtos, sem legenda.') + '</small></div>' +
+      // 19/11: legenda do curto para revisar e corrigir antes de baixar (o Whisper erra nomes)
+      (!novo && c.tipo === 'curto' && !fora && (c.estado === 'triagem' || c.estado === 'edicao') ? '<div class="campo" id="campo-legenda"><span>Legenda do vertical</span><div id="leg-corpo"><p class="leg-msg">Carregando…</p></div></div>' : '') +
       '<div class="dupla"><label class="campo"><span>Início</span><input class="tc-campo" name="inicio" inputmode="numeric" placeholder="00:00:00" value="' + (c.inicio_s === '' ? '' : tc(c.inicio_s)) + '"' + (tempoLivre ? '' : ' disabled') + '>' + ajustes('inicio', tempoLivre) + '</label>' +
       '<label class="campo"><span>Fim</span><input class="tc-campo" name="fim" inputmode="numeric" placeholder="00:00:00" value="' + (c.fim_s === '' ? '' : tc(c.fim_s)) + '"' + (tempoLivre ? '' : ' disabled') + '>' + ajustes('fim', tempoLivre) + '</label></div>' +
       (c.estado === 'edicao' ? '<p style="margin:-.2rem 0 0;font-size:.78rem;color:var(--suave)">' + (fora ? 'Sem arquivo no PC: ajuste o tempo e aperte <b>Salvar</b>.' : 'Mudou o tempo? Use <b>Baixar de novo</b>: o PC baixa com o tempo novo.') + '</p>' : '') +
@@ -786,7 +870,12 @@
           box.querySelectorAll('#esc-tipo button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === tipo); });
           box.querySelector('#campo-layout').hidden = tipo !== 'curto';     // vertical só para curto
         }
-        box.querySelector('#c-layouts').onclick = function () { CortexLayouts.abrir(Number(f.layout.value) || null); };
+        // 19/11: o editor abre com a FOTO deste corte por trás (ajusta o recorte na cena certa)
+        box.querySelector('#c-layouts').onclick = function () {
+          var ft = box.querySelector('#cena-foto'), lid = Number(f.layout.value) || (f.layout.value === '' ? v.layout_id : null) || null;
+          CortexLayouts.abrir(lid, ft && ft.naturalWidth ? { foto: ft.src, rotulo: 'foto do corte (' + tc(c.quadro_s) + ')' } : null);
+        };
+        var leg = box.querySelector('#campo-legenda') ? editorLegenda(box.querySelector('#leg-corpo'), c) : null;
         // 19/11: foto do corte com o recorte do layout escolhido por cima + prévia do vertical
         function layoutDoSelect() {
           var val = f.layout.value, id = val === '' ? v.layout_id : Number(val);
@@ -805,6 +894,7 @@
         };
         function layoutEscolhido() { return tipo !== 'curto' ? undefined : f.layout.value === '' ? null : Number(f.layout.value); }
         marcarTipo();
+        if (leg) box.querySelector('#esc-tipo').addEventListener('click', function () { box.querySelector('#campo-legenda').hidden = tipo !== 'curto'; });
         box.querySelector('#esc-tipo').onclick = function (ev) { var b = ev.target.closest('button'); if (b) { tipo = b.dataset.v; marcarTipo(); mostrarDur(); } };
         // máscara de timecode: só dígitos e ":", e completa os ":" ao sair do campo
         [f.inicio, f.fim, f.g_inicio, f.g_fim].forEach(function (el) {
@@ -864,7 +954,9 @@
               extra = Object.assign({ tipo: tipo, inicio_s: ini, fim_s: fim, titulo: f.titulo.value.trim(), gancho: f.gancho.value.trim(),
                 descricao: f.descricao.value.trim(), tags: f.tags.value, layout_id: layoutEscolhido() }, tg);
             }
-            mudarEstado(c.id, b.dataset.ir, b, extra).then(function (ok) { if (ok) fecharGaveta(); });
+            (leg && b.dataset.ir === 'download' ? leg.salvarSePreciso() : Promise.resolve(true)).then(function (seguir) {
+              if (seguir) return mudarEstado(c.id, b.dataset.ir, b, extra).then(function (ok) { if (ok) fecharGaveta(); });
+            });
           };
         });
         var ex = box.querySelector('#c-excluir');

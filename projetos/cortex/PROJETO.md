@@ -450,3 +450,13 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   antes o Whisper adivinhava e saiu em inglês), modelo `whisper-large-v3` (mais preciso que o
   turbo) e tempo ajustado: início real do áudio (ffprobe), bloco entra 0,12 s antes da fala e
   não pisca entre blocos próximos.
+- 19/11 (agente 2.4.0, pedido do dono): **legenda revisada antes de baixar.** Na gaveta do curto
+  (Triagem/Edição), "📝 Transcrever para revisar" cria a tarefa `legenda`: o PC busca só o ÁUDIO
+  do trecho (`yt-dlp -g -f ba/b`, `ffmpeg -ss -t`), o painel manda ao Whisper e guarda as palavras
+  em `cortex_cortes.legenda` (JSON `{p,i,f}`, migration 0018). O dono corrige frase por frase
+  (frase mudada reparte o tempo dela entre as palavras novas) e salva; "Aprovar e baixar" salva
+  antes o que estiver pendente. No download o PC usa esse texto (não chama a Groq de novo); sem
+  revisão, transcreve sozinho e o texto também fica guardado (dá para corrigir e "Baixar de
+  novo"). Tempo do corte mudou = legenda apagada. Cartão mostra "· legenda ✓".
+- 19/11: "Editar layouts" na gaveta do corte abre o editor com a **foto daquele corte** de fundo
+  (não é gravada como print do layout).

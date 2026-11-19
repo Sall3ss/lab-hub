@@ -12,6 +12,9 @@
   var dep = null;                 // { api, aviso, confirmar, esc, aoMudar }
   var lista = [], atual = null, sujo = false, img = null, $ = function (id) { return document.getElementById(id); };
   var CHAVE_PRINT = 'cortex-print-';
+  // 19/11: aberto pela gaveta do corte, o fundo é a foto daquele corte (a cena certa).
+  // Ela não é guardada como "print" do layout (é do corte; some quando o vídeo é concluído).
+  var fotoCorte = null;
 
   function proporcaoCam(L) { return (1080 / alturaCam(L)) / L.proporcao; }          // largura/altura (em fração)
   function proporcaoJogo(L) { return (1080 / (1920 - (L.tipo === 'webcam' ? alturaCam(L) : 0))) / L.proporcao; }
@@ -41,7 +44,7 @@
 
   // ---------- print (só neste navegador) ----------
   function lerPrintSalvo(id) { try { return localStorage.getItem(CHAVE_PRINT + id); } catch (e) { return null; } }
-  function salvarPrint(id, url) { try { if (url) localStorage.setItem(CHAVE_PRINT + id, url); } catch (e) { /* cheio ou bloqueado: segue sem */ } }
+  function salvarPrint(id, url) { try { if (url && /^data:/.test(url)) localStorage.setItem(CHAVE_PRINT + id, url); } catch (e) { /* cheio ou bloqueado: segue sem */ } }
   function carregarImagem(url, pronto) {
     if (!url) { img = null; pronto(); return; }
     var i = new Image();
@@ -90,7 +93,7 @@
         var base = lista.find(function (l) { return l.tipo === 'webcam'; }) || lista[0];
         atual = Object.assign({}, base || { tipo: 'webcam', cam_altura: 0.35, jogo_x: 0.25, jogo_y: 0, jogo_w: 0.49, jogo_h: 1, proporcao: 16 / 9 },
           { id: null, nome: 'Novo layout' });
-        atual.print = base ? lerPrintSalvo(base.id) : null;
+        atual.print = fotoCorte ? fotoCorte.foto : base ? lerPrintSalvo(base.id) : null;
         sujo = true; abrirEditor();
       });
     };
@@ -122,7 +125,7 @@
   function escolher(id) {
     var l = lista.find(function (x) { return x.id === id; });
     if (!l) return;
-    atual = Object.assign({}, l); atual.print = lerPrintSalvo(id); sujo = false;
+    atual = Object.assign({}, l); atual.print = fotoCorte ? fotoCorte.foto : lerPrintSalvo(id); sujo = false;
     abrirEditor();
   }
 
@@ -141,7 +144,8 @@
       '</div>' +
       '<div class="lay-area">' +
       '<div class="lay-palco-col"><p class="lay-dica">Arraste as caixas. O canto ◢ muda o tamanho (a proporção fica travada). <b>Gameplay</b>: deixe o personagem no meio. ' +
-      'Para ver a live por trás: <b>Ctrl+V</b> com um print dela ou <label class="lay-arq">escolha a imagem<input type="file" accept="image/*" id="lay-arq" hidden></label>.</p>' +
+      (fotoCorte && L.print === fotoCorte.foto ? 'Fundo: <b>' + dep.esc(fotoCorte.rotulo) + '</b>. Para usar outro print: <b>Ctrl+V</b> ou ' : 'Para ver a live por trás: <b>Ctrl+V</b> com um print dela ou ') +
+      '<label class="lay-arq">escolha a imagem<input type="file" accept="image/*" id="lay-arq" hidden></label>.</p>' +
       '<div class="lay-palco" id="lay-palco"><div class="lay-fundo" id="lay-fundo"></div>' +
       '<div class="lay-caixa jogo" data-caixa="jogo"><span>GAMEPLAY</span><i data-alca="jogo">◢</i></div>' +
       '<div class="lay-caixa cam" data-caixa="cam"><span>WEBCAM</span><i data-alca="cam">◢</i></div></div></div>' +
@@ -272,14 +276,16 @@
     return dep.api('/layouts').then(function (j) { lista = j.layouts || []; return lista; });
   }
   function fechar() {
-    sairDaqui(function () { $('lay-tela').hidden = true; document.body.style.overflow = ''; atual = null; });
+    sairDaqui(function () { $('lay-tela').hidden = true; document.body.style.overflow = ''; atual = null; fotoCorte = null; });
   }
 
   window.CortexLayouts = {
     iniciar: function (d) { dep = d; },
     carregar: carregarLista,
     // abre a tela (no layout pedido, ou no primeiro)
-    abrir: function (id) {
+    // opc (19/11): { foto, rotulo } = foto do corte como fundo
+    abrir: function (id, opc) {
+      fotoCorte = opc && opc.foto ? opc : null;
       montar();
       $('lay-tela').hidden = false; document.body.style.overflow = 'hidden';
       $('lay-editor').innerHTML = '<p class="carregando">Carregando os layouts…</p>';

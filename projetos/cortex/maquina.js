@@ -26,13 +26,14 @@ import { db } from '../../lib/db.js';
 import { passoRoteiro } from './roteiro.js';
 import { receberFoto, MAX_FOTO } from './cena.js';
 
-export const AGENTE_VERSAO = '2.3.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
-const PRAZO_MIN = { texto: 30, baixar_corte: 60, roteiro: 20, quadros: 15 };
+export const AGENTE_VERSAO = '2.4.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+const PRAZO_MIN = { texto: 30, baixar_corte: 60, roteiro: 20, quadros: 15, legenda: 15 };
 const VERSAO_ROTEIRO = [1, 3, 0];       // agente mais velho nao sabe fazer 'roteiro': nao recebe
 const VERSAO_TRECHO = [1, 7, 0];        // 16/11: so a 1.7.0+ respeita "analisar de/ate"; a velha buscaria a live inteira
 const VERSAO_VERTICAL = [2, 0, 0];      // 19/11: curto com layout vertical 9:16 (o agente velho entregaria so o horizontal)
 const VERSAO_FICHA = [1, 9, 0];         // 18/11: ficha .txt de corte "sem baixar"; o agente velho BAIXARIA o video
-const VERSAO_QUADROS = [2, 1, 0];      // 19/11: foto de cada curto (cena + previa do vertical)
+const VERSAO_QUADROS = [2, 1, 0];
+const VERSAO_LEGENDA = [2, 4, 0];      // 19/11: legenda do curto revisada no painel antes de baixar      // 19/11: foto de cada curto (cena + previa do vertical)
 const VERSAO_LIVE = [1, 8, 2];          // 18/11: live da Kick (link do canal, m3u8, "Puxar o resto" com "ate") so a 1.8.2+
 const MAX_TENTATIVAS = 3;
 const VISTO_A_CADA_MS = 60 * 1000;      // grava "visto_em" no maximo 1x por minuto (poupa escrita no D1)
@@ -88,6 +89,7 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     if (ag.baixa_cortes) lista.push('baixar_corte');
     if (versaoMin(ag.versao, VERSAO_ROTEIRO)) lista.push('roteiro');
     if (versaoMin(ag.versao, VERSAO_QUADROS)) lista.push('quadros');
+    if (versaoMin(ag.versao, VERSAO_LEGENDA)) lista.push('legenda');
     const tipos = '(' + lista.map((x) => `'${x}'`).join(', ') + ')';
     // Agente antigo nao pega texto de video com trecho marcado (atualiza sozinho em ate 10 min).
     let semTrecho = versaoMin(ag.versao, VERSAO_TRECHO) ? '' :
@@ -120,7 +122,7 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
       let corte = null;
       if (t.corte_id) {
         corte = await db(env).first(
-          `SELECT id, tipo, inicio_s, fim_s, titulo, descricao, tags, gancho, gancho_inicio_s, gancho_fim_s, baixar_fora, arquivo_local, layout_id
+          `SELECT id, tipo, inicio_s, fim_s, titulo, descricao, tags, gancho, gancho_inicio_s, gancho_fim_s, baixar_fora, arquivo_local, layout_id, legenda, legenda_editada
              FROM cortex_cortes WHERE id = ?`, t.corte_id);
         if (corte) {
           // 19/11: layout vertical do curto (o do corte; senao o do video; 0 = nenhum).
@@ -130,6 +132,8 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
             `SELECT id, nome, tipo, cam_x, cam_y, cam_w, cam_h, cam_altura, jogo_x, jogo_y, jogo_w, jogo_h, proporcao
                FROM cortex_layouts WHERE id = ? AND usuario_id = ?`, lid, ag.usuario_id) : null;
           delete corte.layout_id;
+          // 19/11: legenda revisada no painel (o PC usa em vez de transcrever de novo)
+          try { corte.legenda = corte.legenda ? JSON.parse(corte.legenda) : null; } catch { corte.legenda = null; }
           try { corte.tags = JSON.parse(corte.tags || '[]'); } catch { corte.tags = []; }
           // numero do corte dentro do video (01, 02...) para o nome do arquivo seguir a ordem do tempo
           const n = await db(env).first(
@@ -138,7 +142,7 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
           corte.numero = (n ? n.n : 0) + 1;
         }
       }
-      if (t.tipo !== 'baixar_corte' && t.tipo !== 'quadros') {
+      if (t.tipo === 'texto' || t.tipo === 'roteiro') {
         await db(env).run("UPDATE cortex_videos SET erro = NULL, atualizado_em = ? WHERE id = ?", iso, t.video_id);
       }
       // 19/11: fotos - os curtos da Triagem ainda sem foto, com o segundo do meio de cada um.
@@ -318,7 +322,7 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
   if (acao === 'palavras') {
     // 19/11: legenda. O texto guardado do video vem em blocos de ~30 s (grosso demais); o PC manda
     // o audio SO do corte e o Whisper devolve cada palavra com o tempo, contado do inicio do corte.
-    if (tarefa.tipo !== 'baixar_corte') return json({ erro: 'tarefa não é de corte' }, 400);
+    if (tarefa.tipo !== 'baixar_corte' && tarefa.tipo !== 'legenda') return json({ erro: 'tarefa não é de corte' }, 400);
     if (!env.GROQ_API_KEY) return json({ erro: 'Falta a chave GROQ_API_KEY no Cloudflare (legenda).', definitivo: true }, 503);
     const audio = await request.arrayBuffer();
     if (!audio.byteLength) return json({ erro: 'áudio vazio' }, 400);
@@ -329,6 +333,14 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     const idioma = /^[a-z]{2}$/.test(url.searchParams.get('idioma') || '') ? url.searchParams.get('idioma') : 'pt';
     const r = await transcreverGroq(env, audio, request.headers.get('content-type') || 'audio/ogg', { palavras: true, idioma });
     if (r.erro) return json({ erro: r.erro, esperar_s: r.esperar_s, definitivo: !!r.definitivo }, r.status || 502);
+    // 19/11: guarda para o dono revisar. Pedido de revisao ('legenda') sobrescreve; o do download
+    // so preenche se ainda nao ha legenda (nunca apaga uma correcao do dono).
+    if (tarefa.corte_id && r.palavras && r.palavras.length) {
+      await db(env).run(
+        `UPDATE cortex_cortes SET legenda = ?, legenda_em = ?, legenda_editada = 0, legenda_erro = NULL
+          WHERE id = ?${tarefa.tipo === 'legenda' ? '' : ' AND legenda IS NULL'}`,
+        JSON.stringify(r.palavras), iso, tarefa.corte_id);
+    }
     return json({ ok: true, palavras: r.palavras, idioma: r.idioma || null });
   }
 
@@ -367,7 +379,8 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     if (fim) {
       const msg = `${ag.nome}: ${erro}`;
       // Foto que falhou nao e erro do video (o corte segue sem foto; "Tirar foto de novo" na gaveta).
-      if (tarefa.tipo !== 'baixar_corte' && tarefa.tipo !== 'quadros') lotes.push(['UPDATE cortex_videos SET erro = ?, atualizado_em = ? WHERE id = ?', [msg, iso, tarefa.video_id]]);
+      if (tarefa.tipo === 'legenda') lotes.push(['UPDATE cortex_cortes SET legenda_erro = ? WHERE id = ?', [msg.slice(0, 300), tarefa.corte_id]]);
+      else if (tarefa.tipo !== 'baixar_corte' && tarefa.tipo !== 'quadros') lotes.push(['UPDATE cortex_videos SET erro = ?, atualizado_em = ? WHERE id = ?', [msg, iso, tarefa.video_id]]);
       else if (tarefa.corte_id) lotes.push(['UPDATE cortex_cortes SET erro = ?, atualizado_em = ? WHERE id = ?', [msg, iso, tarefa.corte_id]]);
     }
     await db(env).batch(lotes);

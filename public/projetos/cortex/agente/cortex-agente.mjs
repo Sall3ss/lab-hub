@@ -16,6 +16,8 @@
 //     2.3.0: curto com layout vai SÓ para "Shorts" (o horizontal é baixado numa pasta de
 //     trabalho e apagado); legenda só nele, em português, com o tempo acertado pelo início
 //     real do áudio. Sem layout ("Nenhum") e longos: só o horizontal + .txt, sem legenda.
+//   - "legenda" (2.4.0): só o ÁUDIO do trecho de um curto (não baixa o vídeo) -> Whisper, para o
+//     dono revisar o texto no painel antes de aprovar. No download, o texto revisado é usado.
 //   - "quadros" (2.1.0): UMA foto pequena do meio de cada curto da Triagem, tirada direto do
 //     endereço do vídeo (não baixa o vídeo). O painel guarda e a IA diz a cena (full cam, jogo
 //     com webcam, só o jogo), para o corte já chegar com o layout vertical certo.
@@ -42,7 +44,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '2.3.0';
+const VERSAO = '2.4.0';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -436,13 +438,18 @@ async function palavrasDoCorte(cfg, t, arquivo, pasta) {
   const audio = join(pasta, 'legenda.ogg');
   const atraso = await atrasoDoAudio(arquivo);
   await rodar('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', arquivo, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'libopus', '-b:a', '24k', audio]);
+  const palavras = await enviarAudioLegenda(cfg, t, audio);
+  if (atraso) log(`Legenda: áudio começa ${atraso.toFixed(2)} s depois do vídeo; tempos ajustados.`);
+  return palavras.map((w) => ({ ...w, i: w.i + atraso, f: w.f + atraso }));
+}
+// Manda o áudio (ogg) para o painel -> Whisper. Volta [{ p, i, f }] contado do início do áudio.
+async function enviarAudioLegenda(cfg, t, audio) {
   const bytes = readFileSync(audio);
   if (bytes.length > 24 * 1024 * 1024) throw new Error('áudio do corte grande demais para a legenda');
   for (let tent = 0; ; tent++) {
     try {
       const r = await painel(cfg, `/tarefas/${t.id}/palavras?idioma=pt`, { bruto: bytes, tipo: 'audio/ogg', prazo: 5 * 60000 });
-      if (atraso) log(`Legenda: áudio começa ${atraso.toFixed(2)} s depois do vídeo; tempos ajustados.`);
-      return (r.palavras || []).map((w) => ({ ...w, i: w.i + atraso, f: w.f + atraso }));
+      return r.palavras || [];
     } catch (e) {
       const esp = e instanceof ErroPainel && Number(e.dados.esperar_s);
       if (esp && esp <= 600 && tent < 3) { log(`Limite da Groq: legenda tenta de novo em ${minutos(esp)}.`); await dorme(esp * 1000); continue; }
@@ -605,7 +612,12 @@ async function tarefaCorte(cfg, t, pasta) {
   // Curto com layout: legenda (Whisper, português) gravada no vertical; falhou = vertical sem ela.
   let palavras = null, avisoLeg = null;
   try {
-    palavras = await palavrasDoCorte(cfg, t, caminho, pasta);
+    // 2.4.0: legenda já revisada no painel (palavras contadas do início do corte): usa essa.
+    if (Array.isArray(c.legenda) && c.legenda.length) {
+      const atraso = await atrasoDoAudio(caminho);
+      palavras = c.legenda.map((w) => ({ p: w.p, i: Number(w.i) + atraso, f: Number(w.f) + atraso }));
+      log(`Legenda do painel (${palavras.length} palavras${c.legenda_editada ? ', corrigida' : ''}).`);
+    } else palavras = await palavrasDoCorte(cfg, t, caminho, pasta);
     if (!palavras.length) avisoLeg = 'sem fala para legendar';
     else log(`Legenda: ${palavras.length} palavras.`);
   } catch (e) {
@@ -798,6 +810,29 @@ async function tarefaQuadros(cfg, t, pasta) {
 }
 const NOMES_CENA = { fullcam: 'Full cam', jogo_webcam: 'Jogo com webcam', jogo: 'Só o jogo' };
 
+// ---------------------------------------------------------------- tarefa "legenda" (2.4.0)
+// O dono quer ler e corrigir a legenda ANTES de aprovar. Só o áudio do trecho do curto: o
+// yt-dlp acha o endereço (áudio, ou o vídeo mais leve se não houver áudio separado) e o ffmpeg
+// pula direto para o início e grava só aquele pedaço, leve (~180 KB por minuto).
+async function tarefaLegenda(cfg, t, pasta) {
+  const v = t.video, c = t.corte;
+  if (!c) throw Object.assign(new Error('o corte foi apagado no painel'), { definitivo: true });
+  log(`Legenda para revisar: "${c.titulo}" (${tc(c.inicio_s)} → ${tc(c.fim_s)})`);
+  const alvo = v.fonte_m3u8 || v.url;
+  const endereco = ultimaLinha(await rodar('yt-dlp', ['-g', '--no-playlist', '--no-warnings',
+    '-f', 'ba/b[height<=480]/b', alvo])).trim();
+  if (!/^https?:\/\//.test(endereco)) throw new Error('o yt-dlp não devolveu o endereço do áudio');
+  const audio = join(pasta, 'legenda.ogg');
+  const relogio = setTimeout(() => matarFilhos(), 5 * 60000);
+  try {
+    await rodar('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-ss', String(c.inicio_s), '-i', endereco,
+      '-t', String(c.fim_s - c.inicio_s), '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'libopus', '-b:a', '24k', audio]);
+  } finally { clearTimeout(relogio); }
+  if (!existsSync(audio)) throw new Error('o ffmpeg não gerou o áudio do trecho');
+  const palavras = await enviarAudioLegenda(cfg, t, audio);
+  log(`Legenda pronta para revisar: ${palavras.length} palavras.`);
+}
+
 // ---------------------------------------------------------------- laço principal
 async function executar(cfg, t) {
   const pasta = join(tmpdir(), 'cortex-' + t.id + '-' + Date.now());
@@ -809,7 +844,10 @@ async function executar(cfg, t) {
   try {
     if (t.tipo === 'texto') await tarefaTexto(cfg, t, pasta);
     else if (t.tipo === 'roteiro') await tarefaRoteiro(cfg, t);
-    else if (t.tipo === 'quadros') {
+    else if (t.tipo === 'legenda') {
+      await tarefaLegenda(cfg, t, pasta);
+      await painel(cfg, `/tarefas/${t.id}/concluir`, { corpo: {} });
+    } else if (t.tipo === 'quadros') {
       await tarefaQuadros(cfg, t, pasta);
       await painel(cfg, `/tarefas/${t.id}/concluir`, { corpo: {} });
     } else {
