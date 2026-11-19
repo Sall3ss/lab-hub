@@ -12,6 +12,8 @@
 //   POST /tarefas/:id/audio?parte&total&inicio          corpo = audio cru (ogg/opus) -> Groq
 //   POST /tarefas/:id/roteiro            um passo do roteiro com a IA (etapa 3); resposta chega aos poucos
 //   POST /tarefas/:id/quadro?corte&s     corpo = foto JPEG crua do meio do curto -> R2 + cena pelo Gemini (19/11)
+//   POST /tarefas/:id/palavras           corpo = audio cru do corte baixado -> Whisper (Groq) palavra a palavra,
+//                                        para o PC gravar a legenda no vertical e o .srt (19/11, agente 2.2.0)
 //   POST /tarefas/:id/concluir            { arquivo_local? }
 //   POST /tarefas/:id/falhar              { erro, definitivo? }
 //   POST /tarefas/:id/devolver            o dono desligou o PC no meio: volta para a fila sem contar falha
@@ -24,7 +26,7 @@ import { db } from '../../lib/db.js';
 import { passoRoteiro } from './roteiro.js';
 import { receberFoto, MAX_FOTO } from './cena.js';
 
-export const AGENTE_VERSAO = '2.1.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+export const AGENTE_VERSAO = '2.2.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
 const PRAZO_MIN = { texto: 30, baixar_corte: 60, roteiro: 20, quadros: 15 };
 const VERSAO_ROTEIRO = [1, 3, 0];       // agente mais velho nao sabe fazer 'roteiro': nao recebe
 const VERSAO_TRECHO = [1, 7, 0];        // 16/11: so a 1.7.0+ respeita "analisar de/ate"; a velha buscaria a live inteira
@@ -311,6 +313,19 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     }
   }
 
+  if (acao === 'palavras') {
+    // 19/11: legenda. O texto guardado do video vem em blocos de ~30 s (grosso demais); o PC manda
+    // o audio SO do corte e o Whisper devolve cada palavra com o tempo, contado do inicio do corte.
+    if (tarefa.tipo !== 'baixar_corte') return json({ erro: 'tarefa não é de corte' }, 400);
+    if (!env.GROQ_API_KEY) return json({ erro: 'Falta a chave GROQ_API_KEY no Cloudflare (legenda).', definitivo: true }, 503);
+    const audio = await request.arrayBuffer();
+    if (!audio.byteLength) return json({ erro: 'áudio vazio' }, 400);
+    if (audio.byteLength > MAX_AUDIO) return json({ erro: 'áudio do corte maior que 24 MB', definitivo: true }, 413);
+    const r = await transcreverGroq(env, audio, request.headers.get('content-type') || 'audio/ogg', { palavras: true });
+    if (r.erro) return json({ erro: r.erro, esperar_s: r.esperar_s, definitivo: !!r.definitivo }, r.status || 502);
+    return json({ ok: true, palavras: r.palavras, idioma: r.idioma || null });
+  }
+
   if (acao === 'concluir') {
     const corpo = await request.json().catch(() => ({}));
     const lotes = [["UPDATE cortex_tarefas SET estado = 'feita', progresso = NULL, erro = NULL, atualizada_em = ? WHERE id = ?", [iso, tarefa.id]]];
@@ -322,7 +337,7 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
       lotes.push([
         "UPDATE cortex_cortes SET estado = 'edicao', arquivo_local = ?, qualidade = ?, erro = NULL, atualizado_em = ? WHERE id = ? AND estado = 'download'",
         [corpo.arquivo_local ? `${ag.nome}: ${String(corpo.arquivo_local).slice(0, 400)}` : null,
-         corpo.qualidade ? String(corpo.qualidade).slice(0, 80) : null, iso, tarefa.corte_id]]);
+         corpo.qualidade ? String(corpo.qualidade).slice(0, 200) : null, iso, tarefa.corte_id]]);
     }
     await db(env).batch(lotes);
     return json({ ok: true });
@@ -395,18 +410,25 @@ function juntar(segs) {
 }
 
 // Groq (API compativel com a da OpenAI): Whisper na nuvem, segundos por hora de audio.
-async function transcreverGroq(env, audio, tipo) {
-  const form = new FormData();
-  const ext = tipo.includes('ogg') ? 'ogg' : tipo.includes('mpeg') ? 'mp3' : tipo.includes('mp4') ? 'm4a' : 'webm';
-  form.append('file', new Blob([audio], { type: tipo }), 'parte.' + ext);
-  form.append('model', GROQ_MODELO);
-  form.append('response_format', 'verbose_json');
-  form.append('temperature', '0');
-  let r;
-  try {
-    r = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+// opc.palavras (19/11, legenda): pede tambem o tempo de CADA palavra. Se a Groq recusar o pedido
+// (400), refaz sem e reparte o tempo de cada frase entre as palavras dela.
+async function transcreverGroq(env, audio, tipo, opc = {}) {
+  const pedir = (comPalavras) => {
+    const form = new FormData();
+    const ext = tipo.includes('ogg') ? 'ogg' : tipo.includes('mpeg') ? 'mp3' : tipo.includes('mp4') ? 'm4a' : 'webm';
+    form.append('file', new Blob([audio], { type: tipo }), 'parte.' + ext);
+    form.append('model', GROQ_MODELO);
+    form.append('response_format', 'verbose_json');
+    form.append('temperature', '0');
+    if (comPalavras) { form.append('timestamp_granularities[]', 'word'); form.append('timestamp_granularities[]', 'segment'); }
+    return fetch(env.CORTEX_GROQ_URL || 'https://api.groq.com/openai/v1/audio/transcriptions', {
       method: 'POST', headers: { authorization: 'Bearer ' + env.GROQ_API_KEY }, body: form,
     });
+  };
+  let r;
+  try {
+    r = await pedir(!!opc.palavras);
+    if (opc.palavras && r.status === 400) r = await pedir(false);
   } catch {
     return { erro: 'Groq fora do ar (rede). O PC tenta de novo.', status: 502 };
   }
@@ -419,5 +441,19 @@ async function transcreverGroq(env, audio, tipo) {
     return { erro: `Groq respondeu ${r.status}: ${txt}`, status: 502 };
   }
   const j = await r.json();
-  return { segmentos: (j.segments || []).map((s) => ({ i: s.start, f: s.end, t: s.text })) };
+  const segmentos = (j.segments || []).map((s) => ({ i: s.start, f: s.end, t: s.text }));
+  if (!opc.palavras) return { segmentos };
+  let palavras = (j.words || []).map((w) => ({ p: String(w.word || '').trim(), i: Number(w.start), f: Number(w.end) }))
+    .filter((w) => w.p && Number.isFinite(w.i) && Number.isFinite(w.f));
+  if (!palavras.length) {
+    // sem tempo por palavra: reparte o tempo da frase pelo tamanho de cada palavra
+    for (const s of segmentos) {
+      const ps = String(s.t || '').trim().split(/\s+/).filter(Boolean);
+      const total = ps.reduce((n, x) => n + x.length, 0) || 1;
+      let t = Number(s.i);
+      for (const x of ps) { const d = (Number(s.f) - Number(s.i)) * (x.length / total); palavras.push({ p: x, i: t, f: t + d }); t += d; }
+    }
+  }
+  palavras = palavras.slice(0, 20000).map((w) => ({ p: w.p.slice(0, 40), i: Math.round(w.i * 100) / 100, f: Math.round(Math.max(w.f, w.i) * 100) / 100 }));
+  return { segmentos, palavras, idioma: j.language || null };
 }

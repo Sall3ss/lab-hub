@@ -376,7 +376,31 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   tela no PC e no celular sem erro. 19/11: depósito `lab-hub-arquivos` criado pelo dono e ligado
   no `wrangler.toml` (binding `ARQUIVOS`), publicado. Falta: teste com live de verdade.
 
+- 19/11: **legenda automática, estilo Shorts** (pedido do dono: "muito trabalho para legendar";
+  escolheu o estilo A). Agente 2.2.0, rota `/maquina/tarefas/:id/palavras`. Sem migration.
+  - Depois de baixar o corte, o PC separa o áudio (mono 16 kHz opus 24k, ~180 KB/min) e manda;
+    a nuvem pede ao Whisper da Groq (mesma `GROQ_API_KEY`, grátis) o tempo de CADA palavra
+    (`timestamp_granularities[]=word`; se a Groq recusar, reparte o tempo de cada frase).
+  - Curto com layout: o vertical sai **legendado** (até 3 palavras, Arial Black 92, branco com
+    contorno preto, a palavra falada em amarelo; na emenda webcam/jogo, ou abaixo do meio sem
+    webcam) e, na MESMA passada do FFmpeg (`split` + `ass`), o vertical **sem legenda** em
+    `Shorts\sem legenda\`. O FFmpeg roda dentro da pasta temporária e o filtro usa só
+    "legenda.ass" (caminho do Windows com "C:" quebra o filtro).
+  - Todo corte baixado (curto e longo) ganha um `.srt` ao lado (frases de até ~42 letras), para
+    corrigir à mão ou mandar ao YouTube. Longo não leva legenda gravada no vídeo.
+  - Falhou a legenda (Groq fora, limite, sem fala, FFmpeg sem libass): o corte sai igual, sem ela,
+    e a qualidade diz "legenda FALHOU (refaça com Baixar de novo)". Cartão: "· legendado" ou
+    "· sem legenda".
+  Testado local (Groq de mentira, vídeo 1080p de 20 s, FFmpeg real com libass): curto Full cam e
+  curto com webcam legendados nas posições certas, destaque amarelo, versão sem legenda, .srt nos
+  curtos e no longo, Groq fora do ar sem travar o corte, cartões no PC e no celular. Falta: o
+  Whisper de verdade (pedido de tempo por palavra na Groq real) e conferir a fonte no Windows.
+  Próximo passo proposto: revisar/corrigir o texto da legenda no painel antes de gerar o vídeo.
+
 ## Decisões
+
+- 19/11: legenda **gravada no vertical pelo PC** (FFmpeg/libass), não num editor: sai pronta
+  para postar; a versão sem legenda e o .srt ficam como reserva para correção.
 
 - 19/11: foto do corte **no R2, não no D1** (regra da base: arquivo mora no depósito, o banco
   guarda a chave). Pequena (640 px, ~15-30 KB) e apagada quando o vídeo é concluído.

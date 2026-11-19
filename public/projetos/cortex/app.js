@@ -260,7 +260,8 @@
       (layoutEfetivo(c, c.video_layout_id) && nomeLayout(layoutEfetivo(c, c.video_layout_id)) && !c.baixar_fora
         ? '<div class="c-layout" title="Vertical 9:16 gerado no PC com este layout">▦ ' + esc(nomeLayout(layoutEfetivo(c, c.video_layout_id))) +
           (c.cena_auto && c.estado === 'triagem' ? ' <span class="c-auto" title="Escolhido pela cena que a IA viu na foto">· auto</span>' : '') + '</div>' : '') +
-      (c.qualidade ? '<div class="c-qual" title="' + esc(c.qualidade) + '">▣ ' + esc(c.qualidade.split(' · ').slice(0, 2).join(' · ')) + '</div>' : '') + st +
+      (c.qualidade ? '<div class="c-qual" title="' + esc(c.qualidade) + '">▣ ' + esc(c.qualidade.split(' · ').slice(0, 2).join(' · ')) +
+        (/· legendado/.test(c.qualidade) ? ' · legendado' : /legenda FALHOU/.test(c.qualidade) ? ' · <span style="color:var(--perigo)">sem legenda</span>' : '') + '</div>' : '') + st +
       (acoes ? '<div class="c-acoes">' + acoes + '</div>' : '') + '</div>';
   }
 
