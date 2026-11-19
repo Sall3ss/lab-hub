@@ -373,7 +373,8 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   Testado local (R2 simulado, Google de mentira, vídeo de 80 min servido por HTTP, ffmpeg real):
   20 fotos e cenas, layout trocado só onde devia, escolha manual preservada, limite do Gemini com
   espera, fila sem duplicar, limpeza do R2 (excluir, concluir), reabrir refaz, foto exige login,
-  tela no PC e no celular sem erro. Falta: depósito criado e teste com live de verdade.
+  tela no PC e no celular sem erro. 19/11: depósito `lab-hub-arquivos` criado pelo dono e ligado
+  no `wrangler.toml` (binding `ARQUIVOS`), publicado. Falta: teste com live de verdade.
 
 ## Decisões
 

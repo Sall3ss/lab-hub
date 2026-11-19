@@ -121,7 +121,7 @@
    pasta por PC na tela PCs, ficha .txt no "sem baixar" (1.9.0). 19/11: layouts verticais 9:16
    dos curtos (tela Layouts; o PC gera o 1080x1920 com FFmpeg), agente 2.0.0. 19/11: foto de cada curto + cena
    detectada pelo Gemini (full cam / jogo com webcam / só o jogo) escolhendo o layout, agente 2.1.0;
-   falta o dono criar o depósito R2 `lab-hub-arquivos` para a foto aparecer. Arquitetura,
+   depósito R2 `lab-hub-arquivos` criado pelo dono e ligado (binding `ARQUIVOS`). Arquitetura,
    modelo de dados e próximos passos em `projetos/cortex/PROJETO.md`.
 
 ## ClipStudio: arquivado em 15/10/2026
