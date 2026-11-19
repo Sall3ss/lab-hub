@@ -473,3 +473,8 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   também), sem repetir estrutura dos títulos já usados na live. Campo **Contexto da live** na
   gaveta do vídeo (migration 0019). Botão **"✨ Refazer textos com a IA"** no corte (não grava;
   o dono confere e Salva). A ficha .txt leva as 3 opções e a thumbnail.
+- 19/11: **"Puxar mais" também em vídeo GRAVADO** analisado só em parte (pedido do dono: VOD de
+  10 h do Coringa, analisou 2 h e quer ir pegando o resto). Antes só valia para link de live
+  (`ao_vivo_canal`). Onde parou = `capturado_ate_s` ou, se faltar, `analisar_ate_s`; aparece
+  enquanto esse ponto estiver antes do fim do vídeo. O PC (1.8.2+) já começava de
+  `continuar_de_s` em qualquer vídeo; só o painel e a tela travavam.

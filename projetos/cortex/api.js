@@ -8,7 +8,7 @@
 //   GET    /quadro                 videos + cortes do Kanban e se o PC esta online
 //   POST   /videos                 { url, analisar_de_s?, analisar_ate_s? } -> cria o video e a tarefa "buscar texto" do PC
 //   POST   /videos/:id/trecho      { analisar_de_s, analisar_ate_s, confirmado? } muda o trecho analisado (16/11)
-//   POST   /videos/:id/continuar   { ate_s? } "Puxar o resto" de uma live da Kick: so a parte nova (18/11),
+//   POST   /videos/:id/continuar   { ate_s? } "Puxar o resto" de uma live da Kick (18/11) ou de video gravado analisado em parte (19/11): so a parte nova,
 //                                   ate ate_s (vazio = ate o fim; 18/11: puxar de 2 em 2 h)
 //   GET    /videos/:id             video + todos os cortes (linha do tempo)
 //   PATCH  /videos/:id             { titulo?, arquivado?, layout_id? }  layout_id = padrao dos curtos do video  arquivado = "Concluir video" (sai do quadro)
@@ -533,11 +533,16 @@ async function mudarTrecho({ request, env, data, u, id, json, agora }) {
 async function puxarResto({ request, env, data, u, id, json, agora }) {
   const video = await db(env).first('SELECT * FROM cortex_videos WHERE id = ? AND usuario_id = ?', Number(id), u.id);
   if (!video) return json({ erro: 'vídeo não encontrado' }, 404);
-  if (!video.ao_vivo_canal) return json({ erro: 'Só vídeos importados pelo link da live (kick.com/canal) têm "Puxar o resto".' }, 400);
+  // 19/11: vale também para vídeo GRAVADO analisado só em parte (live de 10 h: 2 h, depois mais 2 h...).
+  // Onde parou: a captura (live) ou o "até" do trecho analisado.
+  const cap = video.capturado_ate_s || video.analisar_ate_s || null;
+  if (!video.ao_vivo_canal && (!cap || (video.duracao_s && cap >= video.duracao_s - 60))) {
+    return json({ erro: 'Esse vídeo já foi analisado até o fim. Para ler outro pedaço, mude o trecho ("Analisar a partir de").' }, 409);
+  }
   if (video.continuar_de_s !== null) return json({ erro: 'Já está puxando o resto deste vídeo. Espere o texto novo chegar.' }, 409);
   // So depois do roteiro pronto: puxar com a IA parada no meio faria a parte antiga ficar sem
   // leitura (a IA passa a ler so a parte nova). 18/11, achado no 1o teste do dono (Gemini 503).
-  if (!video.capturado_ate_s || video.etapa !== 'cortado') {
+  if (!cap || video.etapa !== 'cortado') {
     return json({ erro: video.etapa === 'roteiro'
       ? 'A IA ainda não terminou de ler a parte já capturada. Termine o roteiro (ou use "Tentar de novo" se falhou) e depois puxe o resto.'
       : 'Espere a primeira captura terminar (o texto chegar) antes de puxar o resto.' }, 409);
@@ -545,17 +550,17 @@ async function puxarResto({ request, env, data, u, id, json, agora }) {
   const ocupado = await db(env).first(
     "SELECT COUNT(*) AS n FROM cortex_tarefas WHERE video_id = ? AND tipo IN ('texto', 'roteiro') AND estado IN ('pega', 'pendente')", video.id);
   if (ocupado.n) return json({ erro: 'Este vídeo ainda tem trabalho na fila do PC (texto ou IA). Espere terminar e puxe o resto depois.' }, 409);
-  if (!video.ao_vivo && video.duracao_s && video.capturado_ate_s >= video.duracao_s - 60) {
+  if (!video.ao_vivo && video.duracao_s && cap >= video.duracao_s - 60) {
     return json({ erro: 'Esse vídeo já foi puxado até o fim (a live tinha terminado na última captura).' }, 409);
   }
   // 18/11: "ate" opcional (puxar mais 2 h, depois mais 2 h...). Vazio = ate o fim.
   const corpo = await request.json().catch(() => ({}));
   let ate = corpo.ate_s === undefined || corpo.ate_s === null || corpo.ate_s === '' ? null : Math.round(Number(corpo.ate_s));
-  if (ate !== null && (!Number.isFinite(ate) || ate - video.capturado_ate_s < 120)) {
-    return json({ erro: `O "até" precisa ser pelo menos 2 min depois de ${fmt(video.capturado_ate_s)} (onde a última captura parou).` }, 400);
+  if (ate !== null && (!Number.isFinite(ate) || ate - cap < 120)) {
+    return json({ erro: `O "até" precisa ser pelo menos 2 min depois de ${fmt(cap)} (onde a última captura parou).` }, 400);
   }
   if (ate !== null && !video.ao_vivo && video.duracao_s && ate >= video.duracao_s) ate = null;   // passou do fim = ate o fim
-  const de = Math.max(0, video.capturado_ate_s - 30);
+  const de = Math.max(0, cap - 30);
   await db(env).batch([
     ["UPDATE cortex_videos SET continuar_de_s = ?, analisar_ate_s = ?, etapa = 'entrada', erro = NULL, arquivado = 0, atualizado_em = ? WHERE id = ?",
       [de, ate, agora, video.id]],
@@ -563,7 +568,7 @@ async function puxarResto({ request, env, data, u, id, json, agora }) {
     ["INSERT INTO cortex_tarefas (usuario_id, tipo, video_id, criada_em, atualizada_em) VALUES (?, 'texto', ?, ?, ?)", [u.id, video.id, agora, agora]],
   ]);
   await auditar(env, { quem: u.email, acao: 'puxar-resto', entidade: 'cortex_videos', entidade_id: video.id,
-    antes: { capturado_ate_s: video.capturado_ate_s }, depois: { continuar_de_s: de, analisar_ate_s: ate }, ip: data.ip });
+    antes: { capturado_ate_s: cap }, depois: { continuar_de_s: de, analisar_ate_s: ate }, ip: data.ip });
   return json({ ok: true, de, ate });
 }
 

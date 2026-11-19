@@ -237,7 +237,8 @@
       (v.duracao_s ? '<span class="c-tc">' + tc(v.duracao_s) + '</span>' : '') + '</div>' +
       '<p class="c-titulo">' + esc(v.titulo || v.url.replace(/^https:\/\/(www\.)?/, '')) + '</p>' +
       (v.canal ? '<div class="c-sub">' + esc(v.canal) + '</div>' : '') +
-      (v.ao_vivo_canal && v.capturado_ate_s ? '<div class="c-trecho" title="Até onde o texto foi capturado">⟳ capturado até ' + tc(v.capturado_ate_s) + '</div>' : '') +
+      (v.ao_vivo_canal && v.capturado_ate_s ? '<div class="c-trecho" title="Até onde o texto foi capturado">⟳ capturado até ' + tc(v.capturado_ate_s) + '</div>'
+        : !v.ao_vivo_canal && podePuxar(v) ? '<div class="c-trecho" title="Analisado só até aqui: use Puxar mais">⟳ analisado até ' + tc(capturado(v)) + ' de ' + tc(v.duracao_s) + '</div>' : '') +
       (textoTrecho(v) ? '<div class="c-trecho" title="Parte do vídeo analisada">⏱ ' + textoTrecho(v) + '</div>' : '') + st + '</button>';
   }
 
@@ -345,9 +346,14 @@
   $('btn-concluir').addEventListener('click', function () { if (detalhe) concluirVideo(detalhe.video); });
   $('linha-nome').addEventListener('click', function () { if (detalhe) abrirVideo(); });
   // ---------- "Puxar o resto" (18/11): live da Kick, só a parte nova ----------
+  // Até onde o texto do vídeo já foi buscado (live: a captura; vídeo gravado: o "até" do trecho).
+  function capturado(v) { return v.capturado_ate_s || v.analisar_ate_s || null; }
   function podePuxar(v) {
     // só com o roteiro pronto: com a IA parada no meio, a parte já capturada ficaria sem leitura
-    return !!(v && v.ao_vivo_canal && v.capturado_ate_s && v.continuar_de_s == null && v.etapa === 'cortado');
+    if (!(v && v.continuar_de_s == null && v.etapa === 'cortado' && capturado(v))) return false;
+    // 19/11: também vídeo GRAVADO analisado só em parte (live de 10 h: pega 2 h, depois mais 2 h...)
+    if (v.ao_vivo_canal) return true;
+    return !!(v.duracao_s && capturado(v) < v.duracao_s - 60);
   }
   function puxarResto(v, botao, msgEl, ate) {
     botao.disabled = true;
@@ -485,7 +491,7 @@
     nome.title = 'Abrir os detalhes do vídeo: ' + nome.textContent;
     nome.disabled = false;
     $('btn-resto').hidden = !podePuxar(v);
-    if (podePuxar(v)) $('btn-resto').textContent = '⟳ Puxar mais (de ' + tc(v.capturado_ate_s) + ')';
+    if (podePuxar(v)) $('btn-resto').textContent = '⟳ Puxar mais (de ' + tc(capturado(v)) + ')';
     btn.hidden = false;
     var cont = contagem(v.id), bc = $('btn-concluir');
     bc.hidden = v.etapa !== 'cortado';
@@ -587,8 +593,8 @@
         (v.erro ? '<div class="acoes"><button class="btn btn-ok" type="button" id="v-tentar">↻ Tentar de novo</button></div>' : '') +
         // 18/11: "Puxar o resto" - só para vídeo que veio do link da live, depois da 1ª captura
         (podePuxar(v)
-          ? '<div class="bloco caixa-resto"><b class="resto-tit">⟳ Puxar mais da live</b><div class="dupla">' +
-            '<label class="campo"><span>De (onde parou)</span><input class="tc-campo" value="' + tc(v.capturado_ate_s) + '" disabled></label>' +
+          ? '<div class="bloco caixa-resto"><b class="resto-tit">⟳ Puxar mais ' + (v.ao_vivo_canal ? 'da live' : 'do vídeo') + '</b><div class="dupla">' +
+            '<label class="campo"><span>De (onde parou)</span><input class="tc-campo" value="' + tc(capturado(v)) + '" disabled></label>' +
             '<label class="campo"><span>Até (vazio = até o fim)</span><input class="tc-campo" id="resto-ate" inputmode="numeric" autocomplete="off" placeholder="fim do vídeo"></label></div>' +
             '<div class="acoes resto-mais">' + [1, 2, 3].map(function (h) { return '<button type="button" class="mini" data-mais="' + h * 3600 + '">+' + h + ' h</button>'; }).join('') +
             '<button type="button" class="mini" data-mais="0">Até o fim</button></div>' +
@@ -651,16 +657,16 @@
             ra.addEventListener('blur', rotuloResto);
             function rotuloResto() {
               var a = lerTC(ra.value);
-              vr.textContent = '⟳ Puxar de ' + tc(v.capturado_ate_s) + (a != null ? ' até ' + tc(a) + ' (' + duracao(Math.max(0, a - v.capturado_ate_s)) + ')' : ' até o fim');
+              vr.textContent = '⟳ Puxar de ' + tc(capturado(v)) + (a != null ? ' até ' + tc(a) + ' (' + duracao(Math.max(0, a - capturado(v))) + ')' : ' até o fim');
             }
             rotuloResto();
             box.querySelectorAll('[data-mais]').forEach(function (b) {
-              b.onclick = function () { var n = Number(b.dataset.mais); ra.value = n ? tc(v.capturado_ate_s + n) : ''; rotuloResto(); };
+              b.onclick = function () { var n = Number(b.dataset.mais); ra.value = n ? tc(capturado(v) + n) : ''; rotuloResto(); };
             });
             vr.onclick = function () {
               var txt = ra.value.trim(), a = txt ? lerTC(txt) : null;
               if (txt && a == null) { $('msg-resto').textContent = 'Tempo inválido. Use HH:MM:SS.'; return; }
-              if (a != null && a - v.capturado_ate_s < 120) { $('msg-resto').textContent = 'O "até" precisa vir pelo menos 2 min depois de ' + tc(v.capturado_ate_s) + '.'; return; }
+              if (a != null && a - capturado(v) < 120) { $('msg-resto').textContent = 'O "até" precisa vir pelo menos 2 min depois de ' + tc(capturado(v)) + '.'; return; }
               puxarResto(v, vr, $('msg-resto'), a);
             };
           }
