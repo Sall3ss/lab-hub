@@ -21,9 +21,11 @@ database_id = "4d14d93f-25e8-4dba-967a-1464bbdb1afd"  # lab-hub-d1, conta Cloudf
 #
 # ⚠️ Binding novo so passa a existir no deploy SEGUINTE ao da ligacao.
 #
-# [[r2_buckets]]
-# binding = "ARQUIVOS"
-# bucket_name = "CLIENTE-SLUG-arquivos"
+# Lab Hub (19/11/2026): deposito criado pelo dono na Cloudflare pessoal dele. Primeiro uso:
+# fotos dos cortes curtos do Cortex (projetos/cortex/cena.js). Claude (Opus 5.5).
+[[r2_buckets]]
+binding = "ARQUIVOS"
+bucket_name = "lab-hub-arquivos"
 
 # Secrets (defina com `wrangler pages secret put NOME --project-name <slug>`), NUNCA no toml.
 # NAO existe mais ADMIN_TOKEN: o acesso e por usuario e senha individuais, e o sistema ja

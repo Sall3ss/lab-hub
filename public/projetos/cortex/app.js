@@ -8,7 +8,7 @@
 // Nada grava sem o dono confirmar: "Marcar corte" só cria ao apertar Salvar.
 // Autoria: Claude (Opus 5.5), Lab Hub, 14/11/2026.
 (function () {
-  var API = '/api/p/cortex';
+  var API = '/api/p/cortex';   // fotos dos curtos: deposito R2 lab-hub-arquivos ligado em 19/11/2026
   var COLUNAS = [
     { id: 'entrada', faixa: 'V1', nome: 'Entrada', grupo: 'video' },
     { id: 'transcricao', faixa: 'V2', nome: 'Transcrição', grupo: 'video' },
