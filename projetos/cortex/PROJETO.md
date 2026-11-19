@@ -491,3 +491,6 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   linha de hashtags do fim + uma linha só de hashtags (as da descrição primeiro, depois as das
   tags), sem repetir, no máximo 8 (mais de 15 o YouTube ignora todas). Tags do Studio limitadas a
   500 caracteres. A gaveta do corte tem os mesmos 3 botões "Copiar" (usam o que está nos campos).
+- 19/11: quadro **não volta mais para o topo** sozinho (a atualização de 20 s redesenhava as
+  colunas; agora só redesenha se algo mudou e devolve a rolagem de cada coluna) e os cortes de
+  cada coluna ficam em **ordem de tempo** (início do corte), agrupados por vídeo.

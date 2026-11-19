@@ -198,12 +198,20 @@
     return '';
   }
 
+  // 19/11 (pedido do dono): cortes em ordem de TEMPO dentro de cada vídeo (02:10:00 antes de
+  // 02:30:00), e os vídeos na ordem do quadro (o mexido por último primeiro).
+  function ordemCortes(a, b) {
+    var ia = estado.videos.findIndex(function (v) { return v.id === a.video_id; }), ib = estado.videos.findIndex(function (v) { return v.id === b.video_id; });
+    if (ia !== ib) return (ia < 0 ? 1e9 : ia) - (ib < 0 ? 1e9 : ib);
+    return a.inicio_s - b.inicio_s || a.id - b.id;
+  }
+  var ultimoQuadro = '';
   function desenharQuadro() {
     var rolagem = quadroEl.scrollLeft, html = '', atalhos = '';
     COLUNAS.forEach(function (col, i) {
       var itens = col.grupo === 'video'
         ? estado.videos.filter(function (v) { return v.etapa === col.id; })
-        : estado.cortes.filter(function (c) { return c.estado === col.id; });
+        : estado.cortes.filter(function (c) { return c.estado === col.id; }).sort(ordemCortes);
       html += '<section class="coluna' + (i === 3 ? ' divisa' : '') + '" data-grupo="' + col.grupo + '" aria-label="' + esc(col.nome) + '">' +
         '<header class="col-topo"><span class="faixa">' + col.faixa + '</span><span class="col-nome">' + esc(col.nome) + '</span>' +
         '<span class="col-qtd">' + itens.length + '</span></header><div class="col-lista">' +
@@ -211,7 +219,16 @@
         '</div></section>';
       atalhos += '<button type="button" data-col="' + i + '">' + col.faixa + ' ' + esc(col.nome.split(' ')[0]) + '<b>' + itens.length + '</b></button>';
     });
-    quadroEl.innerHTML = html;
+    // 19/11: a atualização a cada 20 s jogava a rolagem das colunas para o topo. Agora: nada mudou =
+    // não redesenha; mudou = redesenha e devolve cada coluna (e a página) para onde estava.
+    if (html !== ultimoQuadro) {
+      var rolCols = Array.prototype.map.call(quadroEl.querySelectorAll('.col-lista'), function (el) { return el.scrollTop; });
+      var rolPagina = window.scrollY;
+      quadroEl.innerHTML = html;
+      quadroEl.querySelectorAll('.col-lista').forEach(function (el, k) { if (rolCols[k]) el.scrollTop = rolCols[k]; });
+      if (window.scrollY !== rolPagina) window.scrollTo(0, rolPagina);
+      ultimoQuadro = html;
+    }
     quadroEl.scrollLeft = rolagem;   // atualizar não pode jogar o celular de volta para a 1ª coluna
     $('atalhos').innerHTML = atalhos; marcarAtalho();
     var nv = estado.videos.length, nc = estado.cortes.length;
