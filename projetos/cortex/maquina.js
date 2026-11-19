@@ -22,10 +22,11 @@
 import { db } from '../../lib/db.js';
 import { passoRoteiro } from './roteiro.js';
 
-export const AGENTE_VERSAO = '1.9.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+export const AGENTE_VERSAO = '2.0.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
 const PRAZO_MIN = { texto: 30, baixar_corte: 60, roteiro: 20 };
 const VERSAO_ROTEIRO = [1, 3, 0];       // agente mais velho nao sabe fazer 'roteiro': nao recebe
 const VERSAO_TRECHO = [1, 7, 0];        // 16/11: so a 1.7.0+ respeita "analisar de/ate"; a velha buscaria a live inteira
+const VERSAO_VERTICAL = [2, 0, 0];      // 19/11: curto com layout vertical 9:16 (o agente velho entregaria so o horizontal)
 const VERSAO_FICHA = [1, 9, 0];         // 18/11: ficha .txt de corte "sem baixar"; o agente velho BAIXARIA o video
 const VERSAO_LIVE = [1, 8, 2];          // 18/11: live da Kick (link do canal, m3u8, "Puxar o resto" com "ate") so a 1.8.2+
 const MAX_TENTATIVAS = 3;
@@ -84,6 +85,10 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     let semTrecho = versaoMin(ag.versao, VERSAO_TRECHO) ? '' :
       " AND NOT (tipo = 'texto' AND EXISTS (SELECT 1 FROM cortex_videos v WHERE v.id = video_id AND (v.analisar_de_s IS NOT NULL OR v.analisar_ate_s IS NOT NULL)))";
     // Agente < 1.8.0 nao sabe achar a live nem baixar pelo m3u8 (o link normal falha enquanto a live roda).
+    if (!versaoMin(ag.versao, VERSAO_VERTICAL)) {
+      semTrecho += ` AND NOT (tipo = 'baixar_corte' AND EXISTS (SELECT 1 FROM cortex_cortes c JOIN cortex_videos v ON v.id = c.video_id
+        WHERE c.id = corte_id AND c.tipo = 'curto' AND c.baixar_fora = 0 AND COALESCE(c.layout_id, v.layout_id, 0) <> 0))`;
+    }
     if (!versaoMin(ag.versao, VERSAO_FICHA)) {
       semTrecho += " AND NOT (tipo = 'baixar_corte' AND EXISTS (SELECT 1 FROM cortex_cortes c WHERE c.id = corte_id AND c.baixar_fora = 1))";
     }
@@ -107,9 +112,16 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
       let corte = null;
       if (t.corte_id) {
         corte = await db(env).first(
-          `SELECT id, tipo, inicio_s, fim_s, titulo, descricao, tags, gancho, gancho_inicio_s, gancho_fim_s, baixar_fora, arquivo_local
+          `SELECT id, tipo, inicio_s, fim_s, titulo, descricao, tags, gancho, gancho_inicio_s, gancho_fim_s, baixar_fora, arquivo_local, layout_id
              FROM cortex_cortes WHERE id = ?`, t.corte_id);
         if (corte) {
+          // 19/11: layout vertical do curto (o do corte; senao o do video; 0 = nenhum).
+          const lid = corte.tipo !== 'curto' ? 0 : corte.layout_id !== null ? corte.layout_id
+            : ((await db(env).first('SELECT layout_id FROM cortex_videos WHERE id = ?', t.video_id)) || {}).layout_id || 0;
+          corte.layout = lid ? await db(env).first(
+            `SELECT id, nome, tipo, cam_x, cam_y, cam_w, cam_h, cam_altura, jogo_x, jogo_y, jogo_w, jogo_h, proporcao
+               FROM cortex_layouts WHERE id = ? AND usuario_id = ?`, lid, ag.usuario_id) : null;
+          delete corte.layout_id;
           try { corte.tags = JSON.parse(corte.tags || '[]'); } catch { corte.tags = []; }
           // numero do corte dentro do video (01, 02...) para o nome do arquivo seguir a ordem do tempo
           const n = await db(env).first(
@@ -151,6 +163,7 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
       `UPDATE cortex_videos SET titulo = COALESCE(titulo, ?), canal = COALESCE(?, canal), duracao_s = COALESCE(?, duracao_s),
               capturado_ate_s = COALESCE(?, capturado_ate_s), ao_vivo = COALESCE(?, ao_vivo), atualizado_em = ? WHERE id = ?`,
       c.titulo ? String(c.titulo).slice(0, 200) : null, c.canal ? String(c.canal).slice(0, 120) : null, dur, cap, vivo, iso, tarefa.video_id);
+    await herdarLayout(env, tarefa.video_id);
     return json({ ok: true });
   }
 
@@ -177,6 +190,7 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
               ao_vivo = ?, atualizado_em = ? WHERE id = ?`,
       idExt, `https://kick.com/${video.ao_vivo_canal}/videos/${uuid}`, fonte.slice(0, 500),
       c.titulo ? String(c.titulo).slice(0, 200) : null, video.ao_vivo_canal, c.ao_vivo ? 1 : 0, iso, video.id);
+    await herdarLayout(env, video.id);
     return json({ ok: true });
   }
 
@@ -305,6 +319,16 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
   }
 
   return json({ erro: 'rota nao encontrada' }, 404);
+}
+
+// 19/11: video novo de um canal ja cortado antes herda o layout vertical do ultimo video desse
+// canal (o streamer costuma manter a webcam no mesmo lugar). So se o video ainda nao tem layout.
+async function herdarLayout(env, videoId) {
+  await db(env).run(
+    `UPDATE cortex_videos SET layout_id = (SELECT o.layout_id FROM cortex_videos o
+        WHERE o.usuario_id = cortex_videos.usuario_id AND o.canal = cortex_videos.canal AND o.id <> cortex_videos.id
+          AND o.layout_id IS NOT NULL ORDER BY o.id DESC LIMIT 1)
+      WHERE id = ? AND layout_id IS NULL AND canal IS NOT NULL`, videoId);
 }
 
 function versaoMin(v, min) {

@@ -296,3 +296,52 @@ button, input, textarea { font: inherit; color: inherit; }
 /* 18/11: ficha .txt do corte "sem baixar" no PC */
 .fora-ficha { display: flex; align-items: center; justify-content: space-between; gap: .5rem; flex-wrap: wrap; font-size: .78rem; color: var(--metal); border-top: 1px dashed var(--fio); padding-top: .5rem; }
 .fora-ficha span { min-width: 0; word-break: break-all; }
+
+/* ---------- 19/11: layouts verticais (9:16) dos cortes curtos ---------- */
+.c-layout { font: .66rem/1.4 var(--mono); color: #4fd8e8; }
+.linha-layout { display: flex; gap: .5rem; align-items: center; }
+.linha-layout select { flex: 1; min-width: 0; background: #08090b; color: var(--texto); border: 1px solid var(--fio); border-radius: 6px; padding: .55rem .6rem; font: inherit; }
+.dica-layout { font-size: .74rem; color: var(--suave); }
+.lay-tela { position: fixed; inset: 0; z-index: 60; background: var(--fundo); display: flex; flex-direction: column;
+  padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px); }
+.lay-topo { display: flex; align-items: center; gap: 1rem; padding: .7rem 1rem; border-bottom: 1px solid var(--fio); background: var(--painel-2); }
+.lay-topo h2 { flex: 1; margin: 0; font-size: 1rem; }
+.lay-topo small { font: .68rem var(--mono); color: var(--suave); margin-left: .4rem; letter-spacing: .06em; }
+.lay-corpo { flex: 1; min-height: 0; display: grid; grid-template-columns: 15rem 1fr; }
+.lay-lista { border-right: 1px solid var(--fio); padding: .8rem; display: flex; flex-direction: column; gap: .5rem; overflow-y: auto; background: var(--painel); }
+.lay-item { text-align: left; background: var(--painel-2); border: 1px solid var(--fio); border-radius: var(--raio); padding: .55rem .65rem; color: var(--texto); cursor: pointer; display: flex; flex-direction: column; gap: .2rem; font: inherit; }
+.lay-item span { font: .66rem var(--mono); color: var(--suave); }
+.lay-item.on { border-color: var(--cor); box-shadow: 0 0 0 2px var(--cor-fraca); }
+.lay-vazio { color: var(--suave); font-size: .85rem; }
+.lay-editor { padding: 1rem; overflow-y: auto; display: flex; flex-direction: column; gap: .8rem; }
+.lay-campos { display: grid; grid-template-columns: minmax(10rem, 1fr) auto minmax(10rem, 1fr); gap: .8rem; align-items: end; }
+.lay-campos input[type=range] { width: 100%; accent-color: var(--cor); }
+.lay-area { display: grid; grid-template-columns: 1fr 15rem; gap: 1rem; align-items: start; }
+.lay-dica { margin: 0 0 .5rem; font-size: .8rem; color: var(--metal); }
+.lay-arq { color: var(--cor); text-decoration: underline; cursor: pointer; }
+.lay-palco { position: relative; width: 100%; border: 1px solid var(--fio-2); border-radius: 6px; overflow: hidden; background: #050608; touch-action: none; user-select: none; }
+.lay-fundo { position: absolute; inset: 0; background: center / 100% 100% no-repeat; }
+.lay-palco.sem-print .lay-fundo { background-image: repeating-linear-gradient(0deg, transparent 0 calc(10% - 1px), #1a1d23 calc(10% - 1px) 10%), repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), #1a1d23 calc(10% - 1px) 10%); }
+.lay-palco.sem-print::after { content: "Cole um print da live aqui (Ctrl+V)"; position: absolute; left: 50%; bottom: .6rem; transform: translateX(-50%); font: .72rem var(--mono); color: var(--suave); pointer-events: none; }
+.lay-caixa { position: absolute; border: 2px solid; border-radius: 3px; cursor: move; box-shadow: 0 0 0 9999px rgb(0 0 0 / .0); }
+.lay-caixa.jogo { border-color: #ff8a3d; background: rgb(255 138 61 / .12); }
+.lay-caixa.cam { border-color: #2fd6ea; background: rgb(47 214 234 / .16); z-index: 2; }
+.lay-caixa span { position: absolute; left: 0; top: 0; padding: .15rem .35rem; font: 700 .6rem/1 var(--mono); letter-spacing: .08em; color: #000; }
+.lay-caixa.jogo span { background: #ff8a3d; } .lay-caixa.cam span { background: #2fd6ea; }
+.lay-caixa i { position: absolute; right: -2px; bottom: -2px; width: 1.4rem; height: 1.4rem; display: grid; place-items: center; font-style: normal; font-size: .8rem; cursor: nwse-resize; color: #000; }
+.lay-caixa.jogo i { background: #ff8a3d; } .lay-caixa.cam i { background: #2fd6ea; }
+.lay-previa-col { display: flex; flex-direction: column; gap: .4rem; align-items: center; }
+.lay-rot { font: 600 .66rem var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--suave); }
+#lay-previa { width: 100%; max-width: 15rem; aspect-ratio: 9 / 16; border: 6px solid #22262e; border-radius: 1.1rem; background: #000; }
+@media (max-width: 860px) {
+  .lay-corpo { grid-template-columns: 1fr; grid-template-rows: auto 1fr; overflow-y: auto; }
+  .lay-lista { border-right: 0; border-bottom: 1px solid var(--fio); flex-direction: row; overflow-x: auto; overflow-y: visible; }
+  .lay-lista #lay-itens { display: flex; gap: .5rem; }
+  .lay-item { min-width: 10rem; }
+  .lay-lista > .btn { white-space: nowrap; }
+  .lay-editor { overflow: visible; }
+  .lay-campos { grid-template-columns: 1fr; }
+  .lay-area { grid-template-columns: 1fr; }
+  #lay-previa { max-width: 11rem; }
+}
+#lay-tipo button.on { border-color: var(--cor); color: var(--cor); background: var(--cor-fraca); }

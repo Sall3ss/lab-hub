@@ -32,7 +32,7 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var quadroEl = $('quadro');
-  var estado = { videos: [], cortes: [], pc: { online: false } };
+  var estado = { videos: [], cortes: [], pc: { online: false }, layouts: [] };
   var selVideo = null;        // id do vídeo na linha do tempo
   var detalhe = null;         // { video, cortes } do vídeo selecionado
   var gavetaAberta = null;    // função que redesenha a gaveta (ou null)
@@ -160,6 +160,7 @@
   // ---------- quadro ----------
   function carregar() {
     return api('/quadro').then(function (j) {
+      j.layouts = estado.layouts || [];      // os layouts vêm de /layouts, não do quadro
       estado = j; desenharPC(); desenharQuadro();
       if (selVideo) return carregarDetalhe(selVideo);
     }).catch(function (e) {
@@ -256,6 +257,8 @@
       '<p class="c-titulo">' + esc(c.titulo) + '</p>' +
       '<div class="c-sub">' + esc(c.video_titulo || NOME_PLAT[c.plataforma]) + '</div>' +
       (c.baixar_fora && c.estado === 'edicao' ? '<div class="c-fora">↗ BAIXAR FORA · ' + tc(c.inicio_s) + ' → ' + tc(c.fim_s) + '</div>' : '') +
+      (layoutEfetivo(c, c.video_layout_id) && nomeLayout(layoutEfetivo(c, c.video_layout_id)) && !c.baixar_fora
+        ? '<div class="c-layout" title="Vertical 9:16 gerado no PC com este layout">▦ ' + esc(nomeLayout(layoutEfetivo(c, c.video_layout_id))) + '</div>' : '') +
       (c.qualidade ? '<div class="c-qual" title="' + esc(c.qualidade) + '">▣ ' + esc(c.qualidade.split(' · ').slice(0, 2).join(' · ')) + '</div>' : '') + st +
       (acoes ? '<div class="c-acoes">' + acoes + '</div>' : '') + '</div>';
   }
@@ -376,6 +379,25 @@
     }).catch(function (e) { aviso(e.message, true); });
   }
   $('btn-concluidos').addEventListener('click', abrirConcluidos);
+  // ---------- layouts verticais dos curtos (19/11) ----------
+  function nomeLayout(id) { var l = estado.layouts.find(function (x) { return x.id === id; }); return l ? l.nome : null; }
+  // layout que vale para o corte curto: o dele; senão o do vídeo; 0 = nenhum
+  function layoutEfetivo(c, videoLayout) {
+    if (c.tipo !== 'curto') return null;
+    var id = c.layout_id != null ? c.layout_id : videoLayout;
+    return id ? id : null;
+  }
+  function opcoesLayout(valor, rotuloVazio) {
+    return '<option value=""' + (valor == null ? ' selected' : '') + '>' + esc(rotuloVazio) + '</option>' +
+      estado.layouts.map(function (l) { return '<option value="' + l.id + '"' + (valor === l.id ? ' selected' : '') + '>' + esc(l.nome) + '</option>'; }).join('') +
+      '<option value="0"' + (valor === 0 ? ' selected' : '') + '>Nenhum (só o horizontal)</option>';
+  }
+  if (window.CortexLayouts) {
+    CortexLayouts.iniciar({ api: api, aviso: aviso, confirmar: confirmar, esc: esc,
+      aoMudar: function (l) { estado.layouts = l; desenharQuadro(); } });
+    CortexLayouts.carregar().then(function (l) { estado.layouts = l; desenharQuadro(); }).catch(function () { /* a tela segue sem os nomes */ });
+    $('btn-layouts').addEventListener('click', function () { CortexLayouts.abrir(); });
+  }
   $('prontos').addEventListener('click', function (ev) {
     var b = ev.target.closest('[data-concluir]'); if (!b) return;
     var v = estado.videos.find(function (x) { return x.id === Number(b.dataset.concluir); });
@@ -530,6 +552,12 @@
             (v.duracao_s ? ' (na última captura o vídeo tinha ' + tc(v.duracao_s) + (v.ao_vivo ? ' e a live seguia no ar' : '') + ')' : '') + '.</p>' +
             '<p class="msg-form" id="msg-resto"></p></div>' : '') +
         '<form class="bloco" id="f-video"><label class="campo"><span>Título</span><input name="titulo" maxlength="200" value="' + esc(v.titulo || '') + '" placeholder="O PC preenche com o título original"></label>' +
+        // 19/11: layout padrão dos curtos deste vídeo (vídeo novo do mesmo canal herda)
+        '<div class="campo"><span>Layout vertical dos curtos</span><div class="linha-layout"><select name="layout">' +
+          estado.layouts.map(function (l) { return '<option value="' + l.id + '"' + (v.layout_id === l.id ? ' selected' : '') + '>' + esc(l.nome) + '</option>'; }).join('') +
+          '<option value=""' + (!v.layout_id ? ' selected' : '') + '>Nenhum (só o horizontal)</option></select>' +
+          '<button type="button" class="mini" id="v-layouts">Editar layouts</button></div>' +
+          '<small class="dica-layout">Vale para todos os curtos deste vídeo (dá para trocar em cada corte). O próximo vídeo do mesmo canal já vem com ele.</small></div>' +
         '<p class="msg-form" id="msg-video"></p><div class="acoes"><button class="btn btn-cor" type="submit">Salvar</button>' +
         '<button class="btn" type="button" id="v-marcar">+ Marcar corte</button></div></form>' +
         '<form class="bloco" id="f-trecho" novalidate><div class="dupla">' +
@@ -541,11 +569,12 @@
         function (box) {
           box.querySelector('#f-video').onsubmit = function (ev) {
             ev.preventDefault();
-            var titulo = this.titulo.value.trim();
-            api('/videos/' + v.id, { metodo: 'PATCH', corpo: { titulo: titulo } }).then(function () { aviso('Salvo.'); fecharGaveta(); carregar(); })
+            var titulo = this.titulo.value.trim(), lay = this.layout.value === '' ? null : Number(this.layout.value);
+            api('/videos/' + v.id, { metodo: 'PATCH', corpo: { titulo: titulo, layout_id: lay } }).then(function () { aviso('Salvo.'); fecharGaveta(); carregar(); })
               .catch(function (e) { $('msg-video').textContent = e.message; });
           };
           box.querySelector('#v-marcar').onclick = function () { formCorte(null); };
+          box.querySelector('#v-layouts').onclick = function () { CortexLayouts.abrir(v.layout_id || null); };
           var ft = box.querySelector('#f-trecho');
           mascaraTC(ft.de); mascaraTC(ft.ate);
           ft.onsubmit = function (ev) {
@@ -678,6 +707,11 @@
       (acoesEstado ? '<div class="acoes">' + acoesEstado + '</div>' : '') +
       '<form class="bloco" id="f-corte" novalidate>' +
       '<div class="campo"><span>Tipo</span><div class="escolha" id="esc-tipo"><button type="button" data-v="curto">Curto · 45-90 s</button><button type="button" data-v="longo">Longo · 30-40 min</button></div></div>' +
+      // 19/11: layout do vertical 9:16 (só curto). O PC gera o 1080x1920 pronto na pasta Shorts.
+      '<div class="campo" id="campo-layout"><span>Vertical 9:16 (layout)</span><div class="linha-layout"><select name="layout">' +
+        opcoesLayout(c.layout_id == null ? null : c.layout_id, 'Padrão do vídeo' + (v.layout_id ? ' (' + (nomeLayout(v.layout_id) || 'layout') + ')' : ' (nenhum)')) +
+        '</select><button type="button" class="mini" id="c-layouts">Editar layouts</button></div>' +
+        '<small class="dica-layout">' + (c.estado === 'edicao' && !fora ? 'Mudou o layout? Use <b>Baixar de novo</b> para gerar o vertical com ele.' : 'O PC baixa o corte e já gera o vídeo vertical pronto, na pasta Shorts.') + '</small></div>' +
       '<div class="dupla"><label class="campo"><span>Início</span><input class="tc-campo" name="inicio" inputmode="numeric" placeholder="00:00:00" value="' + (c.inicio_s === '' ? '' : tc(c.inicio_s)) + '"' + (tempoLivre ? '' : ' disabled') + '>' + ajustes('inicio', tempoLivre) + '</label>' +
       '<label class="campo"><span>Fim</span><input class="tc-campo" name="fim" inputmode="numeric" placeholder="00:00:00" value="' + (c.fim_s === '' ? '' : tc(c.fim_s)) + '"' + (tempoLivre ? '' : ' disabled') + '>' + ajustes('fim', tempoLivre) + '</label></div>' +
       (c.estado === 'edicao' ? '<p style="margin:-.2rem 0 0;font-size:.78rem;color:var(--suave)">' + (fora ? 'Sem arquivo no PC: ajuste o tempo e aperte <b>Salvar</b>.' : 'Mudou o tempo? Use <b>Baixar de novo</b>: o PC baixa com o tempo novo.') + '</p>' : '') +
@@ -704,7 +738,12 @@
             bf.textContent = 'Na fila do PC'; carregar();
           }).catch(function (e) { bf.disabled = false; aviso(e.message, true); });
         };
-        function marcarTipo() { box.querySelectorAll('#esc-tipo button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === tipo); }); }
+        function marcarTipo() {
+          box.querySelectorAll('#esc-tipo button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === tipo); });
+          box.querySelector('#campo-layout').hidden = tipo !== 'curto';     // vertical só para curto
+        }
+        box.querySelector('#c-layouts').onclick = function () { CortexLayouts.abrir(Number(f.layout.value) || null); };
+        function layoutEscolhido() { return tipo !== 'curto' ? undefined : f.layout.value === '' ? null : Number(f.layout.value); }
         marcarTipo();
         box.querySelector('#esc-tipo').onclick = function (ev) { var b = ev.target.closest('button'); if (b) { tipo = b.dataset.v; marcarTipo(); mostrarDur(); } };
         // máscara de timecode: só dígitos e ":", e completa os ":" ao sair do campo
@@ -763,7 +802,7 @@
               if (ini == null || fim == null) { msg.textContent = 'Preencha início e fim no formato 00:00:00.'; return; }
               var tg = tempoGancho(); if (tg.erro) { msg.textContent = tg.erro; return; }
               extra = Object.assign({ tipo: tipo, inicio_s: ini, fim_s: fim, titulo: f.titulo.value.trim(), gancho: f.gancho.value.trim(),
-                descricao: f.descricao.value.trim(), tags: f.tags.value }, tg);
+                descricao: f.descricao.value.trim(), tags: f.tags.value, layout_id: layoutEscolhido() }, tg);
             }
             mudarEstado(c.id, b.dataset.ir, b, extra).then(function (ok) { if (ok) fecharGaveta(); });
           };
@@ -783,7 +822,7 @@
           if (ini == null || fim == null) { msg.textContent = 'Preencha início e fim no formato 00:00:00.'; return; }
           var tg = tempoGancho(); if (tg.erro) { msg.textContent = tg.erro; return; }
           var corpo = Object.assign({ tipo: tipo, inicio_s: ini, fim_s: fim, titulo: f.titulo.value.trim(), gancho: f.gancho.value.trim(),
-            descricao: f.descricao.value.trim(), tags: f.tags.value }, tg);
+            descricao: f.descricao.value.trim(), tags: f.tags.value, layout_id: layoutEscolhido() }, tg);
           if (novo) corpo.video_id = v.id;
           var btn = f.querySelector('[type=submit]'); btn.disabled = true; msg.textContent = '';
           api(novo ? '/cortes' : '/cortes/' + c.id, { metodo: novo ? 'POST' : 'PATCH', corpo: corpo }).then(function () {

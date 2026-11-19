@@ -325,7 +325,35 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   título novo trocando o arquivo, "Baixar pelo PC" substituindo a ficha na fila, tela no PC e no
   celular.
 
+- 19/11: **vertical 9:16 pronto para os CURTOS** (pedido do dono: escolher um layout - webcam
+  topo-direita, topo-esquerda, baixo-esquerda, sem webcam - e o PC já gerar o 1080x1920, sem
+  ajustar enquadramento no Movavi). Migration 0015 (`cortex_layouts`; `layout_id` no corte e no
+  vídeo), agente 2.0.0, tela nova `public/projetos/cortex/layouts.js`.
+  - Tela **▦ Layouts** (botão no topo do quadro): lista à esquerda, print da live ao fundo (Ctrl+V
+    ou escolher imagem; fica só no navegador, localStorage, o painel guarda só as coordenadas),
+    caixa WEBCAM e caixa GAMEPLAY arrastáveis, canto ◢ muda o tamanho com a proporção TRAVADA na
+    do espaço que ocupa no vertical, slider "webcam ocupa N% da altura" (20-60%), prévia do
+    celular desenhando o mesmo recorte que o FFmpeg faz. Salvar, Duplicar, Excluir (confirma),
+    alterações não salvas perguntam antes de sair. Os 4 iniciais nascem no 1º acesso.
+  - Coordenadas em fração do quadro (0 a 1): valem para 720p/1080p/1440p.
+  - Escolha: no vídeo ("Layout vertical dos curtos", padrão) e em cada curto ("Padrão do vídeo",
+    um layout, ou "Nenhum"). Longo nunca tem vertical. Vídeo novo do mesmo canal herda o layout
+    do anterior (o streamer costuma manter a webcam no lugar). Cartão mostra "▦ <layout>".
+  - PC (2.0.0): baixa o curto como sempre (Curtos\NN - título.mp4 + .txt) e gera o vertical em
+    `Shorts\NN - título.mp4`: `crop` da webcam e da gameplay, `scale` 1080 de largura, `vstack`
+    (webcam em cima), libx264 veryfast crf 20, aac. Se o vertical falhar, o horizontal fica e a
+    qualidade do corte diz "vertical FALHOU". Agente < 2.0.0 não recebe curto com layout.
+  - Mudou o layout de um corte já baixado: "Baixar de novo" gera o vertical com o novo.
+  Testado: API (iniciais, recusas, longo sem layout, padrão do vídeo, "nenhum", excluir), agente
+  2.0.0 com FFmpeg real (vertical 1080x1920 com áudio na pasta Shorts), editor com print e arrasto,
+  gaveta do corte, PC e celular.
+
 ## Decisões
+
+- 19/11: no vertical a **webcam fica em cima** e a gameplay embaixo (padrão dos shorts de live);
+  o "topo-direita/baixo-esquerda" do layout é onde a webcam está na LIVE, não no vertical.
+- 19/11: o **print da live não vai para a nuvem** (o hub não tem depósito de arquivos e a imagem
+  só serve para desenhar); em outro aparelho o editor mostra a grade e dá para colar outro print.
 
 - 18/11: live da Kick vai pelo **m3u8** (o link do vídeo não abre enquanto a live roda) e o
   texto prefere a **legenda da própria Kick** na língua do canal (instantânea, sem gastar a cota

@@ -8,6 +8,8 @@
 //     da Kick (acha o vídeo da live, legenda da Kick, download pelo m3u8, "Puxar o resto").
 //   - "baixar_corte": baixa SÓ os minutos do corte (yt-dlp --download-sections) para a pasta
 //     de edição, com um .txt ao lado (título, gancho, descrição, tags) para publicar.
+//     2.0.0: curto com layout escolhido no painel ganha também o VERTICAL 1080x1920 pronto
+//     (FFmpeg: recorte da webcam e da gameplay + escala + empilhamento) na pasta "Shorts".
 //
 // Uso (o painel mostra os comandos prontos na tela "PCs"):
 //   node cortex-agente.mjs conectar <endereço do painel> <chave>   grava config.json
@@ -31,7 +33,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '1.9.0';
+const VERSAO = '2.0.0';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -392,6 +394,26 @@ function adotarPasta(cfg, nova) {
 }
 
 function tempoExato(s) { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return ((h ? h + ' h ' : '') + (m ? m + ' min ' : '') + (x || (!h && !m) ? x + ' s' : '')).trim(); }
+// 2.0.0: o vertical. Coordenadas do layout em fração do quadro (valem para qualquer resolução).
+// Webcam em cima (cam_altura da tela), gameplay embaixo; 'sem_webcam' = só a gameplay.
+function filtroVertical(L) {
+  const f = (x) => Math.min(1, Math.max(0, Number(x))).toFixed(5);
+  const corte = (x, y, w, h) => `crop=trunc(iw*${f(w)}/2)*2:trunc(ih*${f(h)}/2)*2:trunc(iw*${f(x)}):trunc(ih*${f(y)})`;
+  const jogo = corte(L.jogo_x, L.jogo_y, L.jogo_w, L.jogo_h);
+  if (L.tipo === 'sem_webcam') return `[0:v]${jogo},scale=1080:1920:flags=lanczos,setsar=1,format=yuv420p[v]`;
+  const hc = Math.round((1920 * Number(L.cam_altura)) / 2) * 2, hj = 1920 - hc;
+  return `[0:v]split=2[a][b];[b]${corte(L.cam_x, L.cam_y, L.cam_w, L.cam_h)},scale=1080:${hc}:flags=lanczos,setsar=1[cam];` +
+    `[a]${jogo},scale=1080:${hj}:flags=lanczos,setsar=1[jogo];[cam][jogo]vstack=inputs=2,format=yuv420p[v]`;
+}
+async function gerarVertical(cfg, t, entrada, saida, L, durS) {
+  log(`Gerando o vertical 1080x1920 (${L.nome})…`);
+  const prog = progresso(cfg, t, 'vertical', durS);
+  await rodar('ffmpeg', ['-hide_banner', '-y', '-i', entrada, '-filter_complex', filtroVertical(L), '-map', '[v]', '-map', '0:a?',
+    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', saida],
+  { aoLer: prog.aoLer });
+  if (!existsSync(saida)) throw new Error('o ffmpeg terminou mas o vertical não apareceu');
+}
+
 // Ficha .txt ao lado do corte: tudo o que precisa na hora de editar e publicar.
 function escreverFicha(arquivo, v, c, qualidade) {
   writeFileSync(arquivo, [
@@ -474,6 +496,24 @@ async function tarefaCorte(cfg, t) {
   const qualidade = await medirQualidade(caminho);
   escreverFicha(destino + '.txt', v, c, qualidade);
   log(`Pronto: ${caminho}${qualidade ? ' · ' + qualidade : ''}`);
+
+  // 2.0.0 (19/11): curto com layout -> vertical 1080x1920 pronto, na pasta Shorts ao lado de Curtos.
+  // Se falhar, o horizontal continua lá e o painel fica sabendo (não baixa tudo de novo).
+  if (c.tipo === 'curto' && c.layout) {
+    const pastaShorts = join(dirname(pastaVideo), 'Shorts');
+    mkdirSync(pastaShorts, { recursive: true });
+    const vertical = join(pastaShorts, nome + '.mp4');
+    try {
+      await gerarVertical(cfg, t, caminho, vertical, c.layout, c.fim_s - c.inicio_s);
+      log(`Vertical pronto (${c.layout.nome}): ${vertical}`);
+      return { caminho: vertical, qualidade: (qualidade ? qualidade + ' · ' : '') + 'vertical 1080x1920 (' + c.layout.nome + ')' };
+    } catch (e) {
+      if (parando) throw e;
+      try { unlinkSync(vertical); } catch { /* */ }
+      log(`Vertical falhou (${e.message}); o horizontal ficou pronto.`);
+      return { caminho, qualidade: (qualidade ? qualidade + ' · ' : '') + 'vertical FALHOU: ' + String(e.message).slice(0, 80) };
+    }
+  }
   return { caminho, qualidade };
 }
 
