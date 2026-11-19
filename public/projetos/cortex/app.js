@@ -1235,6 +1235,6 @@
   // ---------- início e atualização ----------
   carregar();
   // O PC trabalha sozinho: a cada 20 s o quadro se atualiza (só com a aba visível).
-  setInterval(function () { if (!document.hidden && $('gaveta').hidden) carregar(); }, 20000);
+  setInterval(function () { if (!document.hidden && $('gaveta').hidden) carregar(); }, 30000);   // 19/11: 30 s (poupa o limite diário de leituras do D1)
   document.addEventListener('visibilitychange', function () { if (!document.hidden) carregar(); });
 })();

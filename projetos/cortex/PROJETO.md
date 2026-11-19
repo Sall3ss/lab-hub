@@ -504,3 +504,11 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   salvo por último (PATCH no corte, `cena_auto = 0`, a foto nova não troca mais) e redesenha a
   prévia com as medidas novas. Causa provável do "layout errado ao baixar": corte em "Padrão do
   vídeo" com o layout trocado sozinho pela cena (foto); escolha feita no editor agora trava.
+- 19/11 (noite) - **CAUSA REAL da página parada:** a consulta do quadro buscava a última tarefa de
+  cada corte SEM índice (`SCAN t`, 4x por corte). Com a live de 10 h, centenas de milhares de
+  linhas lidas por atualização (a cada 20 s) - o limite grátis do D1 (5 milhões de linhas
+  lidas/dia) estourou, as consultas passaram a falhar (tela parada) e o deploy também (o passo de
+  migrations usa o D1). Migration 0021 cria `idx_cortex_tarefas_corte` e `idx_cortex_tarefas_video`
+  (busca de 1-2 linhas) e o quadro atualiza a cada 30 s. Se o limite estourou, só volta às 00:00
+  UTC (21:00 de Brasília); depois disso, o deploy precisa rodar de novo (Actions › deploy › Run
+  workflow, ou um push).
