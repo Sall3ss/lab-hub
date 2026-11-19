@@ -755,7 +755,7 @@
       '<div class="campo" id="campo-layout"><span>Vertical 9:16 (layout)</span>' + (novo ? '' : blocoCena(c)) + '<div class="linha-layout"><select name="layout">' +
         opcoesLayout(c.layout_id == null ? null : c.layout_id, 'Padrão do vídeo' + (v.layout_id ? ' (' + (nomeLayout(v.layout_id) || 'layout') + ')' : ' (nenhum)')) +
         '</select><button type="button" class="mini" id="c-layouts">Editar layouts</button></div>' +
-        '<small class="dica-layout">' + (c.estado === 'edicao' && !fora ? 'Mudou o layout? Use <b>Baixar de novo</b> para gerar o vertical com ele.' : 'O PC baixa o corte e já gera o vídeo vertical pronto, na pasta Shorts.') + '</small></div>' +
+        '<small class="dica-layout">' + (c.estado === 'edicao' && !fora ? 'Mudou o layout? Use <b>Baixar de novo</b> para gerar o vertical com ele.' : 'Com layout, o corte sai só na pasta Shorts: vertical pronto e legendado. Com "Nenhum", sai horizontal em Curtos, sem legenda.') + '</small></div>' +
       '<div class="dupla"><label class="campo"><span>Início</span><input class="tc-campo" name="inicio" inputmode="numeric" placeholder="00:00:00" value="' + (c.inicio_s === '' ? '' : tc(c.inicio_s)) + '"' + (tempoLivre ? '' : ' disabled') + '>' + ajustes('inicio', tempoLivre) + '</label>' +
       '<label class="campo"><span>Fim</span><input class="tc-campo" name="fim" inputmode="numeric" placeholder="00:00:00" value="' + (c.fim_s === '' ? '' : tc(c.fim_s)) + '"' + (tempoLivre ? '' : ' disabled') + '>' + ajustes('fim', tempoLivre) + '</label></div>' +
       (c.estado === 'edicao' ? '<p style="margin:-.2rem 0 0;font-size:.78rem;color:var(--suave)">' + (fora ? 'Sem arquivo no PC: ajuste o tempo e aperte <b>Salvar</b>.' : 'Mudou o tempo? Use <b>Baixar de novo</b>: o PC baixa com o tempo novo.') + '</p>' : '') +
@@ -996,7 +996,7 @@
       '<div class="passo"><h3><i>3</i>Criar o atalho de ligar e desligar</h3><p>No mesmo PowerShell, cole:</p>' + blocoCmd('cmd3', ligar) +
       '<p>Aparece na área de trabalho o atalho <b>Cortex - ligar e desligar</b>, e o Cortex já fica <b>ligado</b> (minimizado na barra de tarefas). Daqui pra frente:</p>' +
       '<p>• <b>Dois cliques no atalho</b> com ele desligado → liga.<br>• <b>Dois cliques de novo</b> → desliga. Se estiver baixando algo, o trabalho volta para a fila e nada se perde.<br>• Desligado, não roda nada no PC. O que você importar no painel espera até ligar.</p>' +
-      '<p>Os cortes caem em <b>Vídeos › Cortex</b>, uma pasta por vídeo, com Curtos e Longos separados e um .txt com título, descrição e tags ao lado de cada arquivo.</p></div>' +
+      '<p>Os cortes caem em <b>Vídeos › Cortex</b>, uma pasta por vídeo, com Longos, Curtos (sem layout) e Shorts (verticais legendados) separados e um .txt com título, descrição e tags ao lado de cada arquivo.</p></div>' +
       '<div class="acoes"><button class="btn" type="button" id="pc-voltar">Voltar para PCs</button></div>',
       function (box) { ligarCopiar(box); box.querySelector('#pc-voltar').onclick = abrirPCs; });
   }

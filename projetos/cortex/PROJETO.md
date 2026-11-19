@@ -443,3 +443,10 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   com o layout **com webcam** salvo por último (`herdarLayout` + migration 0017 para os vídeos
   no quadro), e o cartão do curto sem layout mostra "só horizontal · sem layout" em vermelho.
   A legenda só é gravada **no vertical**; o horizontal leva só o `.srt`.
+- 19/11 (agente 2.3.0, pedido do dono): curto com layout sai **só em `Shorts`** (vertical
+  legendado + ficha .txt + cópia em `Shorts\sem legenda`); o horizontal é baixado em `_baixando`
+  e apagado (se o vertical falhar, ele vai para `Curtos`). Sem layout ("Nenhum") e longos: só o
+  horizontal + .txt, **sem legenda e sem .srt**. Legenda em **português fixo** (`language=pt`;
+  antes o Whisper adivinhava e saiu em inglês), modelo `whisper-large-v3` (mais preciso que o
+  turbo) e tempo ajustado: início real do áudio (ffprobe), bloco entra 0,12 s antes da fala e
+  não pisca entre blocos próximos.

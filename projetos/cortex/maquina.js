@@ -26,7 +26,7 @@ import { db } from '../../lib/db.js';
 import { passoRoteiro } from './roteiro.js';
 import { receberFoto, MAX_FOTO } from './cena.js';
 
-export const AGENTE_VERSAO = '2.2.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+export const AGENTE_VERSAO = '2.3.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
 const PRAZO_MIN = { texto: 30, baixar_corte: 60, roteiro: 20, quadros: 15 };
 const VERSAO_ROTEIRO = [1, 3, 0];       // agente mais velho nao sabe fazer 'roteiro': nao recebe
 const VERSAO_TRECHO = [1, 7, 0];        // 16/11: so a 1.7.0+ respeita "analisar de/ate"; a velha buscaria a live inteira
@@ -37,6 +37,8 @@ const VERSAO_LIVE = [1, 8, 2];          // 18/11: live da Kick (link do canal, m
 const MAX_TENTATIVAS = 3;
 const VISTO_A_CADA_MS = 60 * 1000;      // grava "visto_em" no maximo 1x por minuto (poupa escrita no D1)
 const GROQ_MODELO = 'whisper-large-v3-turbo';
+// 19/11 (legenda): o modelo completo erra menos palavra e tempo; o corte e curto, a cota gratis aguenta.
+const GROQ_MODELO_LEGENDA = 'whisper-large-v3';
 const MAX_AUDIO = 24 * 1024 * 1024;     // limite da Groq no plano gratis e 25 MB
 
 export async function hashChave(chave) {
@@ -321,7 +323,11 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     const audio = await request.arrayBuffer();
     if (!audio.byteLength) return json({ erro: 'áudio vazio' }, 400);
     if (audio.byteLength > MAX_AUDIO) return json({ erro: 'áudio do corte maior que 24 MB', definitivo: true }, 413);
-    const r = await transcreverGroq(env, audio, request.headers.get('content-type') || 'audio/ogg', { palavras: true });
+    // 19/11: idioma FIXO (padrao pt). Sem ele o Whisper adivinhava e um trecho de jogo virou
+    // legenda em ingles, com o tempo das palavras errado junto.
+    const url = new URL(request.url);
+    const idioma = /^[a-z]{2}$/.test(url.searchParams.get('idioma') || '') ? url.searchParams.get('idioma') : 'pt';
+    const r = await transcreverGroq(env, audio, request.headers.get('content-type') || 'audio/ogg', { palavras: true, idioma });
     if (r.erro) return json({ erro: r.erro, esperar_s: r.esperar_s, definitivo: !!r.definitivo }, r.status || 502);
     return json({ ok: true, palavras: r.palavras, idioma: r.idioma || null });
   }
@@ -423,7 +429,9 @@ async function transcreverGroq(env, audio, tipo, opc = {}) {
     const form = new FormData();
     const ext = tipo.includes('ogg') ? 'ogg' : tipo.includes('mpeg') ? 'mp3' : tipo.includes('mp4') ? 'm4a' : 'webm';
     form.append('file', new Blob([audio], { type: tipo }), 'parte.' + ext);
-    form.append('model', GROQ_MODELO);
+    form.append('model', opc.palavras ? GROQ_MODELO_LEGENDA : GROQ_MODELO);
+    if (opc.idioma) form.append('language', opc.idioma);
+    if (opc.idioma === 'pt') form.append('prompt', 'Transcrição em português do Brasil de um trecho de live, com pontuação.');
     form.append('response_format', 'verbose_json');
     form.append('temperature', '0');
     if (comPalavras) { form.append('timestamp_granularities[]', 'word'); form.append('timestamp_granularities[]', 'segment'); }

@@ -12,7 +12,10 @@
 //     (FFmpeg: recorte da webcam e da gameplay + escala + empilhamento) na pasta "Shorts".
 //     2.2.0: LEGENDA - o áudio do corte vai para o Whisper (Groq, grátis) palavra a palavra; o
 //     vertical sai legendado no estilo dos Shorts (até 3 palavras, a falada em amarelo) e o
-//     vertical sem legenda fica em "Shorts\sem legenda". Todo corte baixado ganha um .srt.
+//     vertical sem legenda fica em "Shorts\sem legenda".
+//     2.3.0: curto com layout vai SÓ para "Shorts" (o horizontal é baixado numa pasta de
+//     trabalho e apagado); legenda só nele, em português, com o tempo acertado pelo início
+//     real do áudio. Sem layout ("Nenhum") e longos: só o horizontal + .txt, sem legenda.
 //   - "quadros" (2.1.0): UMA foto pequena do meio de cada curto da Triagem, tirada direto do
 //     endereço do vídeo (não baixa o vídeo). O painel guarda e a IA diz a cena (full cam, jogo
 //     com webcam, só o jogo), para o corte já chegar com o layout vertical certo.
@@ -39,7 +42,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '2.2.0';
+const VERSAO = '2.3.0';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -431,19 +434,33 @@ async function gerarVertical(cfg, t, entrada, saida, L, durS, leg) {
 // Volta cada palavra com o tempo contado do início do corte.
 async function palavrasDoCorte(cfg, t, arquivo, pasta) {
   const audio = join(pasta, 'legenda.ogg');
+  const atraso = await atrasoDoAudio(arquivo);
   await rodar('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', arquivo, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'libopus', '-b:a', '24k', audio]);
   const bytes = readFileSync(audio);
   if (bytes.length > 24 * 1024 * 1024) throw new Error('áudio do corte grande demais para a legenda');
   for (let tent = 0; ; tent++) {
     try {
-      const r = await painel(cfg, `/tarefas/${t.id}/palavras`, { bruto: bytes, tipo: 'audio/ogg', prazo: 5 * 60000 });
-      return r.palavras || [];
+      const r = await painel(cfg, `/tarefas/${t.id}/palavras?idioma=pt`, { bruto: bytes, tipo: 'audio/ogg', prazo: 5 * 60000 });
+      if (atraso) log(`Legenda: áudio começa ${atraso.toFixed(2)} s depois do vídeo; tempos ajustados.`);
+      return (r.palavras || []).map((w) => ({ ...w, i: w.i + atraso, f: w.f + atraso }));
     } catch (e) {
       const esp = e instanceof ErroPainel && Number(e.dados.esperar_s);
       if (esp && esp <= 600 && tent < 3) { log(`Limite da Groq: legenda tenta de novo em ${minutos(esp)}.`); await dorme(esp * 1000); continue; }
       throw e;
     }
   }
+}
+// 2.3.0: o áudio do corte pode começar alguns centésimos depois do vídeo (corte no quadro-chave).
+// O Whisper conta do 1º som; a legenda conta do 1º quadro. A diferença entra em cada palavra.
+async function atrasoDoAudio(arq) {
+  try {
+    const j = JSON.parse(await rodar('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type,start_time', '-of', 'json', arq]));
+    const ini = (tp) => Number(((j.streams || []).find((x) => x.codec_type === tp) || {}).start_time);
+    const a = ini('audio'), v = ini('video');
+    if (!Number.isFinite(a) || !Number.isFinite(v)) return 0;
+    const d = a - Math.min(a, v);
+    return d > 0.01 && d < 5 ? d : 0;
+  } catch { return 0; }
 }
 const limparPalavra = (p) => String(p || '').replace(/[{}\\]/g, '').replace(/^[\s"'“”«»(]+|[\s"'“”«»),.;:…]+$/g, '').trim();
 // Junta palavras em blocos: no máximo `max` palavras / `chars` letras, e quebra em pausa ou fim de frase.
@@ -460,18 +477,22 @@ function blocos(palavras, max, chars, pausa) {
   return out;
 }
 const hAss = (s) => { s = Math.max(0, s); const cs = Math.round(s * 100); return `${Math.floor(cs / 360000)}:${dois(Math.floor(cs / 6000) % 60)}:${dois(Math.floor(cs / 100) % 60)}.${dois(cs % 100)}`; };
-const hSrt = (s) => { s = Math.max(0, s); const ms = Math.round(s * 1000); return `${dois(Math.floor(ms / 3600000))}:${dois(Math.floor(ms / 60000) % 60)}:${dois(Math.floor(ms / 1000) % 60)},${String(ms % 1000).padStart(3, '0')}`; };
 // Estilo A (escolhido pelo dono em 19/11): até 3 palavras, letra grande branca com contorno
 // preto, a palavra falada em amarelo. Fica na emenda webcam/jogo; sem webcam, abaixo do meio.
 function legendaAss(palavras, L) {
   const y = L.tipo === 'webcam' ? Math.round((1920 * Number(L.cam_altura)) / 2) * 2 : 1340;
   const linhas = [];
   const grupos = blocos(palavras, 3, 18, 0.5);
+  // 2.3.0 (tempo): o bloco aparece um pouco ANTES da 1ª palavra (o olho lê antes de ouvir) e,
+  // se o próximo vem logo, fica na tela até ele (sem piscar vazio entre um e outro).
+  const ANTES = 0.12;
+  const entra = (n) => Math.max(0, grupos[n][0].i - ANTES);
   grupos.forEach((g, n) => {
-    const prox = grupos[n + 1];
-    const fimGrupo = Math.min(prox ? prox[0].i : Infinity, g[g.length - 1].f + 0.3);
+    const prox = grupos[n + 1], ultimo = g[g.length - 1];
+    const fimGrupo = !prox ? ultimo.f + 0.3 : entra(n + 1) - ultimo.f < 0.7 ? entra(n + 1) : Math.min(entra(n + 1), ultimo.f + 0.3);
     g.forEach((w, k) => {
-      const ini = w.i, fim = Math.max(k < g.length - 1 ? g[k + 1].i : fimGrupo, ini + 0.05);
+      const ini = k === 0 ? entra(n) : Math.max(0, w.i - 0.04);
+      const fim = Math.max(k < g.length - 1 ? Math.max(0, g[k + 1].i - 0.04) : fimGrupo, ini + 0.05);
       const texto = g.map((x, m) => (m === k ? '{\\c&H00FFFF&}' + x.txt.toLocaleUpperCase('pt-BR') + '{\\c&HFFFFFF&}' : x.txt.toLocaleUpperCase('pt-BR'))).join(' ');
       linhas.push(`Dialogue: 0,${hAss(ini)},${hAss(fim)},Cortex,,0,0,0,,{\\pos(540,${y})}${texto}`);
     });
@@ -482,12 +503,6 @@ function legendaAss(palavras, L) {
     'Style: Cortex,Arial Black,92,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,7,3,5,40,40,0,1', '',
     '[Events]', 'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text', ...linhas, ''].join('\n');
 }
-// .srt comum (frases de até ~42 letras): Movavi, YouTube e afins.
-function legendaSrt(palavras) {
-  return blocos(palavras, 8, 42, 0.8).map((g, n) =>
-    `${n + 1}\n${hSrt(g[0].i)} --> ${hSrt(g[g.length - 1].f + 0.2)}\n${g.map((x) => x.bruto.replace(/[{}]/g, '')).join(' ')}\n`).join('\n');
-}
-
 // Ficha .txt ao lado do corte: tudo o que precisa na hora de editar e publicar.
 function escreverFicha(arquivo, v, c, qualidade) {
   writeFileSync(arquivo, [
@@ -509,15 +524,15 @@ async function tarefaCorte(cfg, t, pasta) {
   adotarPasta(cfg, t.pasta);
   if (!c) throw Object.assign(new Error('o corte foi apagado no painel'), { definitivo: true });
   const dia = (v.criado_em || new Date().toISOString()).slice(0, 10);
-  const pastaVideo = join(cfg.pasta, nomeSeguro(`${dia} ${v.canal ? v.canal + ' - ' : ''}${v.titulo || v.plataforma}`, 100),
-    c.tipo === 'longo' ? 'Longos' : 'Curtos');
-  mkdirSync(pastaVideo, { recursive: true });
+  const raiz = join(cfg.pasta, nomeSeguro(`${dia} ${v.canal ? v.canal + ' - ' : ''}${v.titulo || v.plataforma}`, 100));
+  const pastaFinal = join(raiz, c.tipo === 'longo' ? 'Longos' : 'Curtos');
   const nome = `${dois(c.numero || 1)} - ${nomeSeguro(c.titulo, 70)}`;
-  const destino = join(pastaVideo, nome);
 
   // 1.9.0 (18/11): corte aprovado SEM baixar (o dono baixa por fora): só a ficha .txt, com os
   // tempos para baixar e o resto (título, gancho, descrição, tags). Nada de vídeo.
   if (c.baixar_fora) {
+    mkdirSync(pastaFinal, { recursive: true });
+    const destino = join(pastaFinal, nome);
     // Título mudou: a ficha antiga (outro nome) sai, para não ficarem duas.
     const antiga = (String(c.arquivo_local || '').match(/^[^:]+: (.+)$/) || [])[1];
     if (antiga && antiga.endsWith('.txt') && antiga !== destino + '.txt' && existsSync(antiga)) { try { unlinkSync(antiga); } catch { /* */ } }
@@ -526,8 +541,20 @@ async function tarefaCorte(cfg, t, pasta) {
     return { caminho: destino + '.txt', qualidade: null, soFicha: true };
   }
 
+  // 2.3.0 (pedido do dono): curto COM layout sai só em "Shorts" (vertical legendado + ficha). O
+  // horizontal é baixado numa pasta de trabalho do mesmo disco e apagado no fim. Sem layout
+  // ("Nenhum") e longo: horizontal + ficha em Curtos/Longos, sem legenda.
+  const comVertical = c.tipo === 'curto' && !!c.layout;
+  const pastaShorts = join(raiz, 'Shorts');
+  const pastaVideo = comVertical ? join(raiz, '_baixando') : pastaFinal;
+  mkdirSync(pastaVideo, { recursive: true });
+  const destino = join(pastaVideo, nome);
   // Arquivo de um corte anterior com o mesmo nome (ex.: "baixar de novo") sai antes.
-  for (const n of readdirSync(pastaVideo)) if (n.startsWith(nome + '.') && !n.endsWith('.txt')) rmSync(join(pastaVideo, n), { force: true });
+  const limparNome = (dir, tudo) => {
+    if (!existsSync(dir)) return;
+    for (const n of readdirSync(dir)) if (n.startsWith(nome + '.') && (tudo || !n.endsWith('.txt'))) rmSync(join(dir, n), { force: true });
+  };
+  limparNome(pastaVideo, false);
 
   log(`Baixando corte ${c.tipo} "${c.titulo}" (${tc(c.inicio_s)} → ${tc(c.fim_s)})`);
   const prog = progresso(cfg, t, 'baixando', c.fim_s - c.inicio_s);
@@ -568,62 +595,74 @@ async function tarefaCorte(cfg, t, pasta) {
   if (!arq) throw new Error('o yt-dlp terminou mas o arquivo não apareceu');
   const caminho = join(pastaVideo, arq);
   const qualidade = await medirQualidade(caminho);
-  escreverFicha(destino + '.txt', v, c, qualidade);
-  log(`Pronto: ${caminho}${qualidade ? ' · ' + qualidade : ''}`);
 
-  // 2.2.0: legenda. Palavras do Whisper -> .srt ao lado do corte (todo corte) e, no curto com
-  // layout, a legenda gravada no vertical. Se a legenda falhar, o corte sai igual, sem ela.
+  if (!comVertical) {
+    escreverFicha(destino + '.txt', v, c, qualidade);
+    log(`Pronto: ${caminho}${qualidade ? ' · ' + qualidade : ''}`);
+    return { caminho, qualidade };
+  }
+
+  // Curto com layout: legenda (Whisper, português) gravada no vertical; falhou = vertical sem ela.
   let palavras = null, avisoLeg = null;
   try {
     palavras = await palavrasDoCorte(cfg, t, caminho, pasta);
     if (!palavras.length) avisoLeg = 'sem fala para legendar';
-    else { writeFileSync(destino + '.srt', legendaSrt(palavras), 'utf8'); log(`Legenda: ${palavras.length} palavras (${destino}.srt)`); }
+    else log(`Legenda: ${palavras.length} palavras.`);
   } catch (e) {
     if (parando) throw e;
     avisoLeg = 'legenda FALHOU (refaça com "Baixar de novo"): ' + String(e.message).replace(/ ?O PC tenta de novo\.?/, '').slice(0, 80);
-    log(`Legenda falhou (${e.message}); o corte segue sem ela.`);
+    log(`Legenda falhou (${e.message}); o vertical segue sem ela.`);
   }
   const comLeg = palavras && palavras.length ? palavras : null;
 
-  // 2.0.0 (19/11): curto com layout -> vertical 1080x1920 pronto, na pasta Shorts ao lado de Curtos.
-  // Se falhar, o horizontal continua lá e o painel fica sabendo (não baixa tudo de novo).
-  if (c.tipo === 'curto' && c.layout) {
-    const pastaShorts = join(dirname(pastaVideo), 'Shorts');
-    mkdirSync(pastaShorts, { recursive: true });
-    const vertical = join(pastaShorts, nome + '.mp4');
-    const base = (qualidade ? qualidade + ' · ' : '') + 'vertical 1080x1920 (' + c.layout.nome + ')';
-    let leg = null;
-    // "Baixar de novo" sem legenda desta vez: não deixa a legenda/versão "sem legenda" antigas
-    for (const velho of [join(pastaShorts, nome + '.srt'), join(pastaShorts, 'sem legenda', nome + '.mp4')]) {
-      if (!comLeg && existsSync(velho)) { try { unlinkSync(velho); } catch { /* */ } }
-    }
-    if (comLeg) {
-      const pastaSem = join(pastaShorts, 'sem legenda');
-      mkdirSync(pastaSem, { recursive: true });
-      writeFileSync(join(pasta, 'legenda.ass'), legendaAss(comLeg, c.layout), 'utf8');
-      writeFileSync(join(pastaShorts, nome + '.srt'), legendaSrt(comLeg), 'utf8');
-      leg = { pasta, saidaSem: join(pastaSem, nome + '.mp4') };
-    }
-    try {
-      await gerarVertical(cfg, t, caminho, vertical, c.layout, c.fim_s - c.inicio_s, leg);
-      log(`Vertical pronto (${c.layout.nome})${leg ? ', legendado' : ''}: ${vertical}`);
-      return { caminho: vertical, qualidade: base + (leg ? ' · legendado' : avisoLeg ? ' · ' + avisoLeg : '') };
-    } catch (e) {
-      if (parando) throw e;
-      if (leg) {
-        // a legenda pode ser o problema (ffmpeg sem libass, fonte...): tenta o vertical sem ela
-        log(`Vertical com legenda falhou (${e.message}); gerando sem legenda.`);
-        try {
-          await gerarVertical(cfg, t, caminho, vertical, c.layout, c.fim_s - c.inicio_s, null);
-          return { caminho: vertical, qualidade: base + ' · legenda FALHOU no vídeo (o .srt está na pasta): ' + String(e.message).slice(0, 60) };
-        } catch (e2) { if (parando) throw e2; e = e2; }
-      }
-      try { unlinkSync(vertical); } catch { /* */ }
-      log(`Vertical falhou (${e.message}); o horizontal ficou pronto.`);
-      return { caminho, qualidade: (qualidade ? qualidade + ' · ' : '') + 'vertical FALHOU: ' + String(e.message).slice(0, 80) };
-    }
+  mkdirSync(pastaShorts, { recursive: true });
+  const vertical = join(pastaShorts, nome + '.mp4');
+  const pastaSem = join(pastaShorts, 'sem legenda');
+  const base = (qualidade ? qualidade + ' · ' : '') + 'vertical 1080x1920 (' + c.layout.nome + ')';
+  // Sobras de versões antigas deste corte: .srt no Shorts (2.2.0) e a cópia "sem legenda".
+  for (const velho of [join(pastaShorts, nome + '.srt'), join(pastaSem, nome + '.mp4')]) {
+    if (existsSync(velho)) { try { unlinkSync(velho); } catch { /* */ } }
   }
-  return { caminho, qualidade: (qualidade || '') + (comLeg ? (qualidade ? ' · ' : '') + 'legenda .srt' : avisoLeg ? (qualidade ? ' · ' : '') + avisoLeg : '') || null };
+  let leg = null;
+  if (comLeg) {
+    mkdirSync(pastaSem, { recursive: true });
+    writeFileSync(join(pasta, 'legenda.ass'), legendaAss(comLeg, c.layout), 'utf8');
+    leg = { pasta, saidaSem: join(pastaSem, nome + '.mp4') };
+  }
+  const terminar = (resultado) => {
+    // Vertical pronto: a ficha vai para Shorts; o horizontal (e o de versões antigas em Curtos) sai.
+    escreverFicha(join(pastaShorts, nome + '.txt'), v, c, resultado.qualidade);
+    limparNome(pastaVideo, true);
+    limparNome(pastaFinal, true);
+    try { if (!readdirSync(pastaVideo).length) rmSync(pastaVideo, { recursive: true, force: true }); } catch { /* */ }
+    try { if (existsSync(pastaFinal) && !readdirSync(pastaFinal).length) rmSync(pastaFinal, { recursive: true, force: true }); } catch { /* */ }
+    return resultado;
+  };
+  try {
+    await gerarVertical(cfg, t, caminho, vertical, c.layout, c.fim_s - c.inicio_s, leg);
+    log(`Vertical pronto (${c.layout.nome})${leg ? ', legendado' : ''}: ${vertical}`);
+    return terminar({ caminho: vertical, qualidade: base + (leg ? ' · legendado' : avisoLeg ? ' · ' + avisoLeg : '') });
+  } catch (e) {
+    if (parando) throw e;
+    if (leg) {
+      // a legenda pode ser o problema (ffmpeg sem libass, fonte...): tenta o vertical sem ela
+      log(`Vertical com legenda falhou (${e.message}); gerando sem legenda.`);
+      try {
+        await gerarVertical(cfg, t, caminho, vertical, c.layout, c.fim_s - c.inicio_s, null);
+        return terminar({ caminho: vertical, qualidade: base + ' · legenda FALHOU no vídeo: ' + String(e.message).slice(0, 60) });
+      } catch (e2) { if (parando) throw e2; e = e2; }
+    }
+    try { unlinkSync(vertical); } catch { /* */ }
+    // Vertical falhou: o horizontal não se perde - vai para Curtos, com a ficha.
+    mkdirSync(pastaFinal, { recursive: true });
+    const salvo = join(pastaFinal, arq);
+    limparNome(pastaFinal, true);
+    renameSync(caminho, salvo);
+    const q = (qualidade ? qualidade + ' · ' : '') + 'vertical FALHOU: ' + String(e.message).slice(0, 80);
+    escreverFicha(join(pastaFinal, nome + '.txt'), v, c, q);
+    log(`Vertical falhou (${e.message}); o horizontal ficou em ${salvo}.`);
+    return { caminho: salvo, qualidade: q };
+  }
 }
 
 // Lê o andamento e avisa o painel a cada 15 s (isso também renova o prazo da tarefa).
