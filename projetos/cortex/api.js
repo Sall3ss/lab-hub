@@ -230,7 +230,9 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
     if (metodo === 'GET') {
       const cortes = await db(env).all(
         'SELECT * FROM cortex_cortes WHERE video_id = ? ORDER BY inicio_s', video.id);
-      for (const c of cortes) c.tags = lerTags(c.tags);
+      // 19/11: a legenda (palavra a palavra, ~10 KB por corte) não vem aqui: numa live de 10 h com
+      // muitos cortes isso pesava a resposta. A gaveta busca a de UM corte em /cortes/:id/legenda.
+      for (const c of cortes) { c.tags = lerTags(c.tags); c.tem_legenda = c.legenda ? 1 : 0; delete c.legenda; }
       return json({ video, cortes });
     }
 

@@ -106,6 +106,19 @@
 
   <div class="aviso" id="aviso" role="status" hidden></div>
 
+  <!-- 19/11: erro de programa aparece ESCRITO na tela (em vez de página parada), para um print bastar -->
+  <script>
+    (function () {
+      function mostrar(msg) {
+        var el = document.getElementById('erro-tela');
+        if (!el) { el = document.createElement('div'); el.id = 'erro-tela'; el.className = 'erro-tela'; document.body.appendChild(el); }
+        el.innerHTML = '<b>Algo falhou nesta tela.</b> Mande um print disto: <code></code> <button type="button" onclick="location.reload()">Recarregar</button>';
+        el.querySelector('code').textContent = String(msg).slice(0, 300);
+      }
+      window.addEventListener('error', function (e) { if (e.message) mostrar(e.message + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : '')); });
+      window.addEventListener('unhandledrejection', function (e) { mostrar((e.reason && e.reason.message) || e.reason); });
+    })();
+  </script>
   <script src="/navegador.js"></script>
   <script src="/campos.js"></script>
   <script src="./layouts.js"></script>

@@ -165,6 +165,7 @@
       if (selVideo) return carregarDetalhe(selVideo);
     }).catch(function (e) {
       if (!estado.videos.length && !estado.cortes.length) {
+        ultimoQuadro = '';   // a próxima carga boa redesenha (a tela não fica presa no erro)
         quadroEl.innerHTML = '<div class="erro-carga"><p>' + esc(e.message) + '</p><button class="btn" type="button" id="tentar">Tentar de novo</button></div>';
         $('tentar').onclick = function () { quadroEl.innerHTML = '<p class="carregando">Carregando o quadro…</p>'; carregar(); };
       } else aviso(e.message, true);
@@ -963,7 +964,24 @@
         // 19/11: o editor abre com a FOTO deste corte por trás (ajusta o recorte na cena certa)
         box.querySelector('#c-layouts').onclick = function () {
           var ft = box.querySelector('#cena-foto'), lid = Number(f.layout.value) || (f.layout.value === '' ? v.layout_id : null) || null;
-          CortexLayouts.abrir(lid, ft && ft.naturalWidth ? { foto: ft.src, rotulo: 'foto do corte (' + tc(c.quadro_s) + ')' } : null);
+          var opc = ft && ft.naturalWidth ? { foto: ft.src, rotulo: 'foto do corte (' + tc(c.quadro_s) + ')' } : {};
+          // 19/11: ao fechar o editor, a gaveta já mostra o layout salvo (com as medidas novas) e o corte
+          // passa a usar ele - nada de trocar de layout e voltar para atualizar.
+          opc.aoFechar = function (salvo) {
+            var antes = f.layout.value;
+            f.layout.innerHTML = opcoesLayout(null, 'Padrão do vídeo' + (v.layout_id ? ' (' + (nomeLayout(v.layout_id) || 'layout') + ')' : ' (nenhum)'));
+            f.layout.value = salvo ? String(salvo) : antes;
+            desenharCena(box, layoutDoSelect());
+            if (!salvo || !box.isConnected) return;
+            if (c.estado !== 'triagem' && c.estado !== 'edicao') return;
+            api('/cortes/' + c.id, { metodo: 'PATCH', corpo: { layout_id: salvo } }).then(function () {
+              c.layout_id = salvo; c.cena_auto = 0;
+              var lc = box.querySelector('.cena-linha span'); if (lc) lc.innerHTML = lc.innerHTML.replace(' · layout escolhido pela cena', '');
+              aviso('Este corte agora usa o layout "' + (nomeLayout(salvo) || 'salvo') + '"' + (c.estado === 'edicao' ? '. Use "Baixar de novo" para gerar o vertical com ele.' : '.'));
+              carregar();
+            }).catch(function (e) { aviso(e.message, true); });
+          };
+          CortexLayouts.abrir(lid, opc);
         };
         var leg = box.querySelector('#campo-legenda') ? editorLegenda(box.querySelector('#leg-corpo'), c) : null;
         // 19/11: textos da IA. `extrasIA` vai junto no Salvar/Aprovar quando o dono refez os textos.

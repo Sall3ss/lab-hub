@@ -404,3 +404,8 @@ button, input, textarea { font: inherit; color: inherit; }
 .pub-tit { font: 700 .64rem/1.3 var(--mono); letter-spacing: .08em; color: var(--ok); }
 .pub-linha { display: flex; align-items: center; justify-content: space-between; gap: .6rem; font-size: .84rem; }
 .pub-linha small { display: block; font-size: .7rem; color: var(--suave); }
+
+/* 19/11: erro de programa escrito na tela */
+.erro-tela { position: fixed; left: 50%; bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 9999; width: min(36rem, calc(100% - 2rem)); padding: .8rem 1rem; border-radius: var(--raio); background: #3a1016; border: 1px solid var(--perigo); color: #fff; font-size: .84rem; line-height: 1.45; }
+.erro-tela code { display: block; margin: .35rem 0; font: .74rem/1.4 var(--mono); color: #ffb3bb; word-break: break-word; }
+.erro-tela button { font: inherit; padding: .3rem .7rem; border-radius: 6px; border: 1px solid #fff6; background: transparent; color: #fff; cursor: pointer; }

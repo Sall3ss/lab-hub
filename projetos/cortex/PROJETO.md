@@ -494,3 +494,13 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
 - 19/11: quadro **não volta mais para o topo** sozinho (a atualização de 20 s redesenhava as
   colunas; agora só redesenha se algo mudou e devolve a rolagem de cada coluna) e os cortes de
   cada coluna ficam em **ordem de tempo** (início do corte), agrupados por vídeo.
+- 19/11 (noite): dono relatou "a página parou de carregar". Daqui não dá para abrir com a sessão
+  dele; corrigido o que podia travar: (1) depois de uma falha, "Tentar de novo" ficava preso em
+  "Carregando" (a correção da rolagem pulava o redesenho) - agora redesenha; (2) GET
+  /videos/:id mandava a legenda inteira de cada corte (live de 10 h: ~3 MB) - agora só
+  `tem_legenda`; (3) erro de programa aparece ESCRITO na tela (`#erro-tela`, no index.html) para
+  um print bastar. Teste local com 330 cortes: quadro em <1 s, vídeo em 216 KB.
+- 19/11: editor de layout aberto pela gaveta do corte: ao fechar, a gaveta passa a usar o layout
+  salvo por último (PATCH no corte, `cena_auto = 0`, a foto nova não troca mais) e redesenha a
+  prévia com as medidas novas. Causa provável do "layout errado ao baixar": corte em "Padrão do
+  vídeo" com o layout trocado sozinho pela cena (foto); escolha feita no editor agora trava.

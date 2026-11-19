@@ -15,6 +15,9 @@
   // 19/11: aberto pela gaveta do corte, o fundo é a foto daquele corte (a cena certa).
   // Ela não é guardada como "print" do layout (é do corte; some quando o vídeo é concluído).
   var fotoCorte = null;
+  // 19/11: aberto pela gaveta do corte - ao fechar, avisa qual layout foi salvo por último (a
+  // gaveta passa a usar ele e redesenha a prévia, sem precisar trocar de layout e voltar).
+  var aoFecharCorte = null, salvoNaSessao = null, overflowAntes = '';
   // 19/11: logo do canal (uma por conta, no R2). Posição/tamanho são de cada layout.
   var logoInfo = null, logoImg = null;
   function carregarLogo() {
@@ -363,6 +366,7 @@
     b.disabled = true; msg.textContent = '';
     dep.api(L.id ? '/layouts/' + L.id : '/layouts', { metodo: L.id ? 'PATCH' : 'POST', corpo: corpoDe(L) }).then(function (r) {
       var id = L.id || r.id;
+      salvoNaSessao = id;
       salvarPrint(id, L.print);
       sujo = false; dep.aviso('Layout salvo.');
       return carregarLista().then(function () { escolher(id); if (dep.aoMudar) dep.aoMudar(lista); });
@@ -388,7 +392,11 @@
     return dep.api('/layouts').then(function (j) { lista = j.layouts || []; return lista; });
   }
   function fechar() {
-    sairDaqui(function () { $('lay-tela').hidden = true; document.body.style.overflow = ''; atual = null; fotoCorte = null; });
+    sairDaqui(function () {
+      $('lay-tela').hidden = true; document.body.style.overflow = overflowAntes; atual = null; fotoCorte = null;
+      var cb = aoFecharCorte, id = salvoNaSessao; aoFecharCorte = null; salvoNaSessao = null;
+      if (cb) cb(id);
+    });
   }
 
   window.CortexLayouts = {
@@ -398,6 +406,8 @@
     // opc (19/11): { foto, rotulo } = foto do corte como fundo
     abrir: function (id, opc) {
       fotoCorte = opc && opc.foto ? opc : null;
+      aoFecharCorte = opc && opc.aoFechar ? opc.aoFechar : null; salvoNaSessao = null;
+      overflowAntes = document.body.style.overflow;
       montar();
       $('lay-tela').hidden = false; document.body.style.overflow = 'hidden';
       $('lay-editor').innerHTML = '<p class="carregando">Carregando os layouts…</p>';
