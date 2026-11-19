@@ -478,3 +478,10 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   (`ao_vivo_canal`). Onde parou = `capturado_ate_s` ou, se faltar, `analisar_ate_s`; aparece
   enquanto esse ponto estiver antes do fim do vídeo. O PC (1.8.2+) já começava de
   `continuar_de_s` em qualquer vídeo; só o painel e a tela travavam.
+- 19/11 (agente 2.6.0): **logo do canal nos curtos.** Enviada no editor de layout (reduzida na
+  tela para até 800 px, PNG, corpo cru) e guardada no R2 (`<dono>/0-cortex-logo.png`, tabela
+  `cortex_marca`, migration 0020). Cada layout liga a logo e define posição/tamanho/opacidade
+  (arrastando na prévia, que mostra as faixas dos botões/título do app e a da legenda). O PC
+  baixa a logo uma vez (`logo-<data>.png` ao lado do programa, troca quando o dono troca) e faz
+  `overlay` por cima do vertical e por baixo da legenda. Excluir a logo apaga o objeto do R2 e
+  desliga em todos os layouts. A ficha .txt ganhou `HASHTAGS:` (as tags com #, sem espaço).

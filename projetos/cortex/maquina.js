@@ -25,8 +25,9 @@
 import { db } from '../../lib/db.js';
 import { passoRoteiro } from './roteiro.js';
 import { receberFoto, MAX_FOTO } from './cena.js';
+import { arquivos, temDeposito } from '../../lib/arquivos.js';
 
-export const AGENTE_VERSAO = '2.5.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+export const AGENTE_VERSAO = '2.6.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
 const PRAZO_MIN = { texto: 30, baixar_corte: 60, roteiro: 20, quadros: 15, legenda: 15 };
 const VERSAO_ROTEIRO = [1, 3, 0];       // agente mais velho nao sabe fazer 'roteiro': nao recebe
 const VERSAO_TRECHO = [1, 7, 0];        // 16/11: so a 1.7.0+ respeita "analisar de/ate"; a velha buscaria a live inteira
@@ -74,6 +75,15 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     // "visto" fica 3 min no passado: a tela mostra offline na hora, mas guarda quando saiu.
     await db(env).run('UPDATE cortex_agentes SET visto_em = ? WHERE id = ?', new Date(agora.getTime() - 3 * 60000).toISOString(), ag.id);
     return json({ ok: true });
+  }
+
+  // 19/11: a logo do canal (PNG do R2) para o PC gravar nos verticais.
+  if (rota === 'logo') {
+    const m = await db(env).first('SELECT logo_chave FROM cortex_marca WHERE usuario_id = ?', ag.usuario_id);
+    if (!m || !temDeposito(env)) return json({ erro: 'sem logo' }, 404);
+    const obj = await arquivos(env).ler(m.logo_chave);
+    if (!obj) return json({ erro: 'sem logo' }, 404);
+    return new Response(obj.body, { headers: { 'content-type': 'image/png' } });
   }
 
   if (!ag.visto_em || agora - Date.parse(ag.visto_em) > VISTO_A_CADA_MS) {
@@ -129,8 +139,14 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
           const lid = corte.tipo !== 'curto' ? 0 : corte.layout_id !== null ? corte.layout_id
             : ((await db(env).first('SELECT layout_id FROM cortex_videos WHERE id = ?', t.video_id)) || {}).layout_id || 0;
           corte.layout = lid ? await db(env).first(
-            `SELECT id, nome, tipo, cam_x, cam_y, cam_w, cam_h, cam_altura, jogo_x, jogo_y, jogo_w, jogo_h, proporcao
+            `SELECT id, nome, tipo, cam_x, cam_y, cam_w, cam_h, cam_altura, jogo_x, jogo_y, jogo_w, jogo_h, proporcao,
+                    logo_on, logo_x, logo_y, logo_w, logo_opac
                FROM cortex_layouts WHERE id = ? AND usuario_id = ?`, lid, ag.usuario_id) : null;
+          // 19/11: logo do canal - o PC baixa uma vez (por "em") e grava no vertical
+          if (corte.layout && corte.layout.logo_on) {
+            const m = await db(env).first('SELECT largura, altura, atualizado_em FROM cortex_marca WHERE usuario_id = ?', ag.usuario_id);
+            corte.logo = m ? { largura: m.largura, altura: m.altura, em: m.atualizado_em } : null;
+          }
           delete corte.layout_id;
           // 19/11: legenda revisada no painel (o PC usa em vez de transcrever de novo)
           try { corte.legenda = corte.legenda ? JSON.parse(corte.legenda) : null; } catch { corte.legenda = null; }

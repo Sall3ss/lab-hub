@@ -20,6 +20,8 @@
 //     dono revisar o texto no painel antes de aprovar. No download, o texto revisado é usado.
 //     2.5.0: buraco na legenda (o Whisper às vezes pula um pedaço com áudio ruim/música) é
 //     transcrito de novo sozinho; a ficha .txt leva as 3 opções de título e a thumbnail.
+//     2.6.0: a LOGO do canal (enviada no painel) entra no vertical, no lugar marcado no layout;
+//     a ficha .txt ganha a linha HASHTAGS (as tags com #).
 //   - "quadros" (2.1.0): UMA foto pequena do meio de cada curto da Triagem, tirada direto do
 //     endereço do vídeo (não baixa o vídeo). O painel guarda e a IA diz a cena (full cam, jogo
 //     com webcam, só o jogo), para o corte já chegar com o layout vertical certo.
@@ -46,7 +48,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '2.5.0';
+const VERSAO = '2.6.0';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -421,16 +423,41 @@ function filtroVertical(L) {
 // 2.2.0: com `leg` ({ pasta, saidaSem }), a legenda (pasta\legenda.ass) é gravada no vertical e a
 // mesma passada salva também o vertical sem legenda (saidaSem). O ffmpeg roda DENTRO da pasta
 // da legenda: assim o filtro usa só "legenda.ass" (caminho do Windows com "C:" quebra o filtro).
-async function gerarVertical(cfg, t, entrada, saida, L, durS, leg) {
-  log(`Gerando o vertical 1080x1920 (${L.nome})${leg ? ' com legenda' : ''}…`);
+// 2.6.0: `logo` = caminho do PNG da logo; vai por cima do vertical (e por baixo da legenda), no
+// lugar e tamanho do layout (fração da tela 1080x1920), com a transparência escolhida.
+async function gerarVertical(cfg, t, entrada, saida, L, durS, leg, logo) {
+  log(`Gerando o vertical 1080x1920 (${L.nome})${logo ? ' com logo' : ''}${leg ? ' com legenda' : ''}…`);
   const prog = progresso(cfg, t, 'vertical', durS);
   const cod = ['-map', '0:a?', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart'];
+  let filtro = filtroVertical(L), saidaV = 'v';
+  if (logo) {
+    const w = Math.max(2, Math.round((1080 * Number(L.logo_w)) / 2) * 2);
+    const x = Math.round(1080 * Number(L.logo_x)), y = Math.round(1920 * Number(L.logo_y));
+    const op = Math.min(1, Math.max(0.2, Number(L.logo_opac) || 1)).toFixed(2);
+    filtro += `;[1:v]scale=${w}:-2:flags=lanczos,format=rgba,colorchannelmixer=aa=${op}[lg];[v][lg]overlay=${x}:${y}:format=auto,format=yuv420p[vlg]`;
+    saidaV = 'vlg';
+  }
+  const entradas = ['-i', entrada, ...(logo ? ['-i', logo] : [])];
   const args = leg
-    ? ['-hide_banner', '-y', '-i', entrada, '-filter_complex', filtroVertical(L) + ';[v]split=2[vsem][vcom];[vcom]ass=legenda.ass[vleg]',
+    ? ['-hide_banner', '-y', ...entradas, '-filter_complex', filtro + `;[${saidaV}]split=2[vsem][vcom];[vcom]ass=legenda.ass[vleg]`,
       '-map', '[vleg]', ...cod, saida, '-map', '[vsem]', ...cod, leg.saidaSem]
-    : ['-hide_banner', '-y', '-i', entrada, '-filter_complex', filtroVertical(L), '-map', '[v]', ...cod, saida];
+    : ['-hide_banner', '-y', ...entradas, '-filter_complex', filtro, '-map', `[${saidaV}]`, ...cod, saida];
   await rodar('ffmpeg', args, { aoLer: prog.aoLer, cwd: leg ? leg.pasta : undefined });
   if (!existsSync(saida)) throw new Error('o ffmpeg terminou mas o vertical não apareceu');
+}
+
+// 2.6.0: a logo do canal fica guardada ao lado do programa (logo-<data>.png); só baixa de novo
+// quando o dono troca a logo no painel.
+async function obterLogo(cfg, info) {
+  const arq = join(AQUI, 'logo-' + String(info.em || '').replace(/[^0-9]/g, '').slice(0, 17) + '.png');
+  if (existsSync(arq)) return arq;
+  const r = await fetch(cfg.painel.replace(/\/$/, '') + '/api/p/cortex/maquina/logo', {
+    method: 'POST', headers: { authorization: 'Bearer ' + cfg.chave }, signal: AbortSignal.timeout(60000) });
+  if (!r.ok) throw new Error(`o painel não mandou a logo (${r.status})`);
+  writeFileSync(arq, Buffer.from(await r.arrayBuffer()));
+  for (const n of readdirSync(AQUI)) if (/^logo-\d*\.png$/.test(n) && join(AQUI, n) !== arq) { try { unlinkSync(join(AQUI, n)); } catch { /* */ } }
+  log('Logo do canal baixada do painel.');
+  return arq;
 }
 
 // ---------------------------------------------------------------- legenda (2.2.0)
@@ -549,6 +576,13 @@ function legendaAss(palavras, L) {
     'Style: Cortex,Arial Black,92,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,7,3,5,40,40,0,1', '',
     '[Events]', 'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text', ...linhas, ''].join('\n');
 }
+// "GTA 6" -> #GTA6, "Loud Coringa" -> #LoudCoringa (sem espaço nem pontuação; acento fica)
+function hashtags(tags) {
+  const vistas = new Set();
+  return tags.map((t) => '#' + String(t).replace(/^#/, '').replace(/[^\p{L}\p{N}_]+/gu, ''))
+    .filter((h) => h.length > 1 && !vistas.has(h.toLowerCase()) && vistas.add(h.toLowerCase())).join(' ');
+}
+
 // Ficha .txt ao lado do corte: tudo o que precisa na hora de editar e publicar.
 function escreverFicha(arquivo, v, c, qualidade) {
   writeFileSync(arquivo, [
@@ -564,7 +598,9 @@ function escreverFicha(arquivo, v, c, qualidade) {
     c.gancho_inicio_s != null && c.gancho_fim_s != null
       ? `GANCHO NO CORTE: ${tc(c.gancho_inicio_s - c.inicio_s)} → ${tc(c.gancho_fim_s - c.inicio_s)}` +
         ` (no vídeo original: ${tc(c.gancho_inicio_s)} → ${tc(c.gancho_fim_s)})\n` : '',
-    'DESCRIÇÃO:', c.descricao || '', '', `TAGS: ${(c.tags || []).join(', ')}`, '',
+    'DESCRIÇÃO:', c.descricao || '', '', `TAGS: ${(c.tags || []).join(', ')}`,
+    // 2.6.0: as mesmas tags como hashtags (para descrição/legenda das redes)
+    (c.tags || []).length ? `HASHTAGS: ${hashtags(c.tags)}` : '', '',
     c.thumb ? `THUMBNAIL: ${c.thumb}\n` : '',
     `ORIGEM: ${v.url} (${tc(c.inicio_s)} → ${tc(c.fim_s)})`,
   ].join('\n'), 'utf8');
@@ -679,6 +715,10 @@ async function tarefaCorte(cfg, t, pasta) {
   for (const velho of [join(pastaShorts, nome + '.srt'), join(pastaSem, nome + '.mp4')]) {
     if (existsSync(velho)) { try { unlinkSync(velho); } catch { /* */ } }
   }
+  let logo = null, avisoLogo = '';
+  if (c.layout.logo_on && c.logo) {
+    try { logo = await obterLogo(cfg, c.logo); } catch (e) { avisoLogo = ' · logo FALHOU: ' + String(e.message).slice(0, 50); log(`Logo: ${e.message}; o vertical sai sem ela.`); }
+  }
   let leg = null;
   if (comLeg) {
     mkdirSync(pastaSem, { recursive: true });
@@ -695,16 +735,16 @@ async function tarefaCorte(cfg, t, pasta) {
     return resultado;
   };
   try {
-    await gerarVertical(cfg, t, caminho, vertical, c.layout, c.fim_s - c.inicio_s, leg);
-    log(`Vertical pronto (${c.layout.nome})${leg ? ', legendado' : ''}: ${vertical}`);
-    return terminar({ caminho: vertical, qualidade: base + (leg ? ' · legendado' : avisoLeg ? ' · ' + avisoLeg : '') });
+    await gerarVertical(cfg, t, caminho, vertical, c.layout, c.fim_s - c.inicio_s, leg, logo);
+    log(`Vertical pronto (${c.layout.nome})${logo ? ', com logo' : ''}${leg ? ', legendado' : ''}: ${vertical}`);
+    return terminar({ caminho: vertical, qualidade: base + (logo ? ' · logo' : avisoLogo) + (leg ? ' · legendado' : avisoLeg ? ' · ' + avisoLeg : '') });
   } catch (e) {
     if (parando) throw e;
     if (leg) {
       // a legenda pode ser o problema (ffmpeg sem libass, fonte...): tenta o vertical sem ela
       log(`Vertical com legenda falhou (${e.message}); gerando sem legenda.`);
       try {
-        await gerarVertical(cfg, t, caminho, vertical, c.layout, c.fim_s - c.inicio_s, null);
+        await gerarVertical(cfg, t, caminho, vertical, c.layout, c.fim_s - c.inicio_s, null, logo);
         return terminar({ caminho: vertical, qualidade: base + ' · legenda FALHOU no vídeo: ' + String(e.message).slice(0, 60) });
       } catch (e2) { if (parando) throw e2; e = e2; }
     }

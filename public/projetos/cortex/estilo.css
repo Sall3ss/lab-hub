@@ -388,3 +388,13 @@ button, input, textarea { font: inherit; color: inherit; }
 .tit-thumb b { display: block; font: .64rem/1.4 var(--mono); letter-spacing: .08em; color: var(--curto); }
 .tit-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: .45rem; }
 .tit-acoes small { font-size: .72rem; color: var(--suave); flex: 1 1 14rem; }
+
+/* 19/11: logo do canal no editor de layout */
+.lay-logo { width: 100%; max-width: 15rem; display: grid; gap: .45rem; margin-top: .4rem; padding-top: .6rem; border-top: 1px solid var(--fio); }
+.lay-logo-dica { margin: 0; font-size: .74rem; line-height: 1.45; color: var(--suave); }
+.lay-logo-on { display: flex; gap: .45rem; align-items: center; font-size: .82rem; cursor: pointer; }
+.lay-logo-faixa { display: grid; gap: .2rem; font-size: .76rem; color: var(--suave); }
+.lay-logo-faixa b { color: var(--texto); }
+.lay-logo-faixa input { width: 100%; min-width: 0; margin: 0; box-sizing: border-box; }
+.lay-logo-acoes { display: flex; flex-wrap: wrap; gap: .4rem; }
+.lay-logo-acoes label.mini, .lay-logo-env { cursor: pointer; }

@@ -25,6 +25,7 @@
 //   POST   /cortes/:id/legenda     pede ao PC a transcricao do trecho (so o audio) para revisar antes de baixar
 //   PUT    /cortes/:id/legenda     { palavras: [{ p, i, f }] } grava o texto corrigido pelo dono
 //   POST   /cortes/:id/textos      a IA refaz título (3 opções), descrição, tags e thumbnail (não grava)
+//   GET/PUT/DELETE /logo  (+ GET /logo/info)  logo do canal no R2, gravada nos verticais (19/11)
 //   GET    /layouts                layouts verticais (9:16) dos curtos; cria os 4 iniciais na 1a vez (19/11)
 //   POST   /layouts  PATCH/DELETE /layouts/:id    o editor de layout (tela "Layouts")
 //   GET    /agentes                lista os PCs conectados
@@ -42,7 +43,7 @@ import { auditar } from '../../lib/audit.js';
 import { hashChave, AGENTE_VERSAO } from './maquina.js';
 import { refazerTextos } from './roteiro.js';
 import { pedirFotos, apagarFotos } from './cena.js';
-import { arquivos, temDeposito } from '../../lib/arquivos.js';
+import { arquivos, temDeposito, chaveDe } from '../../lib/arquivos.js';
 
 export { maquina } from './maquina.js';
 
@@ -151,6 +152,48 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
     ]);
     await auditar(env, { quem: u.email, acao: 'foto-de-novo', entidade: 'cortex_cortes', entidade_id: c.id, ip: data.ip });
     return json({ ok: true });
+  }
+
+  // 19/11: logo do canal (uma por conta), no R2. O corpo é a imagem CRUA (PNG já reduzido na tela),
+  // com largura/altura na URL - nada de base64 em JSON (regra da base).
+  if (rota === 'logo') {
+    const atual = await db(env).first('SELECT logo_chave, largura, altura, atualizado_em FROM cortex_marca WHERE usuario_id = ?', u.id);
+    if (metodo === 'GET' && !id) {
+      if (!atual || !temDeposito(env)) return json({ erro: 'sem logo' }, 404);
+      const obj = await arquivos(env).ler(atual.logo_chave);
+      if (!obj) return json({ erro: 'sem logo' }, 404);
+      return new Response(obj.body, { headers: { 'content-type': 'image/png', 'cache-control': 'private, max-age=600' } });
+    }
+    if (metodo === 'GET' && id === 'info') return json({ logo: atual ? { largura: atual.largura, altura: atual.altura, em: atual.atualizado_em } : null });
+    if (metodo === 'PUT') {
+      if (!temDeposito(env)) return json({ erro: 'O depósito de arquivos (R2) não está ligado.' }, 503);
+      const url = new URL(request.url);
+      const largura = Math.round(Number(url.searchParams.get('largura'))), altura = Math.round(Number(url.searchParams.get('altura')));
+      if (!(largura >= 16 && largura <= 2000 && altura >= 16 && altura <= 2000)) return json({ erro: 'Tamanho da imagem inválido.' }, 400);
+      const bytes = new Uint8Array(await request.arrayBuffer());
+      if (!bytes.length || bytes.length > 2 * 1024 * 1024) return json({ erro: 'A logo precisa ter até 2 MB.' }, 413);
+      if (!(bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47)) return json({ erro: 'Mande a logo em PNG.' }, 400);
+      const chave = chaveDe(u.id, 0, 'cortex-logo.png');
+      await arquivos(env).guardar(chave, bytes, { tipo: 'image/png' });
+      await db(env).run(
+        `INSERT INTO cortex_marca (usuario_id, logo_chave, largura, altura, atualizado_em) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT (usuario_id) DO UPDATE SET logo_chave = excluded.logo_chave, largura = excluded.largura, altura = excluded.altura, atualizado_em = excluded.atualizado_em`,
+        u.id, chave, largura, altura, agora);
+      await auditar(env, { quem: u.email, acao: atual ? 'trocar-logo' : 'enviar-logo', entidade: 'cortex_marca', entidade_id: u.id, depois: { largura, altura, bytes: bytes.length }, ip: data.ip });
+      return json({ ok: true, logo: { largura, altura, em: agora } });
+    }
+    if (metodo === 'DELETE') {
+      if (!atual) return json({ ok: true });
+      // apagou a linha, apaga o objeto na mesma ação (regra da base); os layouts deixam de usar
+      if (temDeposito(env)) await arquivos(env).apagar(atual.logo_chave);
+      await db(env).batch([
+        ['DELETE FROM cortex_marca WHERE usuario_id = ?', [u.id]],
+        ['UPDATE cortex_layouts SET logo_on = 0 WHERE usuario_id = ?', [u.id]],
+      ]);
+      await auditar(env, { quem: u.email, acao: 'excluir-logo', entidade: 'cortex_marca', entidade_id: u.id, ip: data.ip });
+      return json({ ok: true });
+    }
+    return json({ erro: 'método não permitido' }, 405);
   }
 
   if (rota === 'layouts') return await rotasLayouts({ request, env, data, u, id, metodo, json, agora });
@@ -593,11 +636,12 @@ function layoutsIniciais() {
     // 19/11: só a câmera (a live em "full cam"): recorte 9:16 no centro; a IA escolhe sozinha
     { nome: 'Full cam', tipo: 'sem_webcam', cam_x: null, cam_y: null, cam_w: null, cam_h: null, cam_altura: null,
       jogo_x: +((1 - jogoSem) / 2).toFixed(4), jogo_y: 0, jogo_w: +jogoSem.toFixed(4), jogo_h: 1, proporcao: +P.toFixed(4), cena: 'fullcam' },
-  ].map((L) => ({ cena: null, ...L }));
+  ].map((L) => ({ cena: null, logo_on: 0, logo_x: null, logo_y: null, logo_w: null, logo_opac: null, ...L }));
 }
 
 // cena (19/11): 'fullcam' | 'jogo' | null = o layout que entra sozinho quando a IA vê essa cena na foto do corte
-const CAMPOS_LAYOUT = ['nome', 'tipo', 'cam_x', 'cam_y', 'cam_w', 'cam_h', 'cam_altura', 'jogo_x', 'jogo_y', 'jogo_w', 'jogo_h', 'proporcao', 'cena'];
+const CAMPOS_LAYOUT = ['nome', 'tipo', 'cam_x', 'cam_y', 'cam_w', 'cam_h', 'cam_altura', 'jogo_x', 'jogo_y', 'jogo_w', 'jogo_h', 'proporcao', 'cena',
+  'logo_on', 'logo_x', 'logo_y', 'logo_w', 'logo_opac'];   // 19/11: logo do canal no vertical
 function lerLayout(c) {
   const nome = String(c.nome || '').trim().slice(0, 60);
   if (!nome) return { erro: 'Dê um nome ao layout.' };
@@ -610,6 +654,14 @@ function lerLayout(c) {
     cena: c.cena === 'fullcam' || c.cena === 'jogo' ? c.cena : null };
   for (const k of ['jogo_x', 'jogo_y', 'jogo_w', 'jogo_h']) L[k] = +n(c[k]).toFixed(4);
   if (!caixa(L.jogo_x, L.jogo_y, L.jogo_w, L.jogo_h)) return { erro: 'O recorte da gameplay saiu do quadro.' };
+  // 19/11: logo do canal (posição em fração da tela 1080x1920). Desligada = campos vazios.
+  L.logo_on = c.logo_on ? 1 : 0;
+  if (L.logo_on) {
+    L.logo_x = +n(c.logo_x).toFixed(4); L.logo_y = +n(c.logo_y).toFixed(4); L.logo_w = +n(c.logo_w).toFixed(4);
+    L.logo_opac = Number.isFinite(n(c.logo_opac)) ? +Math.min(1, Math.max(0.2, n(c.logo_opac))).toFixed(2) : 1;
+    if (![L.logo_x, L.logo_y, L.logo_w].every(Number.isFinite) || L.logo_w < 0.05 || L.logo_w > 0.8 || L.logo_x < -0.001 || L.logo_y < -0.001
+        || L.logo_x + L.logo_w > 1.001 || L.logo_y > 0.98) return { erro: 'A logo saiu da tela do vertical.' };
+  } else { L.logo_x = L.logo_y = L.logo_w = L.logo_opac = null; }
   if (tipo === 'webcam') {
     for (const k of ['cam_x', 'cam_y', 'cam_w', 'cam_h', 'cam_altura']) L[k] = +n(c[k]).toFixed(4);
     if (!caixa(L.cam_x, L.cam_y, L.cam_w, L.cam_h)) return { erro: 'O recorte da webcam saiu do quadro.' };

@@ -15,6 +15,96 @@
   // 19/11: aberto pela gaveta do corte, o fundo é a foto daquele corte (a cena certa).
   // Ela não é guardada como "print" do layout (é do corte; some quando o vídeo é concluído).
   var fotoCorte = null;
+  // 19/11: logo do canal (uma por conta, no R2). Posição/tamanho são de cada layout.
+  var logoInfo = null, logoImg = null;
+  function carregarLogo() {
+    return fetch('/api/p/cortex/logo/info', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (j) {
+      logoInfo = j.logo || null; logoImg = null;
+      if (!logoInfo) return;
+      return new Promise(function (ok) {
+        var i = new Image(); i.onload = function () { logoImg = i; ok(); }; i.onerror = function () { ok(); };
+        i.src = '/api/p/cortex/logo?v=' + encodeURIComponent(logoInfo.em);
+      });
+    }).catch(function () { logoInfo = null; logoImg = null; });
+  }
+  // A logo é reduzida aqui (até 800 px, PNG com transparência) e vai CRUA para o painel.
+  function enviarLogo(arq) {
+    if (!arq || !/^image\//.test(arq.type)) { dep.aviso('Isso não é uma imagem. Use a logo em PNG (de preferência com fundo transparente).', true); return; }
+    var url = URL.createObjectURL(arq), i = new Image();
+    i.onload = function () {
+      var esc = Math.min(1, 800 / Math.max(i.naturalWidth, i.naturalHeight)), cv = document.createElement('canvas');
+      cv.width = Math.max(16, Math.round(i.naturalWidth * esc)); cv.height = Math.max(16, Math.round(i.naturalHeight * esc));
+      cv.getContext('2d').drawImage(i, 0, 0, cv.width, cv.height);
+      URL.revokeObjectURL(url);
+      cv.toBlob(function (b) {
+        fetch('/api/p/cortex/logo?largura=' + cv.width + '&altura=' + cv.height, { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'image/png' }, body: b })
+          .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.erro || 'Não consegui enviar a logo.'); }); })
+          .then(carregarLogo).then(function () {
+            dep.aviso('Logo do canal salva.');
+            if (atual && !atual.logo_on) ligarLogo(atual);
+            desenharLogoCampos(); desenhar();
+          }).catch(function (e) { dep.aviso(e.message, true); });
+      }, 'image/png');
+    };
+    i.onerror = function () { URL.revokeObjectURL(url); dep.aviso('Não consegui abrir essa imagem.', true); };
+    i.src = url;
+  }
+  function excluirLogo() {
+    dep.confirmar('Excluir a logo do canal? Ela sai de TODOS os layouts (os vídeos já gerados ficam como estão).', 'Excluir').then(function (sim) {
+      if (!sim) return;
+      fetch('/api/p/cortex/logo', { method: 'DELETE', credentials: 'same-origin' }).then(function (r) { if (!r.ok) throw new Error('Não consegui excluir a logo.'); })
+        .then(function () { logoInfo = null; logoImg = null; if (atual) atual.logo_on = 0; dep.aviso('Logo excluída.'); return carregarLista(); })
+        .then(function () { desenharLista(); desenharLogoCampos(); desenhar(); }).catch(function (e) { dep.aviso(e.message, true); });
+    });
+  }
+  // Primeira vez ligada: canto de cima à esquerda, 22% da largura (longe dos botões do app).
+  function ligarLogo(L) {
+    L.logo_on = 1;
+    if (L.logo_w == null) { L.logo_x = 0.04; L.logo_y = 0.025; L.logo_w = 0.22; L.logo_opac = 1; }
+    sujo = true;
+  }
+  function alturaLogo(L) { return logoInfo ? L.logo_w * 1080 * (logoInfo.altura / logoInfo.largura) / 1920 : 0.1; }
+  function desenharLogoCampos() {
+    var box = $('lay-logo'); if (!box || !atual) return;
+    var L = atual;
+    if (!logoInfo) {
+      box.innerHTML = '<span class="lay-rot">Logo do canal</span><p class="lay-logo-dica">Envie a logo uma vez (PNG com fundo transparente fica melhor) e escolha em cada layout onde ela aparece.</p>' +
+        '<label class="btn btn-fino lay-logo-env">Enviar logo<input type="file" accept="image/png,image/webp,image/jpeg" id="lay-logo-arq" hidden></label>';
+    } else {
+      box.innerHTML = '<span class="lay-rot">Logo do canal</span>' +
+        '<label class="lay-logo-on"><input type="checkbox" id="lay-logo-on"' + (L.logo_on ? ' checked' : '') + '> Mostrar a logo neste layout</label>' +
+        (L.logo_on ? '<label class="lay-logo-faixa"><span>Tamanho <b>' + Math.round(L.logo_w * 100) + '%</b></span><input type="range" id="lay-logo-w" min="8" max="50" step="1" value="' + Math.round(L.logo_w * 100) + '"></label>' +
+          '<label class="lay-logo-faixa"><span>Opacidade <b>' + Math.round((L.logo_opac || 1) * 100) + '%</b></span><input type="range" id="lay-logo-op" min="20" max="100" step="5" value="' + Math.round((L.logo_opac || 1) * 100) + '"></label>' +
+          '<p class="lay-logo-dica">Arraste a logo na prévia. Evite as faixas vermelhas (botões e título do app) e a faixa clara da LEGENDA.</p>' : '') +
+        '<div class="lay-logo-acoes"><label class="mini">Trocar logo<input type="file" accept="image/png,image/webp,image/jpeg" id="lay-logo-arq" hidden></label>' +
+        '<button type="button" class="mini nao" id="lay-logo-del">Excluir logo</button></div>';
+      $('lay-logo-on').onchange = function () { if (this.checked) ligarLogo(L); else { L.logo_on = 0; sujo = true; } desenharLogoCampos(); desenhar(); };
+      if ($('lay-logo-w')) $('lay-logo-w').oninput = function () {
+        L.logo_w = Number(this.value) / 100; L.logo_x = limitar(L.logo_x, 0, 1 - L.logo_w); L.logo_y = limitar(L.logo_y, 0, 1 - alturaLogo(L));
+        this.previousElementSibling.querySelector('b').textContent = this.value + '%'; sujo = true; desenhar();
+      };
+      if ($('lay-logo-op')) $('lay-logo-op').oninput = function () { L.logo_opac = Number(this.value) / 100; this.previousElementSibling.querySelector('b').textContent = this.value + '%'; sujo = true; desenhar(); };
+      $('lay-logo-del').onclick = excluirLogo;
+    }
+    $('lay-logo-arq').onchange = function () { enviarLogo(this.files[0]); this.value = ''; };
+  }
+  // Arrastar a logo na prévia do vertical (mouse e dedo).
+  function ligarArrastoLogo() {
+    var cv = $('lay-previa');
+    cv.onpointerdown = function (ev) {
+      var L = atual; if (!L || !L.logo_on || !logoInfo) return;
+      var r = cv.getBoundingClientRect(), fx = (ev.clientX - r.left) / r.width, fy = (ev.clientY - r.top) / r.height, h = alturaLogo(L);
+      if (fx < L.logo_x || fx > L.logo_x + L.logo_w || fy < L.logo_y || fy > L.logo_y + h) return;
+      ev.preventDefault(); cv.setPointerCapture(ev.pointerId);
+      var dx = fx - L.logo_x, dy = fy - L.logo_y;
+      cv.onpointermove = function (e) {
+        L.logo_x = limitar((e.clientX - r.left) / r.width - dx, 0, 1 - L.logo_w);
+        L.logo_y = limitar((e.clientY - r.top) / r.height - dy, 0, 1 - h);
+        sujo = true; previa();
+      };
+      cv.onpointerup = cv.onpointercancel = function () { cv.onpointermove = null; };
+    };
+  }
 
   function proporcaoCam(L) { return (1080 / alturaCam(L)) / L.proporcao; }          // largura/altura (em fração)
   function proporcaoJogo(L) { return (1080 / (1920 - (L.tipo === 'webcam' ? alturaCam(L) : 0))) / L.proporcao; }
@@ -149,7 +239,8 @@
       '<div class="lay-palco" id="lay-palco"><div class="lay-fundo" id="lay-fundo"></div>' +
       '<div class="lay-caixa jogo" data-caixa="jogo"><span>GAMEPLAY</span><i data-alca="jogo">◢</i></div>' +
       '<div class="lay-caixa cam" data-caixa="cam"><span>WEBCAM</span><i data-alca="cam">◢</i></div></div></div>' +
-      '<div class="lay-previa-col"><span class="lay-rot">Prévia do vertical</span><canvas id="lay-previa" width="270" height="480"></canvas></div>' +
+      '<div class="lay-previa-col"><span class="lay-rot">Prévia do vertical</span><canvas id="lay-previa" width="270" height="480"></canvas>' +
+      '<div class="lay-logo" id="lay-logo"></div></div>' +
       '</div>' +
       '<p class="msg-form" id="lay-msg"></p>' +
       '<div class="acoes"><button class="btn btn-cor" type="button" id="lay-salvar">Salvar layout</button>' +
@@ -175,6 +266,8 @@
     };
     if ($('lay-excluir')) $('lay-excluir').onclick = excluir;
     ligarArrasto();
+    ligarArrastoLogo();
+    desenharLogoCampos();
     reenquadrar(L);
     carregarImagem(L.print, desenhar);
   }
@@ -210,6 +303,23 @@
     }
     if (L.tipo === 'webcam') parte(L.cam_x, L.cam_y, L.cam_w, L.cam_h, 0, hc, '#0e5c66', 'WEBCAM');
     parte(L.jogo_x, L.jogo_y, L.jogo_w, L.jogo_h, hc, 480 - hc, '#6b3416', 'GAMEPLAY');
+    cv.style.touchAction = L.logo_on && logoInfo ? 'none' : '';   // arrastar a logo sem rolar a página (só com logo)
+    // 19/11: logo do canal + as faixas onde o app (Shorts/TikTok/Reels) põe botões e título
+    if (L.logo_on && logoInfo) {
+      g.fillStyle = 'rgba(255,60,60,.16)';
+      g.fillRect(270 - 34, 480 * 0.45, 34, 480 * 0.43);     // coluna dos botões (curtir, comentar...)
+      g.fillRect(0, 480 * 0.83, 270, 480 * 0.17);           // título, canal e música
+      g.fillRect(0, 0, 270, 480 * 0.045);                   // barra de cima
+      // faixa da legenda (o PC centraliza nela: emenda webcam/jogo; sem webcam, 1340 de 1920)
+      var yl = (L.tipo === 'webcam' ? alturaCam(L) : 1340) / 1920 * 480;
+      g.fillStyle = 'rgba(255,255,255,.14)'; g.fillRect(0, yl - 16, 270, 32);
+      g.fillStyle = 'rgba(255,255,255,.7)'; g.font = '700 9px system-ui, sans-serif'; g.textAlign = 'left'; g.fillText('LEGENDA', 5, yl + 3);
+      var lw = L.logo_w * 270, lh = alturaLogo(L) * 480;
+      g.save(); g.globalAlpha = L.logo_opac || 1;
+      if (logoImg) g.drawImage(logoImg, L.logo_x * 270, L.logo_y * 480, lw, lh);
+      g.restore();
+      g.strokeStyle = 'rgba(255,255,255,.55)'; g.setLineDash([4, 3]); g.strokeRect(L.logo_x * 270 + .5, L.logo_y * 480 + .5, lw - 1, lh - 1); g.setLineDash([]);
+    }
   }
 
   // Arrastar (mover) e o canto ◢ (tamanho, proporção travada). Mouse e dedo (pointer events).
@@ -243,6 +353,8 @@
   function corpoDe(L) {
     var c = { nome: (L.nome || '').trim(), tipo: L.tipo, proporcao: L.proporcao, jogo_x: L.jogo_x, jogo_y: L.jogo_y, jogo_w: L.jogo_w, jogo_h: L.jogo_h, cena: L.cena || null };
     if (L.tipo === 'webcam') { c.cam_x = L.cam_x; c.cam_y = L.cam_y; c.cam_w = L.cam_w; c.cam_h = L.cam_h; c.cam_altura = L.cam_altura; }
+    c.logo_on = L.logo_on ? 1 : 0;
+    if (c.logo_on) { c.logo_x = L.logo_x; c.logo_y = L.logo_y; c.logo_w = L.logo_w; c.logo_opac = L.logo_opac || 1; }
     return c;
   }
   function salvar() {
@@ -289,7 +401,7 @@
       montar();
       $('lay-tela').hidden = false; document.body.style.overflow = 'hidden';
       $('lay-editor').innerHTML = '<p class="carregando">Carregando os layouts…</p>';
-      carregarLista().then(function () {
+      Promise.all([carregarLista(), carregarLogo()]).then(function () {
         if (dep.aoMudar) dep.aoMudar(lista);
         if (lista.length) escolher(id && lista.some(function (l) { return l.id === id; }) ? id : lista[0].id); else desenharLista();
       }).catch(function (e) { $('lay-editor').innerHTML = '<p class="msg-form">' + dep.esc(e.message) + '</p>'; });
