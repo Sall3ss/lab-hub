@@ -259,7 +259,10 @@
       (c.baixar_fora && c.estado === 'edicao' ? '<div class="c-fora">↗ BAIXAR FORA · ' + tc(c.inicio_s) + ' → ' + tc(c.fim_s) + '</div>' : '') +
       (layoutEfetivo(c, c.video_layout_id) && nomeLayout(layoutEfetivo(c, c.video_layout_id)) && !c.baixar_fora
         ? '<div class="c-layout" title="Vertical 9:16 gerado no PC com este layout">▦ ' + esc(nomeLayout(layoutEfetivo(c, c.video_layout_id))) +
-          (c.cena_auto && c.estado === 'triagem' ? ' <span class="c-auto" title="Escolhido pela cena que a IA viu na foto">· auto</span>' : '') + '</div>' : '') +
+          (c.cena_auto && c.estado === 'triagem' ? ' <span class="c-auto" title="Escolhido pela cena que a IA viu na foto">· auto</span>' : '') + '</div>'
+        // 19/11: curto sem layout sai só horizontal (sem vertical e sem legenda no vídeo): avisa antes de aprovar
+        : c.tipo === 'curto' && !c.baixar_fora && c.estado !== 'publicado'
+          ? '<div class="c-layout sem" title="Abra o corte e escolha um layout para o PC gerar o vertical legendado">▭ só horizontal · sem layout</div>' : '') +
       (c.qualidade ? '<div class="c-qual" title="' + esc(c.qualidade) + '">▣ ' + esc(c.qualidade.split(' · ').slice(0, 2).join(' · ')) +
         (/· legendado/.test(c.qualidade) ? ' · legendado' : /legenda FALHOU/.test(c.qualidade) ? ' · <span style="color:var(--perigo)">sem legenda</span>' : '') + '</div>' : '') + st +
       (acoes ? '<div class="c-acoes">' + acoes + '</div>' : '') + '</div>';

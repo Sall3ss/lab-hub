@@ -373,12 +373,18 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
 
 // 19/11: video novo de um canal ja cortado antes herda o layout vertical do ultimo video desse
 // canal (o streamer costuma manter a webcam no mesmo lugar). So se o video ainda nao tem layout.
+// 19/11 (tarde): canal novo (sem historico) fica com o layout COM WEBCAM salvo por ultimo pelo
+// dono - antes ficava "Nenhum" e o curto saia so horizontal, sem o vertical legendado.
+// Autoria: Claude (Opus 5.5), Lab Hub, 19/11/2026.
 async function herdarLayout(env, videoId) {
   await db(env).run(
-    `UPDATE cortex_videos SET layout_id = (SELECT o.layout_id FROM cortex_videos o
-        WHERE o.usuario_id = cortex_videos.usuario_id AND o.canal = cortex_videos.canal AND o.id <> cortex_videos.id
-          AND o.layout_id IS NOT NULL ORDER BY o.id DESC LIMIT 1)
-      WHERE id = ? AND layout_id IS NULL AND canal IS NOT NULL`, videoId);
+    `UPDATE cortex_videos SET layout_id = COALESCE(
+        (SELECT o.layout_id FROM cortex_videos o
+          WHERE o.usuario_id = cortex_videos.usuario_id AND o.canal = cortex_videos.canal AND o.id <> cortex_videos.id
+            AND o.layout_id IS NOT NULL ORDER BY o.id DESC LIMIT 1),
+        (SELECT l.id FROM cortex_layouts l WHERE l.usuario_id = cortex_videos.usuario_id AND l.tipo = 'webcam'
+          ORDER BY l.atualizado_em DESC, l.id DESC LIMIT 1))
+      WHERE id = ? AND layout_id IS NULL`, videoId);
 }
 
 function versaoMin(v, min) {

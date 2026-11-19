@@ -299,6 +299,7 @@ button, input, textarea { font: inherit; color: inherit; }
 
 /* ---------- 19/11: layouts verticais (9:16) dos cortes curtos ---------- */
 .c-layout { font: .66rem/1.4 var(--mono); color: #4fd8e8; }
+.c-layout.sem { color: var(--perigo); }
 .linha-layout { display: flex; gap: .5rem; align-items: center; }
 .linha-layout select { flex: 1; min-width: 0; background: #08090b; color: var(--texto); border: 1px solid var(--fio); border-radius: 6px; padding: .55rem .6rem; font: inherit; }
 .dica-layout { font-size: .74rem; color: var(--suave); }

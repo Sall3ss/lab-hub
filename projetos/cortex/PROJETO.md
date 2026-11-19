@@ -438,3 +438,8 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   é o padrão das ferramentas de edição e deixa a mídia como a parte mais clara da tela.
 - 14/11: título e descrição de corte NÃO levam a máscara de maiúsculas do `campos.js`: é texto
   de publicação, a caixa faz parte do título. Tempos usam máscara própria de timecode.
+- 19/11 (tarde): o 1º curto real veio **só horizontal + .srt**: o vídeo estava com layout
+  "Nenhum" (o primeiro vídeo de um canal não tinha de quem herdar). Agora vídeo sem layout fica
+  com o layout **com webcam** salvo por último (`herdarLayout` + migration 0017 para os vídeos
+  no quadro), e o cartão do curto sem layout mostra "só horizontal · sem layout" em vermelho.
+  A legenda só é gravada **no vertical**; o horizontal leva só o `.srt`.
