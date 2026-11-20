@@ -521,3 +521,8 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   frases-fantasma; buraco refeito com régua rígida (`lp < -0.6` ou `ns > 0.35` fora). O painel
   devolve os pedaços descartados e o PC não pede de novo (refazer = inventar de novo). Áudio da
   legenda vai com `highpass=90,lowpass=7500`. Revisão ganhou ✕ por frase.
+- 20/11 (agente 2.7.1, dono: "a palavra que ainda não foi dita fica na tela"): no vertical, cada
+  palavra só aparece quando é dita - as próximas do bloco ficam invisíveis no lugar delas
+  (`{\alpha&HFF&}`, o texto não pula), a falada amarela, as ditas brancas. O bloco entra 0,05 s
+  antes (era 0,12) e sai 0,35 s depois da última palavra (antes ficava até o próximo bloco se
+  viesse em até 0,7 s). Conferido gravando com o libass e tirando quadros.

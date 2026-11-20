@@ -26,6 +26,8 @@
 //     sem repetir, no máximo 8) e as tags do YouTube Studio, cada um pronto para copiar e colar.
 //     2.7.0: legenda de GAMEPLAY - o áudio vai filtrado (só a faixa da voz) e o buraco refeito
 //     passa pela régua rígida do painel (em gameplay, buraco é quase sempre barulho do jogo).
+//     2.7.1: na legenda gravada, cada palavra só aparece quando é dita (as próximas ficam
+//     invisíveis no lugar delas) e o bloco sai 0,35 s depois da última palavra.
 //   - "quadros" (2.1.0): UMA foto pequena do meio de cada curto da Triagem, tirada direto do
 //     endereço do vídeo (não baixa o vídeo). O painel guarda e a IA diz a cena (full cam, jogo
 //     com webcam, só o jogo), para o corte já chegar com o layout vertical certo.
@@ -52,7 +54,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '2.7.0';
+const VERSAO = '2.7.1';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -574,17 +576,23 @@ function legendaAss(palavras, L) {
   const y = L.tipo === 'webcam' ? Math.round((1920 * Number(L.cam_altura)) / 2) * 2 : 1340;
   const linhas = [];
   const grupos = blocos(palavras, 3, 18, 0.5);
-  // 2.3.0 (tempo): o bloco aparece um pouco ANTES da 1ª palavra (o olho lê antes de ouvir) e,
-  // se o próximo vem logo, fica na tela até ele (sem piscar vazio entre um e outro).
-  const ANTES = 0.12;
+  // 2.7.1 (pedido do dono): cada palavra só APARECE quando é dita. As que ainda vão ser ditas
+  // ficam invisíveis ({\alpha&HFF&}), mas ocupam o lugar - o texto não "pula" quando elas entram.
+  // A palavra falada fica amarela; as já ditas, brancas. O bloco sai logo depois da última
+  // palavra (0,35 s), a não ser que o próximo venha colado (aí fica até ele, sem piscar vazio).
+  const ANTES = 0.05;                                             // o olho lê um tiquinho antes de ouvir
+  const SOBRA = 0.35;                                             // quanto a última palavra fica depois de dita
   const entra = (n) => Math.max(0, grupos[n][0].i - ANTES);
+  const up = (t) => t.toLocaleUpperCase('pt-BR');
   grupos.forEach((g, n) => {
     const prox = grupos[n + 1], ultimo = g[g.length - 1];
-    const fimGrupo = !prox ? ultimo.f + 0.3 : entra(n + 1) - ultimo.f < 0.7 ? entra(n + 1) : Math.min(entra(n + 1), ultimo.f + 0.3);
+    const fimGrupo = !prox ? ultimo.f + SOBRA : entra(n + 1) - ultimo.f <= SOBRA ? entra(n + 1) : ultimo.f + SOBRA;
     g.forEach((w, k) => {
-      const ini = k === 0 ? entra(n) : Math.max(0, w.i - 0.04);
-      const fim = Math.max(k < g.length - 1 ? Math.max(0, g[k + 1].i - 0.04) : fimGrupo, ini + 0.05);
-      const texto = g.map((x, m) => (m === k ? '{\\c&H00FFFF&}' + x.txt.toLocaleUpperCase('pt-BR') + '{\\c&HFFFFFF&}' : x.txt.toLocaleUpperCase('pt-BR'))).join(' ');
+      const ini = k === 0 ? entra(n) : Math.max(0, w.i - 0.02);
+      const fim = Math.max(k < g.length - 1 ? Math.max(0, g[k + 1].i - 0.02) : fimGrupo, ini + 0.05);
+      const texto = g.map((x, m) => m < k ? up(x.txt)
+        : m === k ? '{\\c&H00FFFF&}' + up(x.txt) + '{\\c&HFFFFFF&}'
+        : '{\\alpha&HFF&}' + up(x.txt) + '{\\alpha&H00&}').join(' ');
       linhas.push(`Dialogue: 0,${hAss(ini)},${hAss(fim)},Cortex,,0,0,0,,{\\pos(540,${y})}${texto}`);
     });
   });
