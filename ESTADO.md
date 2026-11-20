@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 19/11/2026 (Cortex: logo do canal nos curtos e hashtags na ficha, agente 2.6.0).**
+**Atualizado em 20/11/2026 (Cortex: legenda sem frase inventada em gameplay, agente 2.7.0; índices que destravaram a página).**
 
 ## Pronto
 
@@ -123,7 +123,7 @@
    detectada pelo Gemini (full cam / jogo com webcam / só o jogo) escolhendo o layout, agente 2.1.0;
    depósito R2 `lab-hub-arquivos` criado pelo dono e ligado (binding `ARQUIVOS`).
    19/11: legenda automática estilo Shorts gravada no vertical (Whisper da Groq palavra a
-   palavra), agente 2.2.0; 2.3.0: legenda em português e só no vertical (Shorts); 2.4.0: legenda revisada no painel antes de baixar; 2.5.0: buracos da legenda refeitos, padrão de títulos/descrições/tags do canal e contexto da live; 2.6.0: logo do canal nos curtos e hashtags na ficha. Arquitetura,
+   palavra), agente 2.2.0; 2.3.0: legenda em português e só no vertical (Shorts); 2.4.0: legenda revisada no painel antes de baixar; 2.5.0: buracos da legenda refeitos, padrão de títulos/descrições/tags do canal e contexto da live; 2.6.0: logo do canal nos curtos e hashtags na ficha; 20/11: índices da fila (a página parou por estourar o limite diário de leituras do D1) e 2.7.0: legenda sem frase inventada em gameplay. Arquitetura,
    modelo de dados e próximos passos em `projetos/cortex/PROJETO.md`.
 
 ## ClipStudio: arquivado em 15/10/2026

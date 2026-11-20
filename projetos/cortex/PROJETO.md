@@ -512,3 +512,12 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   (busca de 1-2 linhas) e o quadro atualiza a cada 30 s. Se o limite estourou, só volta às 00:00
   UTC (21:00 de Brasília); depois disso, o deploy precisa rodar de novo (Actions › deploy › Run
   workflow, ou um push).
+- 20/11 (agente 2.7.0, dono: "em gameplay ele puxa legendas aleatórias que não foram ditas"):
+  o Whisper REPETIA o prompt de instrução ("Transcrição em português do Brasil de um trecho de
+  live, com pontuação." virou "Coração em português...") e o contexto quando não achava fala.
+  Agora: prompt = só os NOMES do contexto (`nomesDoContexto`), nenhum prompt no buraco refeito;
+  filtro por trecho (`trechoRuim`): `avg_logprob < -1`, `compression_ratio > 2.4` (loop),
+  `no_speech_prob > 0.5` com nota baixa, eco do prompt (85%+ das palavras são os nomes) e
+  frases-fantasma; buraco refeito com régua rígida (`lp < -0.6` ou `ns > 0.35` fora). O painel
+  devolve os pedaços descartados e o PC não pede de novo (refazer = inventar de novo). Áudio da
+  legenda vai com `highpass=90,lowpass=7500`. Revisão ganhou ✕ por frase.

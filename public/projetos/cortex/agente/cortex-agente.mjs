@@ -24,6 +24,8 @@
 //     a ficha .txt ganha a linha HASHTAGS (as tags com #).
 //     2.6.1: a ficha abre com o bloco PARA PUBLICAR: título, descrição pronta (hashtags juntas,
 //     sem repetir, no máximo 8) e as tags do YouTube Studio, cada um pronto para copiar e colar.
+//     2.7.0: legenda de GAMEPLAY - o áudio vai filtrado (só a faixa da voz) e o buraco refeito
+//     passa pela régua rígida do painel (em gameplay, buraco é quase sempre barulho do jogo).
 //   - "quadros" (2.1.0): UMA foto pequena do meio de cada curto da Triagem, tirada direto do
 //     endereço do vídeo (não baixa o vídeo). O painel guarda e a IA diz a cena (full cam, jogo
 //     com webcam, só o jogo), para o corte já chegar com o layout vertical certo.
@@ -50,7 +52,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '2.6.1';
+const VERSAO = '2.7.0';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -468,7 +470,7 @@ async function obterLogo(cfg, info) {
 async function palavrasDoCorte(cfg, t, arquivo, pasta) {
   const audio = join(pasta, 'legenda.ogg');
   const atraso = await atrasoDoAudio(arquivo);
-  await rodar('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', arquivo, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'libopus', '-b:a', '24k', audio]);
+  await rodar('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', arquivo, '-vn', '-af', FILTRO_VOZ, '-ac', '1', '-ar', '16000', '-c:a', 'libopus', '-b:a', '24k', audio]);
   const palavras = await transcreverCompleto(cfg, t, audio, pasta);
   if (atraso) log(`Legenda: áudio começa ${atraso.toFixed(2)} s depois do vídeo; tempos ajustados.`);
   return palavras.map((w) => ({ ...w, i: w.i + atraso, f: w.f + atraso }));
@@ -478,7 +480,10 @@ async function palavrasDoCorte(cfg, t, arquivo, pasta) {
 // aquele pedaço de novo. Silêncio de verdade volta vazio e o buraco fica. No fim, o painel guarda
 // a versão juntada (para revisar).
 async function transcreverCompleto(cfg, t, audio, pasta) {
-  let palavras = await enviarAudioLegenda(cfg, t, audio, true);
+  // 2.7.0: o painel devolve os pedaços descartados (fala inventada pelo Whisper): não se refaz
+  // buraco que ele mesmo já julgou sem fala de verdade - em gameplay, refazer = inventar de novo.
+  const descartados = [];
+  let palavras = await enviarAudioLegenda(cfg, t, audio, true, false, descartados);
   const dur = await duracaoDe(audio, palavras.length ? palavras[palavras.length - 1].f : 1);
   let achadas = 0, chamadas = 0, refeitos = 0;
   // Até 3 rodadas (no máximo 10 pedidos): um buraco refeito pode ainda deixar um pedaço sem texto.
@@ -486,7 +491,11 @@ async function transcreverCompleto(cfg, t, audio, pasta) {
   const buracos = [];
   let ant = 0, novasRodada = 0;
   for (const w of [...palavras, { i: dur || ant, f: dur || ant }]) {
-    if (w.i - ant >= 3.5) buracos.push([Math.max(0, ant - 0.2), w.i + 0.2]);
+    if (w.i - ant >= 3.5) {
+      const a = Math.max(0, ant - 0.2), b = w.i + 0.2;
+      const coberto = descartados.reduce((n, [x, y]) => n + Math.max(0, Math.min(b, y) - Math.max(a, x)), 0);
+      if (coberto < (b - a) * 0.5) buracos.push([a, b]);
+    }
     ant = Math.max(ant, w.f);
   }
   for (const [a, b] of buracos.slice(0, 10 - chamadas)) {
@@ -495,9 +504,12 @@ async function transcreverCompleto(cfg, t, audio, pasta) {
     const parte = join(pasta, 'buraco.ogg');
     try {
       await rodar('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-ss', a.toFixed(2), '-i', audio, '-t', (b - a).toFixed(2), '-c:a', 'libopus', '-b:a', '24k', parte]);
-      const novas = (await enviarAudioLegenda(cfg, t, parte, true))
+      const desc = [];
+      const novas = (await enviarAudioLegenda(cfg, t, parte, true, true, desc))
         .map((w) => ({ p: w.p, i: +(w.i + a).toFixed(2), f: +(w.f + a).toFixed(2) }))
         .filter((w) => w.i >= a + 0.1 && w.f <= b + 0.3);
+      for (const [x, y] of desc) descartados.push([x + a, y + a]);
+      descartados.push([a, b]);   // pedido uma vez já basta: não volta a este pedaço
       if (novas.length) { achadas += novas.length; novasRodada += novas.length; palavras = palavras.concat(novas).sort((x, y) => x.i - y.i); }
     } catch (e) {
       if (parando || (e instanceof ErroPainel && e.dados.perdida)) throw e;
@@ -510,13 +522,17 @@ async function transcreverCompleto(cfg, t, audio, pasta) {
   await painel(cfg, `/tarefas/${t.id}/legenda_final`, { corpo: { palavras } }).catch((e) => log('Legenda: não consegui guardar no painel:', e.message));
   return palavras;
 }
+// 2.7.0: só a faixa da voz (corta o grave e o agudo do jogo/música), para o Whisper ouvir a fala.
+const FILTRO_VOZ = 'highpass=f=90,lowpass=f=7500';
 // Manda o áudio (ogg) para o painel -> Whisper. Volta [{ p, i, f }] contado do início do áudio.
-async function enviarAudioLegenda(cfg, t, audio, parcial) {
+// `buraco` = pedaço refeito: o painel usa a régua rígida (só fala clara entra) e nenhum prompt.
+async function enviarAudioLegenda(cfg, t, audio, parcial, buraco, descartados) {
   const bytes = readFileSync(audio);
   if (bytes.length > 24 * 1024 * 1024) throw new Error('áudio do corte grande demais para a legenda');
   for (let tent = 0; ; tent++) {
     try {
-      const r = await painel(cfg, `/tarefas/${t.id}/palavras?idioma=pt${parcial ? '&parcial=1' : ''}`, { bruto: bytes, tipo: 'audio/ogg', prazo: 5 * 60000 });
+      const r = await painel(cfg, `/tarefas/${t.id}/palavras?idioma=pt${parcial ? '&parcial=1' : ''}${buraco ? '&buraco=1' : ''}`, { bruto: bytes, tipo: 'audio/ogg', prazo: 5 * 60000 });
+      if (descartados && Array.isArray(r.descartados)) descartados.push(...r.descartados);
       return r.palavras || [];
     } catch (e) {
       const esp = e instanceof ErroPainel && Number(e.dados.esperar_s);
@@ -946,7 +962,7 @@ async function tarefaLegenda(cfg, t, pasta) {
   const relogio = setTimeout(() => matarFilhos(), 5 * 60000);
   try {
     await rodar('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-ss', String(c.inicio_s), '-i', endereco,
-      '-t', String(c.fim_s - c.inicio_s), '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'libopus', '-b:a', '24k', audio]);
+      '-t', String(c.fim_s - c.inicio_s), '-vn', '-af', FILTRO_VOZ, '-ac', '1', '-ar', '16000', '-c:a', 'libopus', '-b:a', '24k', audio]);
   } finally { clearTimeout(relogio); }
   if (!existsSync(audio)) throw new Error('o ffmpeg não gerou o áudio do trecho');
   const palavras = await transcreverCompleto(cfg, t, audio, pasta);

@@ -370,7 +370,8 @@ button, input, textarea { font: inherit; color: inherit; }
 .leg-msg { margin: .2rem 0 .45rem; font-size: .78rem; color: var(--suave); line-height: 1.45; }
 .leg-msg.erro { color: var(--perigo); }
 .leg-lista { display: grid; gap: .3rem; max-height: 22rem; overflow-y: auto; padding-right: .2rem; }
-.leg-linha { display: grid; grid-template-columns: 2.6rem 1fr; gap: .4rem; align-items: center; }
+.leg-linha { display: grid; grid-template-columns: 2.6rem 1fr auto; gap: .4rem; align-items: center; }
+.leg-buraco { grid-template-columns: 2.6rem 1fr; }
 .leg-tc { font: .7rem/1 var(--mono); color: var(--suave); text-align: right; }
 .leg-linha input { width: 100%; min-width: 0; font-size: .86rem; padding: .4rem .5rem; }
 .leg-acoes { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .5rem; }
@@ -409,3 +410,6 @@ button, input, textarea { font: inherit; color: inherit; }
 .erro-tela { position: fixed; left: 50%; bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 9999; width: min(36rem, calc(100% - 2rem)); padding: .8rem 1rem; border-radius: var(--raio); background: #3a1016; border: 1px solid var(--perigo); color: #fff; font-size: .84rem; line-height: 1.45; }
 .erro-tela code { display: block; margin: .35rem 0; font: .74rem/1.4 var(--mono); color: #ffb3bb; word-break: break-word; }
 .erro-tela button { font: inherit; padding: .3rem .7rem; border-radius: 6px; border: 1px solid #fff6; background: transparent; color: #fff; cursor: pointer; }
+
+.leg-apaga { width: 2rem; height: 2rem; border-radius: 6px; border: 1px solid var(--fio-2); background: transparent; color: var(--suave); cursor: pointer; font-size: .8rem; }
+.leg-apaga:hover { color: var(--perigo); border-color: var(--perigo); }

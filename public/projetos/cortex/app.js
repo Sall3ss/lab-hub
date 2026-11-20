@@ -792,7 +792,8 @@
           // 19/11: buraco de 3,5 s ou mais sem texto (o Whisper pulou ou não há fala): dá para escrever ali
           var ant = k ? frases[k - 1][frases[k - 1].length - 1].f : 0, buraco = g[0].i - ant >= 3.5 ? '<label class="leg-linha leg-buraco"><span class="leg-tc">' + seg(ant) + '</span>' +
             '<input data-buraco="' + k + '" placeholder="⚠ ' + Math.round(g[0].i - ant) + ' s sem legenda: escreva o que é falado aqui (ou deixe vazio)" maxlength="200"></label>' : '';
-          return buraco + '<label class="leg-linha"><span class="leg-tc">' + seg(g[0].i) + '</span><input data-k="' + k + '" value="' + esc(textoDe(g)) + '" maxlength="200"></label>';
+          return buraco + '<label class="leg-linha"><span class="leg-tc">' + seg(g[0].i) + '</span><input data-k="' + k + '" value="' + esc(textoDe(g)) + '" maxlength="200">' +
+            '<button type="button" class="leg-apaga" data-apaga="' + k + '" title="Apagar esta frase (não foi dita)" aria-label="Apagar esta frase">✕</button></label>';
         }).join('') + (function () {
           // buraco no FIM do corte (depois da última frase)
           var ult = frases[frases.length - 1], fimU = ult[ult.length - 1].f, durC = c.fim_s - c.inicio_s;
@@ -803,6 +804,14 @@
         '<div class="leg-acoes"><button type="button" class="mini sim" id="leg-salvar" disabled>Salvar legenda</button>' +
         '<button type="button" class="mini" id="leg-refazer">Transcrever de novo</button></div>';
       el.querySelectorAll('.leg-lista input').forEach(function (i) { i.oninput = function () { sujo = true; el.querySelector('#leg-salvar').disabled = false; }; });
+      // 20/11: ✕ apaga a frase inventada com um toque (vazia = sai da legenda ao salvar)
+      el.querySelectorAll('[data-apaga]').forEach(function (b) {
+        b.onclick = function (ev) {
+          ev.preventDefault();
+          var inp = el.querySelector('input[data-k="' + b.dataset.apaga + '"]');
+          inp.value = ''; inp.placeholder = '(apagada - some ao salvar)'; sujo = true; el.querySelector('#leg-salvar').disabled = false;
+        };
+      });
       el.querySelector('#leg-salvar').onclick = function () { salvar(); };
       el.querySelector('#leg-refazer').onclick = function () {
         confirmar('Transcrever de novo? ' + (j.editada || sujo ? 'As suas correções nesta legenda se perdem.' : 'O texto atual é trocado pelo novo.'), 'Transcrever').then(function (sim) { if (sim) pedirLeg(); });

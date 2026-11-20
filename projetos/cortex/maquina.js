@@ -27,7 +27,7 @@ import { passoRoteiro } from './roteiro.js';
 import { receberFoto, MAX_FOTO } from './cena.js';
 import { arquivos, temDeposito } from '../../lib/arquivos.js';
 
-export const AGENTE_VERSAO = '2.6.1';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+export const AGENTE_VERSAO = '2.7.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
 const PRAZO_MIN = { texto: 30, baixar_corte: 60, roteiro: 20, quadros: 15, legenda: 15 };
 const VERSAO_ROTEIRO = [1, 3, 0];       // agente mais velho nao sabe fazer 'roteiro': nao recebe
 const VERSAO_TRECHO = [1, 7, 0];        // 16/11: so a 1.7.0+ respeita "analisar de/ate"; a velha buscaria a live inteira
@@ -350,7 +350,8 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     const idioma = /^[a-z]{2}$/.test(url.searchParams.get('idioma') || '') ? url.searchParams.get('idioma') : 'pt';
     // 19/11: o contexto da live (escrito pelo dono) vai como "prompt" do Whisper: os nomes saem certos.
     const vid = await db(env).first('SELECT contexto FROM cortex_videos WHERE id = ?', tarefa.video_id);
-    const r = await transcreverGroq(env, audio, request.headers.get('content-type') || 'audio/ogg', { palavras: true, idioma, contexto: vid && vid.contexto });
+    const r = await transcreverGroq(env, audio, request.headers.get('content-type') || 'audio/ogg',
+      { palavras: true, idioma, contexto: vid && vid.contexto, buraco: !!url.searchParams.get('buraco') });
     if (r.erro) return json({ erro: r.erro, esperar_s: r.esperar_s, definitivo: !!r.definitivo }, r.status || 502);
     // 19/11: guarda para o dono revisar. Pedido de revisao ('legenda') sobrescreve; o do download
     // so preenche se ainda nao ha legenda (nunca apaga uma correcao do dono).
@@ -361,7 +362,8 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
           WHERE id = ?${tarefa.tipo === 'legenda' ? '' : ' AND legenda IS NULL'}`,
         JSON.stringify(r.palavras), iso, tarefa.corte_id);
     }
-    return json({ ok: true, palavras: r.palavras, idioma: r.idioma || null });
+    // 20/11: os trechos descartados (fala inventada) voltam para o PC não pedir de novo esse pedaço
+    return json({ ok: true, palavras: r.palavras, idioma: r.idioma || null, descartados: r.descartados || [] });
   }
 
   // 19/11 (2.5.0): o PC juntou a legenda (com os buracos transcritos de novo) e manda a versão final.
@@ -473,6 +475,36 @@ function juntar(segs) {
 // Groq (API compativel com a da OpenAI): Whisper na nuvem, segundos por hora de audio.
 // opc.palavras (19/11, legenda): pede tambem o tempo de CADA palavra. Se a Groq recusar o pedido
 // (400), refaz sem e reparte o tempo de cada frase entre as palavras dela.
+// ---- 20/11: filtro de frase inventada pelo Whisper ----
+const FANTASMA = /amara\.org|legendas? (pela|por) comunidade|legendado por|transcri[çc][ãa]o (por|de) |subt[ií]tulos? (por|realizados)|obrigad[oa] por assistir|inscreva-se no canal|portugu[eê]s do brasil de um trecho|trecho de live,? com pontua|contexto e nomes:/i;
+// o prompt que ia até a 2.6 ("Transcrição em português do Brasil de um trecho de live, com pontuação.")
+const PROMPT_ANTIGO = 'transcrição português brasil trecho live pontuação contexto nomes';
+const sem = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+function palavrasChave(t) { return new Set(sem(t).split(/[^a-z0-9]+/).filter((w) => w.length > 2)); }
+function trechoRuim(s, eco, buraco) {
+  const lp = Number(s.avg_logprob), ns = Number(s.no_speech_prob), cr = Number(s.compression_ratio);
+  const txt = String(s.text || '');
+  if (FANTASMA.test(txt)) return true;
+  if (cr > 2.4) return true;                               // texto em loop ("GTA de GTA 6, GTA de GTA 6...")
+  if (lp < -1) return true;                                // o próprio Whisper sem confiança
+  if (ns > 0.5 && lp < -0.5) return true;                  // provável trecho sem fala
+  if (buraco && (lp < -0.6 || ns > 0.35)) return true;     // buraco refeito: só fala clara entra
+  // eco do prompt/contexto: quase todas as palavras do trecho estão no contexto
+  const ws = sem(txt).split(/[^a-z0-9]+/).filter((w) => w.length > 2);
+  if (ws.length >= 2 && ws.filter((w) => eco.has(w)).length / ws.length >= 0.85) return true;
+  return false;
+}
+const NAO_NOME = new Set(['convidado', 'convidados', 'convidada', 'live', 'ex', 'eles', 'ela', 'ele', 'hoje', 'depois', 'durante', 'numa', 'num']);
+// Só os NOMES do contexto escrito pelo dono (palavras com maiúscula e números: "Coringa, Tainá Costa, GTA 6").
+function nomesDoContexto(ctx) {
+  const vistos = new Set(), out = [];
+  for (const m of String(ctx || '').matchAll(/\b[\p{Lu}][\p{L}'’]+(?:\s+(?:[\p{Lu}][\p{L}'’]+|\d+))*|\b[A-Z]{2,}\s?\d+\b/gu)) {
+    const n = m[0].trim(); const k = n.toLowerCase();
+    if (n.length > 2 && !vistos.has(k) && !NAO_NOME.has(k)) { vistos.add(k); out.push(n); }
+  }
+  return out.join(', ').slice(0, 160);
+}
+
 async function transcreverGroq(env, audio, tipo, opc = {}) {
   const pedir = (comPalavras) => {
     const form = new FormData();
@@ -480,10 +512,11 @@ async function transcreverGroq(env, audio, tipo, opc = {}) {
     form.append('file', new Blob([audio], { type: tipo }), 'parte.' + ext);
     form.append('model', opc.palavras ? GROQ_MODELO_LEGENDA : GROQ_MODELO);
     if (opc.idioma) form.append('language', opc.idioma);
-    if (opc.idioma === 'pt') {
-      const nomes = opc.contexto ? ' Contexto e nomes: ' + String(opc.contexto).replace(/\s+/g, ' ').slice(0, 500) : '';
-      form.append('prompt', 'Transcrição em português do Brasil de um trecho de live, com pontuação.' + nomes);
-    }
+    // 20/11: NADA de frase de instrução no prompt - em gameplay (barulho, música) o Whisper não acha
+    // fala e REPETE o prompt como se fosse fala ("...em português do Brasil de um trecho de live").
+    // Vai só uma lista curta de nomes (do contexto da live), e nunca no buraco refeito.
+    const vocab = !opc.buraco ? nomesDoContexto(opc.contexto) : '';
+    if (vocab) form.append('prompt', vocab);
     form.append('response_format', 'verbose_json');
     form.append('temperature', '0');
     if (comPalavras) { form.append('timestamp_granularities[]', 'word'); form.append('timestamp_granularities[]', 'segment'); }
@@ -511,11 +544,11 @@ async function transcreverGroq(env, audio, tipo, opc = {}) {
   if (!opc.palavras) return { segmentos };
   let palavras = (j.words || []).map((w) => ({ p: String(w.word || '').trim(), i: Number(w.start), f: Number(w.end) }))
     .filter((w) => w.p && Number.isFinite(w.i) && Number.isFinite(w.f));
-  // 19/11: o Whisper "inventa" frase em trecho sem fala (música, barulho): tira as palavras de
-  // segmento que ele mesmo acha que não tem fala, e as frases-fantasma conhecidas.
-  const FANTASMA = /amara\.org|legendas? (pela|por) comunidade|legendado por|transcri[çc][ãa]o (por|de) |subt[ií]tulos? (por|realizados)/i;
-  const ruins = (j.segments || []).filter((s) => (Number(s.no_speech_prob) > 0.6 && Number(s.avg_logprob) < -0.8) || FANTASMA.test(String(s.text || '')))
-    .map((s) => [Number(s.start), Number(s.end)]);
+  // 19/11 + 20/11: o Whisper "inventa" frase em trecho sem fala (gameplay, música): tira as palavras
+  // dos trechos que ele mesmo marca como duvidosos (nota baixa, "sem fala", texto em loop), dos que
+  // repetem o prompt/contexto e das frases-fantasma conhecidas. No buraco refeito, régua mais dura.
+  const eco = palavrasChave(nomesDoContexto(opc.contexto) + ' ' + PROMPT_ANTIGO);
+  const ruins = (j.segments || []).filter((s) => trechoRuim(s, eco, !!opc.buraco)).map((s) => [Number(s.start), Number(s.end)]);
   if (ruins.length) palavras = palavras.filter((w) => !ruins.some(([a, b]) => w.i >= a - 0.05 && w.f <= b + 0.05));
   if (!palavras.length) {
     // sem tempo por palavra: reparte o tempo da frase pelo tamanho de cada palavra
@@ -527,5 +560,5 @@ async function transcreverGroq(env, audio, tipo, opc = {}) {
     }
   }
   palavras = palavras.slice(0, 20000).map((w) => ({ p: w.p.slice(0, 40), i: Math.round(w.i * 100) / 100, f: Math.round(Math.max(w.f, w.i) * 100) / 100 }));
-  return { segmentos, palavras, idioma: j.language || null };
+  return { segmentos, palavras, idioma: j.language || null, descartados: ruins.slice(0, 200) };
 }
