@@ -41,7 +41,7 @@
 import { db } from '../../lib/db.js';
 import { auditar } from '../../lib/audit.js';
 import { hashChave, AGENTE_VERSAO } from './maquina.js';
-import { refazerTextos } from './roteiro.js';
+import { refazerTextos, classificarCorte } from './roteiro.js';
 import { pedirFotos, apagarFotos } from './cena.js';
 import { arquivos, temDeposito, chaveDe } from '../../lib/arquivos.js';
 
@@ -76,7 +76,7 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
            FROM cortex_videos v WHERE v.usuario_id = ? AND v.arquivado = 0
           ORDER BY v.atualizado_em DESC LIMIT 300`, u.id),
       db(env).all(
-        `SELECT c.id, c.video_id, c.tipo, c.origem, c.inicio_s, c.fim_s, c.titulo, c.gancho, c.nota, c.estado,
+        `SELECT c.id, c.video_id, c.tipo, c.origem, c.inicio_s, c.fim_s, c.titulo, c.gancho, c.nota, c.categoria, c.estado,
                 c.erro, c.qualidade, c.baixar_fora, c.cena, c.cena_conf, c.cena_auto, c.quadro_em, c.layout_id, c.legenda IS NOT NULL AS tem_legenda, c.legenda_editada, v.layout_id AS video_layout_id, c.atualizado_em, v.titulo AS video_titulo, v.plataforma,
                 ${TAREFA_SQL('t.corte_id = c.id AND t.tipo = \'baixar_corte\'')}
            FROM cortex_cortes c JOIN cortex_videos v ON v.id = c.video_id
@@ -318,6 +318,30 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
     }
   }
 
+  // 21/11: "Classificar com a IA" - corte de antes da categoria existir ganha categoria, motivo,
+  // acontecimento, critérios e a nota calculada. Não mexe em título, tempo, legenda nem arquivo.
+  // A nota "no olho" de antes fica guardada em nota_antiga (só na 1ª classificação).
+  if (rota === 'cortes' && id && partes[2] === 'classificar' && metodo === 'POST') {
+    const c = await db(env).first('SELECT * FROM cortex_cortes WHERE id = ? AND usuario_id = ?', Number(id), u.id);
+    if (!c) return json({ erro: 'corte não encontrado' }, 404);
+    const v = await db(env).first('SELECT id, titulo, canal, plataforma, contexto FROM cortex_videos WHERE id = ?', c.video_id);
+    let cl;
+    try {
+      cl = await classificarCorte(env, c, v);
+    } catch (e) {
+      return json({ erro: e.esperar_s ? 'O Gemini grátis está no limite agora. Tente de novo em ' + Math.ceil(e.esperar_s / 60) + ' min.' : String(e.message || e).slice(0, 300) }, e.esperar_s ? 429 : 502);
+    }
+    const agora = new Date().toISOString();
+    await db(env).run(
+      `UPDATE cortex_cortes SET categoria = ?, categoria_porque = ?, acontecimento = ?, criterios = ?, limitacao = ?,
+              nota_antiga = CASE WHEN criterios IS NULL AND nota_antiga IS NULL THEN nota ELSE nota_antiga END, nota = ?, atualizado_em = ?
+        WHERE id = ?`,
+      cl.categoria, cl.categoria_porque, cl.acontecimento, cl.criterios, cl.limitacao, cl.nota, agora, c.id);
+    await auditar(env, { quem: u.email, acao: 'classificar', entidade: 'cortex_cortes', entidade_id: c.id,
+      antes: { categoria: c.categoria, nota: c.nota }, depois: { categoria: cl.categoria, nota: cl.nota }, ip: data.ip });
+    return json({ ok: true, ...cl });
+  }
+
   // 19/11: legenda do curto revisada no painel antes de baixar (pedido do dono: o Whisper erra nomes).
   if (rota === 'cortes' && id && partes[2] === 'legenda') {
     const c = await db(env).first(
@@ -408,6 +432,12 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
           [ts.length ? JSON.stringify(ts) : null, corpo.titulo_porque ? String(corpo.titulo_porque).slice(0, 400) : null,
            corpo.thumb ? String(corpo.thumb).slice(0, 800) : null, corpo.duvida ? String(corpo.duvida).slice(0, 300) : null, corte.id]]);
         if (corpo.motivo) extras.push(['UPDATE cortex_cortes SET motivo = ? WHERE id = ?', [String(corpo.motivo).slice(0, 400), corte.id]]);
+      }
+      // 21/11: o dono troca a categoria à mão (a escolha dele vence a da IA; motivo fica o da IA).
+      if (corpo.categoria !== undefined && corpo.categoria !== corte.categoria) {
+        const CATS = ['hype', 'engracado', 'epico', 'curiosidade', 'reacao', 'polemica', 'historia', 'bastidores', 'outro'];
+        if (corpo.categoria !== null && !CATS.includes(corpo.categoria)) return json({ erro: 'categoria inválida' }, 400);
+        extras.push(['UPDATE cortex_cortes SET categoria = ? WHERE id = ?', [corpo.categoria, corte.id]]);
       }
       // 19/11: tempo novo = a legenda revisada deixa de bater (as palavras contam do início do corte).
       if (corte.legenda && (novo.inicio_s !== corte.inicio_s || novo.fim_s !== corte.fim_s || novo.tipo !== 'curto')) {

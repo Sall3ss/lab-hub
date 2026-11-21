@@ -94,6 +94,13 @@ destaque, curiosidade sem inventar nem exagerar.
    forte e natural, rosto do criador em destaque, elementos do acontecimento, no máximo 2 ou 3
    pontos focais, texto opcional de poucas palavras.
 
+CATEGORIA NOS TEXTOS (21/11; orienta a abordagem, não é fórmula de título): HYPE destaca a
+   tensão, o risco ou o momento decisivo; ENGRAÇADO, a situação cômica, a piada ou a reação que
+   faz rir; ÉPICO, a habilidade, a dificuldade ou o feito; CURIOSIDADE, o detalhe ou a descoberta;
+   REAÇÃO, a reação da personalidade (só quando ela é mesmo o atrativo); POLÊMICA, a opinião ou o
+   conflito real, sem inflar; HISTÓRIA, o começo da situação sem entregar o desfecho; BASTIDORES,
+   o que acontece fora da atividade principal.
+
 7. ANTES DE ENTREGAR, confira e reescreva o que falhar: o título dá um motivo real para assistir?
    é específico ou serviria para dezenas de cortes? usou o melhor detalhe? o nome está bem
    posicionado? é natural? promete algo que o vídeo não cumpre? as 3 opções têm ângulos
@@ -108,6 +115,54 @@ descrição, hashtags, tags ou thumbnail.
 "duvida": se faltar algo essencial (ex.: não dá para saber quem é o convidado), diga o que falta
 em vez de inventar; se não faltar nada, deixe vazio.`;
 
+// 21/11/2026 (pedido do dono, "evolução do painel de cortes"): o tipo do momento (categoria) e a
+// qualidade (critérios A-H) passam a ser avaliados SEPARADOS. A nota de 0 a 100 deixa de ser um
+// número "no olho" da IA: o código calcula a partir dos critérios (notaDosCriterios).
+const CATEGORIAS = ['hype', 'engracado', 'epico', 'curiosidade', 'reacao', 'polemica', 'historia', 'bastidores', 'outro'];
+const CLASSIFICACAO = `TIPO DO MOMENTO ("categoria": UMA só, a principal = o motivo pelo qual vale assistir):
+- hype: intensidade, tensão ou expectativa (perseguição, troca de tiro, disputa importante,
+  momento decisivo, algo que pode dar muito errado, espera por um resultado, reviravolta).
+- engracado: humor (piada espontânea, brincadeira entre participantes, resposta inesperada,
+  situação constrangedora, reação engraçada, erro ou acontecimento absurdo).
+- epico: impressiona pela habilidade, dificuldade ou importância (jogada muito difícil, vitória
+  inesperada, feito impressionante, alguém carregando a equipe, momento memorável no jogo).
+- curiosidade: dá vontade de descobrir ou entender (descoberta inesperada, detalhe escondido no
+  jogo, situação estranha, informação surpreendente, mistério).
+- reacao: a reação da personalidade é o atrativo principal (susto, surpresa, risada espontânea,
+  indignação, empolgação, incredulidade).
+- polemica: conflito ou opinião forte DE VERDADE (discussão, provocação, discordância, opinião
+  controversa, confronto verbal). Conversa comum não é polêmica.
+- historia: narrativa com começo, desenvolvimento e desfecho (relato, situação que começa de um
+  jeito e termina de outro).
+- bastidores: fora da atividade principal (preparação da live, organização de evento, conversa
+  antes de começar, algo que aconteceu fora do jogo).
+- outro: não se encaixa com segurança em nenhuma.
+Escolha pelo conteúdo real. Gameplay (GTA ou outro) NÃO é automaticamente hype ou épico: pode
+ser engraçado, curiosidade, reação ou história. Empate: a que é o principal atrativo para o
+público. "categoria_porque" = o motivo em 1 frase. "acontecimento" = o que acontece no corte, em
+1 frase concreta (quem, o quê).
+
+QUALIDADE ("criterios", de 0 a 10 cada; é separada da categoria: um corte engraçado pode ser fraco):
+- forca: o momento chama atenção de verdade ou é conversa comum?
+- contexto: quem não viu a live entende o que está acontecendo?
+- desenvolvimento: a situação evolui durante o corte?
+- desfecho: há conclusão, reação, surpresa ou resultado que recompensa quem assistiu até o fim?
+- retencao: segura o espectador até o final?
+- compartilhamento: alguém mandaria isso para um amigo?
+- autonomia: funciona sozinho ou depende de algo que ficou fora do corte?
+- diferencial: tem algo que o diferencia dos outros cortes desta live?
+Avalie o que ACONTECEU, não as palavras: "isso foi insano" não torna o momento interessante.
+Seja exigente: 8 ou mais só para o que é forte de verdade; conversa comum fica em 3-5.
+Você lê SÓ o texto da live: não invente avaliação de imagem ou de som. Se algo importante não dá
+para julgar pelo texto (ação de jogo sem fala, expressão, um som), diga em "limitacao"; se o
+texto basta, deixe vazio.
+
+VARIEDADE: uma live rende tipos diferentes de corte. Os melhores momentos vêm primeiro, mas
+reconheça também curiosidade, história, bastidores etc. quando forem bons. NÃO crie corte fraco
+para preencher categoria. NÃO escolha dois cortes do mesmo acontecimento, nem um que dependa do
+mesmo momento de outro para fazer sentido (os cortes já feitos nesta live vêm no pedido, com
+categoria e acontecimento).`;
+
 const SISTEMA = `Você é editor-chefe de um canal brasileiro de CORTES de lives e vídeos de criadores
 (YouTube, Shorts, TikTok, Reels). Seu trabalho: ler a transcrição com tempos, marcar os trechos
 que viram cortes com alto CTR e alta retenção e escrever os textos de publicação de cada um.
@@ -115,16 +170,15 @@ que viram cortes com alto CTR e alta retenção e escrever os textos de publica�
 Regras dos cortes:
 - Use só o que está na transcrição. Os tempos que você devolve têm que existir nela.
 - Um corte precisa se sustentar sozinho: quem não viu a live entende.
-- Prefira: momentos engraçados, reações fortes, revelações, polêmicas, jogadas épicas, falhas,
-  histórias com começo/meio/fim, opiniões fortes, interações entre as pessoas.
 - Evite: silêncio, leitura de chat sem contexto, propaganda, pausas, papo arrastado.
 - Qualidade acima de quantidade. Se o trecho não tem nada bom, devolva lista vazia.
 - Gancho: a frase falada ou situação dos primeiros 3 segundos que segura quem está rolando o feed.
   "gancho_inicio" e "gancho_fim" = onde essa frase é dita no vídeo (HH:MM:SS, dentro do corte,
   de 2 a 20 segundos), tirados da transcrição.
-- Nota de 0 a 100 = potencial real do corte. Seja exigente: 80+ só para o que é muito forte.
 - Tempos no formato HH:MM:SS, contados desde o começo do vídeo.
 - Personalidade principal: o dono do canal, salvo se o contexto/transcrição mostrar outra.
+
+${CLASSIFICACAO}
 
 ${PADRAO}`;
 
@@ -140,6 +194,23 @@ const TEXTOS = {
   duvida: { type: 'STRING' },
 };
 const REQ_TEXTOS = ['analise', 'titulos', 'melhor', 'porque_titulo', 'descricao', 'tags', 'thumbnail'];
+// 21/11: tipo do momento + qualidade por critério (iguais no roteiro e no "Classificar com a IA").
+const NOMES_CRITERIOS = ['forca', 'contexto', 'desenvolvimento', 'desfecho', 'retencao', 'compartilhamento', 'autonomia', 'diferencial'];
+// Peso de cada critério na nota de 0 a 100 (soma 1). Explicado ao dono em 21/11; mudar aqui muda
+// só os cortes classificados daqui em diante.
+export const PESOS = { forca: 0.20, retencao: 0.15, desfecho: 0.15, autonomia: 0.15, contexto: 0.10, desenvolvimento: 0.10, compartilhamento: 0.10, diferencial: 0.05 };
+const CLASSE = {
+  categoria: { type: 'STRING', enum: CATEGORIAS },
+  categoria_porque: { type: 'STRING' },
+  acontecimento: { type: 'STRING' },
+  criterios: {
+    type: 'OBJECT',
+    properties: Object.fromEntries(NOMES_CRITERIOS.map((k) => [k, { type: 'INTEGER', description: '0 a 10' }])),
+    required: NOMES_CRITERIOS,
+  },
+  limitacao: { type: 'STRING' },
+};
+const REQ_CLASSE = ['categoria', 'categoria_porque', 'acontecimento', 'criterios'];
 const CORTE = {
   type: 'OBJECT',
   properties: {
@@ -148,14 +219,15 @@ const CORTE = {
     gancho: { type: 'STRING' },
     gancho_inicio: { type: 'STRING', description: 'HH:MM:SS em que o gancho começa a ser dito' },
     gancho_fim: { type: 'STRING', description: 'HH:MM:SS em que o gancho termina' },
+    ...CLASSE,
     ...TEXTOS,
-    nota: { type: 'INTEGER' },
   },
   // 17/11: gancho_inicio/gancho_fim passaram a ser obrigatorios: opcionais, o Gemini quase
   // sempre deixava de fora (cortes chegavam sem o tempo do gancho).
-  required: ['inicio', 'fim', 'gancho', 'gancho_inicio', 'gancho_fim', ...REQ_TEXTOS, 'nota'],
+  required: ['inicio', 'fim', 'gancho', 'gancho_inicio', 'gancho_fim', ...REQ_CLASSE, ...REQ_TEXTOS],
 };
 const ESQ_TEXTOS = { type: 'OBJECT', properties: TEXTOS, required: REQ_TEXTOS };
+const ESQ_CLASSE = { type: 'OBJECT', properties: CLASSE, required: REQ_CLASSE };
 const ESQ_TRECHO = {
   type: 'OBJECT',
   properties: {
@@ -245,10 +317,12 @@ async function gravar(env, video, parte, ini, fim, r, agora) {
   for (const c of r.cortes) {
     lotes.push([
       `INSERT INTO cortex_cortes (video_id, usuario_id, tipo, origem, inicio_s, fim_s, titulo, descricao, tags, gancho, gancho_inicio_s, gancho_fim_s, motivo, nota,
-                                  titulos, titulo_porque, thumb, duvida, estado, criado_em, atualizado_em)
-       VALUES (?, ?, ?, 'ia', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'triagem', ?, ?)`,
+                                  titulos, titulo_porque, thumb, duvida, categoria, categoria_porque, acontecimento, criterios, limitacao,
+                                  estado, criado_em, atualizado_em)
+       VALUES (?, ?, ?, 'ia', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'triagem', ?, ?)`,
       [video.id, video.usuario_id, c.tipo, c.inicio_s, c.fim_s, c.titulo, c.descricao, JSON.stringify(c.tags), c.gancho,
-       c.gancho_inicio_s, c.gancho_fim_s, c.motivo, c.nota, JSON.stringify(c.titulos), c.titulo_porque, c.thumb, c.duvida, agora, agora]]);
+       c.gancho_inicio_s, c.gancho_fim_s, c.motivo, c.nota, JSON.stringify(c.titulos), c.titulo_porque, c.thumb, c.duvida,
+       c.categoria, c.categoria_porque, c.acontecimento, c.criterios, c.limitacao, agora, agora]]);
   }
   await db(env).batch(lotes);
 }
@@ -310,9 +384,12 @@ Canal: ${v.canal || '(desconhecido)'} · Plataforma: ${v.plataforma}` +
 // 19/11: títulos já usados nesta live, para a IA não repetir a mesma estrutura (padrão do dono).
 // 21/11: vai junto o gancho que cada um usou (motivo), para este corte buscar outro ângulo.
 async function titulosDaLive(env, videoId, menos) {
-  const l = await db(env).all("SELECT inicio_s, titulo, motivo FROM cortex_cortes WHERE video_id = ? AND estado <> 'descartado' AND id <> ? ORDER BY inicio_s LIMIT 40", videoId, menos || 0);
-  return l.length ? '\nOutros cortes desta live (não repita o gancho nem a estrutura do título):\n' +
-    l.map((x) => `- [${hms(x.inicio_s)}] ${x.titulo}${x.motivo ? ' (gancho: ' + String(x.motivo).slice(0, 140) + ')' : ''}`).join('\n') : '';
+  // 21/11: com a categoria e o acontecimento, para a IA variar o tipo e não repetir o mesmo momento.
+  const l = await db(env).all("SELECT inicio_s, fim_s, titulo, motivo, categoria, acontecimento FROM cortex_cortes WHERE video_id = ? AND estado <> 'descartado' AND id <> ? ORDER BY inicio_s LIMIT 40", videoId, menos || 0);
+  return l.length ? '\nOutros cortes desta live (não repita o acontecimento, o gancho nem a estrutura do título):\n' +
+    l.map((x) => `- [${hms(x.inicio_s)} - ${hms(x.fim_s)}]${x.categoria ? ' ' + x.categoria.toUpperCase() : ''} · ${x.titulo}` +
+      (x.acontecimento ? ' · acontecimento: ' + String(x.acontecimento).slice(0, 160) : '') +
+      (x.motivo ? ' · gancho: ' + String(x.motivo).slice(0, 140) : '')).join('\n') : '';
 }
 // 21/11 (novo padrão editorial): mapa de assuntos da live INTEIRA, que o roteiro já resumiu por
 // trechos (cortex_roteiro_partes). Dá o contexto de antes e depois sem reler a transcrição toda.
@@ -323,6 +400,31 @@ async function mapaDaLive(env, videoId, antesDe) {
   if (!lista.length) return '';
   return `\nMapa de assuntos da live${antesDe != null ? ' até aqui' : ''} (só contexto; não é para cortar daqui):\n` +
     lista.map((a) => `[${hms(a.i)} - ${hms(a.f)}] ${a.a}`).join('\n');
+}
+
+// 21/11: categoria e critérios vindos da IA -> campos do corte. A nota (0-100) é a média
+// ponderada dos critérios (PESOS) x 10; sem critérios válidos, fica null (quem chama decide).
+export function notaDosCriterios(cr) {
+  if (!cr) return null;
+  let soma = 0;
+  for (const [k, p] of Object.entries(PESOS)) { const v = Number(cr[k]); if (!Number.isFinite(v)) return null; soma += p * Math.min(10, Math.max(0, v)); }
+  return Math.round(soma * 10);
+}
+function semAcento(t) { return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); }
+export function lerClasse(c) {
+  const cat = semAcento(c.categoria).replace(/[^a-z]/g, '');
+  const cr = c.criterios && typeof c.criterios === 'object'
+    ? Object.fromEntries(NOMES_CRITERIOS.map((k) => [k, Math.min(10, Math.max(0, Math.round(Number(c.criterios[k]))))]))
+    : null;
+  const crOk = cr && NOMES_CRITERIOS.every((k) => Number.isFinite(cr[k])) ? cr : null;
+  return {
+    categoria: CATEGORIAS.includes(cat) ? cat : (cat ? 'outro' : null),
+    categoria_porque: semEmoji(c.categoria_porque).slice(0, 300) || null,
+    acontecimento: semEmoji(c.acontecimento).slice(0, 300) || null,
+    criterios: crOk ? JSON.stringify(crOk) : null,
+    limitacao: semEmoji(c.limitacao).slice(0, 300) || null,
+    nota: notaDosCriterios(crOk),
+  };
 }
 
 // Textos de publicação vindos da IA -> campos do corte (sem emoji, título da opção "melhor").
@@ -347,6 +449,44 @@ export function lerTextos(c) {
 // 19/11: "Refazer textos" de UM corte (botão na gaveta): lê a fala do trecho e devolve título(s),
 // descrição, tags e thumbnail no padrão do canal. NÃO grava: o dono revisa e aperta Salvar.
 export async function refazerTextos(env, corte, video) {
+  const ctx = await contextoDoCorte(env, corte, video);
+  const classe = corte.categoria
+    ? `Categoria deste corte: ${corte.categoria.toUpperCase()}${corte.categoria_porque ? ' (' + corte.categoria_porque + ')' : ''}. Use-a para orientar a abordagem.\n` +
+      (corte.acontecimento ? `Acontecimento principal: ${corte.acontecimento}\n` : '')
+    : '';
+  const pedido = `${ctx.topo}
+Título atual (sugestão inicial; não troque à toa um título que já é bom): ${corte.titulo}
+${corte.gancho ? 'Gancho: ' + corte.gancho + '\n' : ''}${classe}
+Escreva os textos de publicação deste corte seguindo o padrão do canal.
+
+${ctx.falas}`;
+  const { dados } = await perguntar(env, pedido, ESQ_TEXTOS);
+  return lerTextos(dados);
+}
+
+// 21/11: "Classificar com a IA" de UM corte (cortes de antes da categoria existir): devolve
+// categoria, motivo, acontecimento, critérios, limitação e a nota calculada. Não mexe em título,
+// tempo, legenda nem arquivo; quem grava é a rota (o dono apertou o botão).
+export async function classificarCorte(env, corte, video) {
+  const ctx = await contextoDoCorte(env, corte, video);
+  const pedido = `${ctx.topo}
+Título: ${corte.titulo}
+${corte.gancho ? 'Gancho: ' + corte.gancho + '\n' : ''}
+Este corte JÁ foi escolhido e não vai mudar. Tarefa: classificar o tipo do momento ("categoria",
+"categoria_porque", "acontecimento"), dar os "criterios" de qualidade e, se for o caso, a
+"limitacao", seguindo as regras de TIPO DO MOMENTO e QUALIDADE. Julgue SÓ a fala do corte; o
+antes e o depois servem para entender o contexto.
+
+${ctx.falas}`;
+  const { dados } = await perguntar(env, pedido, ESQ_CLASSE);
+  const cl = lerClasse(dados);
+  if (!cl.categoria || cl.nota === null) throw new ErroRoteiro('A IA respondeu sem categoria ou sem critérios. Tente de novo.');
+  return cl;
+}
+
+// Fala do corte (a legenda revisada, se houver; senão a transcrição) + 6 min antes e 3 min
+// depois + mapa da live + outros cortes. Tudo da transcrição que o painel já tem.
+async function contextoDoCorte(env, corte, video) {
   if (!env.GEMINI_API_KEY) throw new ErroRoteiro('Falta a chave GEMINI_API_KEY no Cloudflare (a mesma da Jean).', { definitivo: true });
   let fala = '';
   try {
@@ -380,17 +520,13 @@ export async function refazerTextos(env, corte, video) {
   const ln = (l) => `[${hms(l.inicio_s)}] ${l.texto}`;
   const antesTx = ao.filter((l) => l.fim_s <= corte.inicio_s).map(ln).join('\n').slice(-12000);
   const depoisTx = ao.filter((l) => l.inicio_s >= corte.fim_s).map(ln).join('\n').slice(0, 6000);
-  const pedido = `${cabecalho(video)}${mapa}${usados}
+  return {
+    topo: `${cabecalho(video)}${mapa}${usados}
 
-Corte ${corte.tipo === 'longo' ? 'LONGO (vídeo horizontal no YouTube)' : 'CURTO (Short vertical)'} de ${hms(corte.inicio_s)} a ${hms(corte.fim_s)}.
-Título atual (sugestão inicial; não troque à toa um título que já é bom): ${corte.titulo}
-${corte.gancho ? 'Gancho: ' + corte.gancho + '\n' : ''}
-Escreva os textos de publicação deste corte seguindo o padrão do canal.
-
-${antesTx ? `Contexto: fala ANTES do corte (não está no vídeo publicado):\n${antesTx}\n\n` : ''}Fala DO CORTE (é isto que o público vai ver; cada linha começa com o tempo):
-${fala.slice(0, 60000)}${depoisTx ? `\n\nContexto: fala DEPOIS do corte (não está no vídeo publicado; o título não pode prometer isto):\n${depoisTx}` : ''}`;
-  const { dados } = await perguntar(env, pedido, ESQ_TEXTOS);
-  return lerTextos(dados);
+Corte ${corte.tipo === 'longo' ? 'LONGO (vídeo horizontal no YouTube)' : 'CURTO (Short vertical)'} de ${hms(corte.inicio_s)} a ${hms(corte.fim_s)}.`,
+    falas: `${antesTx ? `Contexto: fala ANTES do corte (não está no vídeo publicado):\n${antesTx}\n\n` : ''}Fala DO CORTE (é isto que o público vai ver; cada linha começa com o tempo):
+${fala.slice(0, 60000)}${depoisTx ? `\n\nContexto: fala DEPOIS do corte (não está no vídeo publicado; o título não pode prometer isto):\n${depoisTx}` : ''}`,
+  };
 }
 
 // Valida o que veio da IA: tempo dentro do trecho, duracao dentro da faixa, campos aparados.
@@ -404,11 +540,12 @@ function limpar(lista, tipo, min, max) {
     const tx = lerTextos(c);
     if (!tx.titulo) return null;
     const { gi, gf } = tempoGancho(c, tipo, i, f);
+    const cl = lerClasse(c);
     return {
       gancho_inicio_s: gi, gancho_fim_s: gf,
-      tipo, inicio_s: i, fim_s: f, ...tx,
+      tipo, inicio_s: i, fim_s: f, ...tx, ...cl,
       gancho: semEmoji(c.gancho).slice(0, 300) || null,
-      nota: limitar(c.nota),
+      nota: cl.nota ?? limitar(c.nota),
     };
   }).filter(Boolean);
 }

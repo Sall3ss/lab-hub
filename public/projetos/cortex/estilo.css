@@ -413,3 +413,29 @@ button, input, textarea { font: inherit; color: inherit; }
 
 .leg-apaga { width: 2rem; height: 2rem; border-radius: 6px; border: 1px solid var(--fio-2); background: transparent; color: var(--suave); cursor: pointer; font-size: .8rem; }
 .leg-apaga:hover { color: var(--perigo); border-color: var(--perigo); }
+
+/* 21/11: categoria do corte (etiqueta discreta no cartão) e leitura da IA na gaveta */
+.c-ia { margin-left: auto; display: inline-flex; align-items: center; gap: .35rem; white-space: nowrap; }
+.c-ia .nota { margin-left: 0; }
+.cat { font: 700 .56rem/1 var(--mono); letter-spacing: .06em; padding: .16rem .32rem; border-radius: 3px;
+       border: 1px solid currentColor; color: var(--cat, var(--suave)); background: color-mix(in srgb, var(--cat, var(--suave)) 10%, transparent); }
+.cat-hype { --cat: #ff7a45; } .cat-engracado { --cat: #ffd23f; } .cat-epico { --cat: #c08bff; }
+.cat-curiosidade { --cat: #3fc8ff; } .cat-reacao { --cat: #ff6fb5; } .cat-polemica { --cat: #ff5c5c; }
+.cat-historia { --cat: #5fd896; } .cat-bastidores { --cat: #a9b4c4; } .cat-outro { --cat: #7d8798; }
+.nota.fraca { color: var(--perigo); }
+.caixa-ia .ia-cat { display: flex; align-items: center; gap: .5rem; margin: .35rem 0 .45rem; }
+.caixa-ia .ia-cat .cat { margin-left: 0; font-size: .64rem; }
+.caixa-ia .ia-cat select { margin-left: auto; max-width: 11rem; font-size: .78rem; padding: .25rem .4rem; }
+.ia-linha { margin: .3rem 0 0; line-height: 1.4; }
+.ia-linha span { display: block; font: 600 .6rem/1.4 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--suave); }
+.ia-lim { margin: .5rem 0 0; color: var(--curto); font-size: .8rem; line-height: 1.4; }
+.ia-crit { margin-top: .55rem; }
+.ia-crit summary { cursor: pointer; font: 600 .66rem/1.6 var(--mono); color: var(--cor); }
+.crit { display: grid; grid-template-columns: minmax(0, 1fr) 4.5rem 1.4rem; align-items: center; gap: .5rem; margin-top: .3rem; font-size: .76rem; }
+.crit small { color: var(--suave); font: .6rem var(--mono); }
+.crit i { display: block; height: .32rem; border-radius: 2px; background: var(--fio); overflow: hidden; }
+.crit em { display: block; height: 100%; background: var(--cor); }
+.caixa-ia .crit b { display: block; margin: 0; letter-spacing: 0; font: 700 .7rem/1 var(--mono); text-align: right; color: var(--texto); }
+.ia-nota { margin: .5rem 0 0; font-size: .74rem; color: var(--suave); line-height: 1.4; }
+.ia-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; margin-top: .6rem; }
+.ia-acoes small { color: var(--suave); font-size: .74rem; }

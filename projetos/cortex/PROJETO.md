@@ -536,3 +536,20 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   cortes vem com o gancho de cada um. Hashtags da ficha e do "Para publicar": só as da
   descrição (até 5); sem elas, 4 tiradas das tags (antes completava até 8). A escolha dos
   cortes não mudou, e nada regrava corte existente: "Refazer textos" só preenche, o dono salva.
+- 21/11 (dono: "evolução do painel de cortes"; diagnóstico apresentado antes, decisões 1A, 2A e
+  mapa mantido): cada corte ganha **categoria principal** (hype, engraçado, épico, curiosidade,
+  reação, polêmica, história, bastidores ou "a definir"), o motivo, o acontecimento principal, a
+  nota de 0 a 10 em 8 critérios (força, contexto, desenvolvimento, desfecho, retenção,
+  compartilhamento, autonomia, diferencial) e a "limitação" (o que só o texto não mostra).
+  A nota de 0 a 100 passou a ser **calculada pelo código** (`notaDosCriterios`, pesos em
+  `PESOS`: força 20, retenção 15, desfecho 15, autonomia 15, contexto 10, desenvolvimento 10,
+  compartilhamento 10, diferencial 5); antes era um número "no olho" da IA que nada usava.
+  Corte fraco (< 45) só fica com a nota em vermelho (não é descartado). A escolha recebe a
+  lista dos cortes já feitos na live com categoria e acontecimento (variedade, sem repetir o
+  mesmo momento); a lista de "prefira" saiu, porque as categorias a substituem. A categoria
+  orienta os títulos (`PADRAO`, "CATEGORIA NOS TEXTOS"). Cartão: etiqueta discreta ao lado da
+  nota. Gaveta: categoria (troca à mão pelo seletor), por quê, acontecimento, gancho,
+  limitação e "Como a nota foi calculada" com as barras. Cortes antigos: sem etiqueta, com o
+  botão "Classificar com a IA" (rota `POST /cortes/:id/classificar`, guarda a nota antiga em
+  `nota_antiga`, não mexe em título, tempo, legenda nem arquivo). Migration 0022 só acrescenta
+  colunas. Duração, tempos, transcrição, arquivos e o agente do PC não mudaram.

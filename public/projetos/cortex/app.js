@@ -260,6 +260,70 @@
       (textoTrecho(v) ? '<div class="c-trecho" title="Parte do vídeo analisada">⏱ ' + textoTrecho(v) + '</div>' : '') + st + '</button>';
   }
 
+  // 21/11 (pedido do dono): categoria principal do corte (etiqueta no cartão) e a leitura da IA
+  // com os critérios na gaveta. Corte antigo, sem categoria, não ganha etiqueta.
+  var CATS = {
+    hype: 'HYPE', engracado: 'ENGRAÇADO', epico: 'ÉPICO', curiosidade: 'CURIOSIDADE', reacao: 'REAÇÃO',
+    polemica: 'POLÊMICA', historia: 'HISTÓRIA', bastidores: 'BASTIDORES', outro: 'A DEFINIR',
+  };
+  var CRITERIOS = [
+    ['forca', 'Força do acontecimento', 20], ['retencao', 'Retenção', 15], ['desfecho', 'Desfecho', 15], ['autonomia', 'Funciona sozinho', 15],
+    ['contexto', 'Contexto', 10], ['desenvolvimento', 'Desenvolvimento', 10], ['compartilhamento', 'Compartilhamento', 10], ['diferencial', 'Diferencial na live', 5],
+  ];
+  var NOTA_FRACA = 45;   // abaixo disso a nota fica vermelha (decisão do dono, 21/11: só marcar, não descartar)
+  function etiquetaCat(cat) {
+    return cat && CATS[cat] ? '<span class="cat cat-' + cat + '">' + CATS[cat] + '</span>' : '';
+  }
+  function caixaIA(c) {
+    var cr = null; try { cr = c.criterios ? JSON.parse(c.criterios) : null; } catch (e) { cr = null; }
+    var cab = '<b>LEITURA DA IA' + (c.nota != null ? ' · POTENCIAL ' + c.nota + '/100' : '') + '</b>';
+    var cat = c.categoria
+      ? '<div class="ia-cat">' + etiquetaCat(c.categoria) +
+        '<select id="c-cat" aria-label="Categoria do corte">' + Object.keys(CATS).map(function (k) {
+          return '<option value="' + k + '"' + (k === c.categoria ? ' selected' : '') + '>' + CATS[k] + '</option>'; }).join('') + '</select></div>' +
+        (c.categoria_porque ? '<p class="ia-linha"><span>Por quê</span>' + esc(c.categoria_porque) + '</p>' : '') +
+        (c.acontecimento ? '<p class="ia-linha"><span>Acontecimento</span>' + esc(c.acontecimento) + '</p>' : '')
+      : '';
+    var motivo = c.motivo ? '<p class="ia-linha"><span>Gancho</span>' + esc(c.motivo) + '</p>' : '';
+    var lim = c.limitacao ? '<p class="ia-lim">⚠ Só pelo texto não dá para avaliar: ' + esc(c.limitacao) + '</p>' : '';
+    var barras = cr ? '<details class="ia-crit"><summary>Como a nota foi calculada</summary>' +
+        CRITERIOS.map(function (k) {
+          var v = Math.max(0, Math.min(10, Number(cr[k[0]]) || 0));
+          return '<div class="crit"><span>' + k[1] + ' <small>' + k[2] + '%</small></span><i><em style="width:' + (v * 10) + '%"></em></i><b>' + v + '</b></div>';
+        }).join('') +
+        '<p class="ia-nota">A IA dá de 0 a 10 em cada critério lendo o texto da live; a nota é a média com esses pesos, vezes 10. É um potencial estimado, não uma previsão de visualizações.' +
+        (c.nota_antiga != null ? ' Nota antiga, antes da classificação: ' + c.nota_antiga + '.' : '') + '</p></details>' : '';
+    var botao = '<div class="ia-acoes"><button type="button" class="mini" id="c-classificar">' + (cr ? '↻ Reclassificar' : '🏷 Classificar com a IA') + '</button>' +
+      (cr ? '' : '<small>Dá categoria, critérios e nota a este corte. Não muda título, tempo nem arquivo.</small>') + '</div>';
+    return '<div class="caixa-ia" id="caixa-ia">' + cab + cat + motivo + lim + barras + botao + '</div>';
+  }
+  function ligarCaixaIA(box, c) {
+    var area = box.querySelector('#caixa-ia'); if (!area) return;
+    function atualizarQuadro() {
+      var q = estado.cortes.find(function (x) { return x.id === c.id; });
+      if (q) { q.categoria = c.categoria; q.nota = c.nota; desenharQuadro(); }
+    }
+    var sel = area.querySelector('#c-cat');
+    if (sel) sel.onchange = function () {
+      var antes = c.categoria, nova = sel.value;
+      sel.disabled = true;
+      api('/cortes/' + c.id, { metodo: 'PATCH', corpo: { categoria: nova } }).then(function () {
+        c.categoria = nova; area.outerHTML = caixaIA(c); ligarCaixaIA(box, c); atualizarQuadro();
+        aviso('Categoria trocada para ' + CATS[nova] + '.');
+      }).catch(function (e) { sel.value = antes; sel.disabled = false; aviso(e.message, true); });
+    };
+    var bt = area.querySelector('#c-classificar');
+    bt.onclick = function () {
+      bt.disabled = true; bt.textContent = '🏷 A IA está lendo o corte…';
+      api('/cortes/' + c.id + '/classificar', { metodo: 'POST' }).then(function (r) {
+        if (!c.criterios && c.nota_antiga == null) c.nota_antiga = c.nota;
+        ['categoria', 'categoria_porque', 'acontecimento', 'criterios', 'limitacao', 'nota'].forEach(function (k) { c[k] = r[k]; });
+        area.outerHTML = caixaIA(c); ligarCaixaIA(box, c); atualizarQuadro();
+        aviso('Corte classificado: ' + (CATS[r.categoria] || r.categoria) + ', potencial ' + r.nota + '/100.');
+      }).catch(function (e) { bt.disabled = false; bt.textContent = c.criterios ? '↻ Reclassificar' : '🏷 Classificar com a IA'; aviso(e.message, true); });
+    };
+  }
+
   function cartaoCorte(c) {
     var acoes = '';
     if (c.estado === 'triagem') acoes = '<button type="button" class="mini sim" data-acao="download" data-corte="' + c.id + '">✓ Aprovar</button>' +
@@ -272,7 +336,8 @@
     return '<div role="button" tabindex="0" class="cartao ' + c.tipo + '" data-corte-abrir="' + c.id + '">' +
       '<div class="c-linha"><span class="tipo ' + c.tipo + '">' + (c.tipo === 'longo' ? 'LONGO' : 'CURTO') + '</span>' +
       '<span class="c-tc">' + tc(c.inicio_s) + '</span><span>' + duracao(c.fim_s - c.inicio_s) + '</span>' +
-      (c.nota != null ? '<span class="nota" title="Potencial estimado pela IA">' + c.nota + '</span>' : '') + '</div>' +
+      (c.categoria || c.nota != null ? '<span class="c-ia">' + etiquetaCat(c.categoria) +
+        (c.nota != null ? '<span class="nota' + (c.nota < NOTA_FRACA ? ' fraca' : '') + '" title="Potencial estimado pela leitura do texto (0-100). Não é previsão de views.">' + c.nota + '</span>' : '') + '</span>' : '') + '</div>' +
       '<p class="c-titulo">' + esc(c.titulo) + '</p>' +
       '<div class="c-sub">' + esc(c.video_titulo || NOME_PLAT[c.plataforma]) + '</div>' +
       (c.baixar_fora && c.estado === 'edicao' ? '<div class="c-fora">↗ BAIXAR FORA · ' + tc(c.inicio_s) + ' → ' + tc(c.fim_s) + '</div>' : '') +
@@ -916,8 +981,7 @@
       else if (c.estado === 'edicao') acoesEstado = '<button class="btn btn-ok" type="button" data-ir="publicado">✓ Marcar publicado</button><button class="btn btn-fino" type="button" data-ir="download">Baixar de novo</button>';
       else if (c.estado === 'publicado') acoesEstado = '<button class="btn btn-fino" type="button" data-ir="edicao">Voltar para a edição</button>';
     }
-    var ia = c.origem === 'ia' && (c.motivo || c.nota != null)
-      ? '<div class="caixa-ia"><b>LEITURA DA IA' + (c.nota != null ? ' · POTENCIAL ' + c.nota + '/100' : '') + '</b>' + esc(c.motivo || '') + '</div>' : '';
+    var ia = novo ? '' : caixaIA(c);
     abrirGaveta(novo ? 'Marcar corte' : c.titulo,
       (novo ? '<p style="margin:0;color:var(--suave);font-size:.84rem">Em <b style="color:var(--texto)">' + esc(v.titulo || v.url) + '</b>. Só é criado ao apertar Salvar.</p>'
             : '<dl class="info"><dt>Estado</dt><dd>' + nomes[c.estado] + '</dd><dt>Origem</dt><dd>' + (c.origem === 'ia' ? 'Sugerido pela IA' : 'Marcado à mão') + '</dd>' +
@@ -952,7 +1016,7 @@
       // 19/11: pronto para colar no YouTube (o que está nos campos agora, mesmo antes de salvar)
       (novo ? '' : '<div class="pub"><b class="pub-tit">PARA PUBLICAR · COPIE E COLE</b>' +
         '<div class="pub-linha"><span>Título</span><button type="button" class="mini" data-pub="titulo">Copiar</button></div>' +
-        '<div class="pub-linha"><span>Descrição <small>com as hashtags (até 8, sem repetir)</small></span><button type="button" class="mini" data-pub="descricao">Copiar</button></div>' +
+        '<div class="pub-linha"><span>Descrição <small>com as hashtags (poucas, sem repetir)</small></span><button type="button" class="mini" data-pub="descricao">Copiar</button></div>' +
         '<div class="pub-linha"><span>Tags <small>campo "Tags" do YouTube Studio</small></span><button type="button" class="mini" data-pub="tags">Copiar</button></div></div>') +
       '<p class="msg-form" id="msg-corte"></p>' +
       '<div class="acoes"><button class="btn btn-cor" type="submit">Salvar</button><button class="btn btn-fino" type="button" id="c-cancelar">Cancelar</button>' +
@@ -1020,6 +1084,7 @@
           };
         }
         ligarTextos();
+        ligarCaixaIA(box, c);
         box.querySelectorAll('[data-pub]').forEach(function (b) {
           b.onclick = function () {
             var tg = listaTags(f.tags.value), q = b.dataset.pub;
