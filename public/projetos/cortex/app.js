@@ -863,14 +863,16 @@
     return (tags || []).map(function (t) { return '#' + String(t).replace(/^#/, '').replace(/[^\p{L}\p{N}_]+/gu, ''); })
       .filter(function (h) { var k = h.toLowerCase(); if (h.length < 2 || vistas[k]) return false; vistas[k] = 1; return true; });
   }
-  // descrição sem a linha de hashtags do fim + uma linha só de hashtags (as da descrição primeiro), sem repetir, até 8
+  // descrição sem a linha de hashtags do fim + uma linha só de hashtags (as da descrição mandam), sem repetir, poucas
   function descricaoPronta(desc, tags) {
     var linhas = String(desc || '').replace(/\r/g, '').split('\n'), daDesc = [];
     while (linhas.length && (!linhas[linhas.length - 1].trim() || /^(#[\p{L}\p{N}_]+[\s,]*)+$/u.test(linhas[linhas.length - 1].trim()))) {
       var l = linhas.pop().trim(); if (l) daDesc = l.split(/[\s,]+/).filter(Boolean).concat(daDesc);
     }
     var vistas = {}, hs = [];
-    daDesc.concat(hashtagsDe(tags)).forEach(function (h) { var k = h.toLowerCase(); if (h.length > 1 && !vistas[k] && hs.length < 8) { vistas[k] = 1; hs.push(h); } });
+    // 21/11 (padrão editorial): poucas hashtags. As da descrição mandam (até 5); só sem nenhuma lá
+    // é que entram 4 tiradas das tags.
+    (daDesc.length ? daDesc : hashtagsDe(tags)).forEach(function (h) { var k = h.toLowerCase(); if (h.length > 1 && !vistas[k] && hs.length < (daDesc.length ? 5 : 4)) { vistas[k] = 1; hs.push(h); } });
     var corpo = linhas.join('\n').trim();
     return (corpo + (hs.length ? (corpo ? '\n\n' : '') + hs.join(' ') : '')).trim();
   }

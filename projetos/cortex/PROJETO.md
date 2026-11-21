@@ -526,3 +526,13 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   (`{\alpha&HFF&}`, o texto não pula), a falada amarela, as ditas brancas. O bloco entra 0,05 s
   antes (era 0,12) e sai 0,35 s depois da última palavra (antes ficava até o próximo bloco se
   viesse em até 0,7 s). Conferido gravando com o libass e tirando quadros.
+- 21/11 (novo padrão editorial do dono, agente 2.7.2): o `PADRAO` do `roteiro.js` foi trocado
+  pelo padrão novo (melhor gancho em vez de resumo, lista de expressões genéricas a evitar,
+  estrutura variada, 3 ângulos: acontecimento / detalhe curioso / reação ou consequência,
+  descrição em 2 parágrafos + 3 a 4 hashtags, tags do Studio relevantes, checagem antes de
+  entregar). Contexto da live inteira, sem transcrever de novo: o roteiro de um trecho recebe o
+  mapa de assuntos dos trechos anteriores; "Refazer textos" recebe o mapa da live toda, 6 min de
+  fala antes e 3 min depois do corte (marcados como "não está no vídeo"), e a lista dos outros
+  cortes vem com o gancho de cada um. Hashtags da ficha e do "Para publicar": só as da
+  descrição (até 5); sem elas, 4 tiradas das tags (antes completava até 8). A escolha dos
+  cortes não mudou, e nada regrava corte existente: "Refazer textos" só preenche, o dono salva.

@@ -54,7 +54,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '2.7.1';
+const VERSAO = '2.7.2';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -619,9 +619,11 @@ function descricaoPronta(desc, tags) {
     const l = linhas.pop().trim(); if (l) daDesc.unshift(...l.split(/[\s,]+/).filter(Boolean));
   }
   const vistas = new Set(), hs = [];
-  for (const h of [...daDesc, ...hashtags(tags || []).split(' ')]) {
+  // 21/11 (padrão editorial): poucas hashtags; as da descrição mandam, sem elas entram 4 das tags.
+  const max = daDesc.length ? 5 : 4;
+  for (const h of daDesc.length ? daDesc : hashtags(tags || []).split(' ')) {
     const k = h.toLowerCase();
-    if (h.length > 1 && !vistas.has(k) && hs.length < 8) { vistas.add(k); hs.push(h); }
+    if (h.length > 1 && !vistas.has(k) && hs.length < max) { vistas.add(k); hs.push(h); }
   }
   const corpo = linhas.join('\n').trim();
   return (corpo + (hs.length ? (corpo ? '\n\n' : '') + hs.join(' ') : '')).trim();

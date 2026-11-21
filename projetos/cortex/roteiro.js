@@ -23,58 +23,90 @@ const MIN_LONGOS_S = 35 * 60;      // video menor que isso nao ganha corte longo
 const PRAZO_GEMINI_MS = 150000;
 
 // 19/11/2026: padrão de títulos, descrições e tags do canal, escrito pelo dono (resumido aqui sem
-// perder regra). Vale para o roteiro (cortes novos) e para "Refazer textos" de um corte.
-const PADRAO = `PADRÃO DE TÍTULOS, DESCRIÇÕES E TAGS DO CANAL (siga à risca):
-Público: quem encontra o vídeo na página inicial e nas recomendações do YouTube. A pessoa clica
-porque reconhece o criador ou se interessa pela situação. O objetivo é despertar curiosidade
-suficiente para ela querer assistir, sem distorcer o conteúdo.
+// perder regra). 21/11/2026: trocado pelo "novo padrão editorial" do dono (contexto da live
+// inteira, melhor gancho, nada genérico, 3 ângulos, verificação antes de entregar). Vale para o
+// roteiro (cortes novos) e para "Refazer textos" de um corte. NÃO muda a escolha dos cortes.
+const PADRAO = `PADRÃO EDITORIAL DO CANAL PARA TÍTULOS, DESCRIÇÕES E TAGS (siga à risca):
+Objetivo: não resumir o corte, e sim achar o MOTIVO MAIS INTERESSANTE para alguém clicar, com a
+qualidade de um editor humano que entendeu a live: contexto, melhor gancho, personalidade em
+destaque, curiosidade sem inventar nem exagerar.
 
-ANTES DE ESCREVER, analise: quem é a personalidade principal; quem mais participa; qual é o
-acontecimento central; qual é o momento mais interessante; o que desperta curiosidade; se é Short
-ou longo; que contexto da live importa; se algum título sugeriria algo que NÃO acontece.
+1. CONTEXTO DA LIVE: use também o que vem ANTES e DEPOIS do corte (transcrição ao redor e mapa
+   de assuntos da live, quando vierem no pedido) para entender: o que estava acontecendo, quem
+   participa, qual era o assunto, o que levou ao momento, a reação das pessoas, se houve surpresa,
+   descoberta, brincadeira, discussão ou reviravolta, um detalhe dito antes que explica o momento
+   e o desfecho. O contexto serve para ENTENDER; o título só promete o que aparece NO CORTE.
 
-TÍTULOS ("titulos": exatamente 3 opções, em MAIÚSCULAS):
-- Comece pelo nome da personalidade ou do assunto principal (ex.: "CORINGA COMPROU UM CARRO NOVO
-  E MOSTROU TUDO NA LIVE IRL", "TAINÁ NÃO ACEITOU A OPINIÃO DO CORINGA SOBRE OS SALGADOS").
-- Curiosidade vinda do acontecimento REAL: reação inesperada, situação engraçada, momento
-  inusitado, discussão/opinião, descoberta no jogo, jogada impressionante, tensão ou surpresa.
+2. MELHOR GANCHO (responda para si antes de escrever): qual é o acontecimento principal? qual o
+   detalhe mais curioso ou surpreendente? qual a reação mais interessante? alguma fala chama mais
+   atenção que o próprio acontecimento? o que faria um fã do criador querer assistir? que
+   informação desperta curiosidade sem entregar tudo? algum detalhe do contexto deixa o título
+   mais específico? O título explora o melhor gancho, não adjetivos.
+   Ex.: numa fuga da polícia, em vez de "CORINGA FEZ UMA FUGA INSANA NO GTA 6", descubra o que
+   tornou a fuga diferente (o caminho inesperado, a polícia quase pegando, a reação dele, algo
+   que deu errado no meio) e use isso.
+
+3. TÍTULOS ("titulos": exatamente 3 opções, em MAIÚSCULAS, até 70 caracteres, sem hashtag):
+- Personalidade principal no começo quando fizer sentido ("CORINGA DESCOBRIU UMA FORMA
+  INESPERADA DE ESCAPAR DA POLÍCIA", "TAINÁ NÃO CONSEGUIU ACREDITAR NA RESPOSTA DO CORINGA").
+  Se o acontecimento for bem mais forte que a pessoa, ele pode vir primeiro.
+- Nada genérico: "MOMENTO INSANO", "FUGA MAIS LOUCA", "TROCAÇÃO DE TIRO ÉPICA", "BASTIDORES
+  INSANOS", "SITUAÇÃO INACREDITÁVEL", "MOMENTO IMPRESSIONANTE", "ACONTECEU ALGO INESPERADO" só com
+  motivo concreto. Troque adjetivo por informação específica (quem, o que estava em jogo, o que
+  tornou aquilo interessante). Se a fala não mostra um diferencial, procure outro ângulo
+  VERDADEIRO; nunca invente detalhe para encher o título.
 - NUNCA invente: conversa sobre aposta não é aposta cumprida; discussão não é briga; jogada boa não
-  é vitória; "primeira vez" só se for confirmado no trecho.
-- Curto e fácil de entender no celular: sem explicação desnecessária, sem repetir informação, sem
-  vários assuntos no mesmo título, sem palavra que não acrescenta. Até 70 caracteres.
-- As 3 opções exploram ÂNGULOS DIFERENTES (a reação de alguém, o inesperado, o resultado, uma fala
-  engraçada ou polêmica, uma jogada/descoberta, a interação entre duas pessoas).
-- "melhor" (1, 2 ou 3) = a mais forte; "porque_titulo" = o motivo em uma frase. Não escolha a mais
-  exagerada: priorize clique COM fidelidade ao vídeo.
-- Short: um acontecimento específico; o título funciona sozinho para quem não viu a live, nada
-  genérico. Longo: pode apresentar a experiência/atividade principal sem listar tudo.
-- Cortes da mesma live: cada um destaca o PRÓPRIO acontecimento; não repita a estrutura de título
-  dos outros cortes desta live (a lista vem no pedido, quando houver).
+  é vitória; "primeira vez" só se for confirmado. Nada que o vídeo não cumpra.
+- Curiosidade sem entregar o desfecho, mas claro o bastante para entender o assunto. Equilíbrio
+  entre clareza, curiosidade, personalidade, especificidade e fidelidade.
+- Varie a construção (não sempre "FULANO FEZ/ENCONTROU/FICOU/SE IMPRESSIONOU..."): afirmação,
+  pergunta, reação, descoberta, situação específica. Pergunta só quando funciona melhor.
+- Curto e fácil de ler no celular: sem explicação longa, palavra inútil, nome repetido ou excesso
+  de adjetivo.
+- As 3 opções são ÂNGULOS DIFERENTES, não variações da mesma frase. Referência: (1) o
+  acontecimento principal; (2) o detalhe curioso que torna aquilo interessante; (3) a reação de
+  alguém ou a consequência. Use outros ângulos se representarem melhor o vídeo.
+- "melhor" (1, 2 ou 3) pesando curiosidade, clareza, força do acontecimento, reconhecimento da
+  personalidade, naturalidade, fidelidade e o público do canal. NÃO escolha a mais exagerada.
+  "porque_titulo" = o motivo em uma frase.
+- Cortes da mesma live (a lista vem no pedido): cada título traz o diferencial DESTE corte, com
+  gancho e estrutura diferentes dos outros. Se dois cortes mostram coisas parecidas, use o
+  detalhe específico de cada um em vez de forçar variação artificial.
+- Short: um acontecimento só, título que funciona sem ter visto a live. Longo: a atividade ou
+  acontecimento principal da experiência, sem virar lista de assuntos.
 
-DESCRIÇÃO ("descricao"):
-- As 2 primeiras linhas são as mais importantes e explicam com naturalidade: quem participa, o
-  jogo (se houver), a situação/assunto e o contexto da live original.
-- Depois, um complemento breve (contextualiza, não conta tudo). Nada de texto longo, palavra-chave
-  repetida, informação que não está no corte ou frase genérica que serviria para qualquer vídeo.
-- Termine com uma linha de 3 a 6 hashtags relevantes (ex.: #Coringa #GTA6 #Loud). Nada aleatório.
+4. DESCRIÇÃO ("descricao"), natural e específica deste corte:
+- 1º parágrafo: quem participa, o jogo/contexto da live e o assunto principal.
+- 2º parágrafo: o acontecimento do corte e um convite para assistir, sem exagero e sem entregar
+  tudo.
+- Última linha: poucas hashtags relevantes (3 a 4, ex.: "#Coringa #GTA6 #Shorts"; #Shorts só em
+  curto). Hashtag NUNCA no título.
+- Não copie o título com palavras a mais, não invente participante ou fato, nada genérico que
+  serviria para qualquer corte.
 
-TAGS ("tags"): de 8 a 15, cada uma um item da lista, sem #, na grafia normal (ex.: "Coringa",
-"Loud Coringa", "GTA 6", "GTA VI", "Coringa GTA 6", "GTA 6 gameplay", "cortes Coringa",
-"melhores momentos Coringa", "Shorts GTA 6"). Priorize: criador principal, quem aparece, o jogo,
-o evento/atividade, o assunto do corte, termos do acontecimento e o formato (Shorts, cortes de
-live). Só o que tem relação com o conteúdo.
+5. TAGS ("tags", campo de tags do YouTube Studio): de 8 a 15, sem #, grafia normal: criador e
+   apelidos/variações de escrita, participantes, jogo (e variações, ex.: "GTA 6", "GTA VI"),
+   evento, assunto específico, termos do acontecimento, canal/grupo quando relevante (ex.:
+   "Coringa", "Loud Coringa", "Coringa GTA 6", "GTA 6 perseguição", "cortes Coringa"). Relevância
+   acima de quantidade; nada aleatório ou só popular. Tag não é hashtag.
 
-THUMBNAIL ("thumbnail"): direção curta que COMPLEMENTA o título (não repete a frase): expressão
-facial forte e natural, rosto do criador principal em destaque (os outros visíveis quando forem
-importantes), elementos do acontecimento, poucos elementos, contraste, no máximo 2 ou 3 pontos
-focais. Texto opcional com poucas palavras, complementar ao título.
+6. THUMBNAIL ("thumbnail"): direção curta que COMPLEMENTA o título (não repete a frase): expressão
+   forte e natural, rosto do criador em destaque, elementos do acontecimento, no máximo 2 ou 3
+   pontos focais, texto opcional de poucas palavras.
 
-TOM: português do Brasil natural, direto; chamativo sem exagero; sem frase artificial ou de
-enchimento. NENHUM emoji em título, descrição, tags ou thumbnail.
+7. ANTES DE ENTREGAR, confira e reescreva o que falhar: o título dá um motivo real para assistir?
+   é específico ou serviria para dezenas de cortes? usou o melhor detalhe? o nome está bem
+   posicionado? é natural? promete algo que o vídeo não cumpre? as 3 opções têm ângulos
+   diferentes? a descrição contextualiza sem inventar? hashtags só na descrição? tags relevantes?
+   o título difere dos outros cortes da live? existe alternativa mais interessante? Gramática
+   certa não basta: título genérico se reescreve.
 
-"analise": em uma ou duas frases, qual é o acontecimento principal e o melhor gancho para o
-público. "duvida": se faltar algo essencial (ex.: não dá para saber quem é o convidado), diga o
-que falta em vez de inventar; se não faltar nada, deixe vazio.`;
+TOM: português do Brasil natural e direto; chamativo sem exagero. NENHUM emoji em título,
+descrição, hashtags, tags ou thumbnail.
+
+"analise": 1 ou 2 frases: o acontecimento principal e o melhor gancho escolhido (e por quê).
+"duvida": se faltar algo essencial (ex.: não dá para saber quem é o convidado), diga o que falta
+em vez de inventar; se não faltar nada, deixe vazio.`;
 
 const SISTEMA = `Você é editor-chefe de um canal brasileiro de CORTES de lives e vídeos de criadores
 (YouTube, Shorts, TikTok, Reels). Seu trabalho: ler a transcrição com tempos, marcar os trechos
@@ -224,7 +256,8 @@ async function gravar(env, video, parte, ini, fim, r, agora) {
 async function lerTrecho(env, video, linhas, ini, fim, i, n) {
   const texto = linhas.map((l) => `[${hms(l.inicio_s)}] ${l.texto}`).join('\n');
   const usados = await titulosDaLive(env, video.id);
-  const pedido = `${cabecalho(video)}${usados}
+  const antes = i > 0 ? await mapaDaLive(env, video.id, ini) : '';
+  const pedido = `${cabecalho(video)}${antes}${usados}
 Trecho ${i + 1} de ${n}: de ${hms(ini)} a ${hms(fim)}.
 
 Tarefa:
@@ -232,6 +265,8 @@ Tarefa:
    até 15 palavras, forca de 0 a 100 = quanto aquilo prende quem assiste). Cubra o trecho todo.
 2. "curtos": de 0 a 4 cortes CURTOS de 45 a 90 segundos (vertical, Shorts/TikTok/Reels), só os
    que valem de verdade. O corte começa já no gancho, sem introdução.
+   Para os textos de cada corte, use o resto do trecho (antes e depois dele) e o mapa da live
+   como contexto, seguindo o padrão editorial.
 
 Transcrição (cada linha começa com o tempo em que a fala começa):
 ${texto || '(trecho sem fala)'}`;
@@ -273,9 +308,21 @@ Canal: ${v.canal || '(desconhecido)'} · Plataforma: ${v.plataforma}` +
     (v.contexto ? `\nContexto da live (escrito pelo dono do canal, confie nele para nomes e situação): ${v.contexto}` : '');
 }
 // 19/11: títulos já usados nesta live, para a IA não repetir a mesma estrutura (padrão do dono).
+// 21/11: vai junto o gancho que cada um usou (motivo), para este corte buscar outro ângulo.
 async function titulosDaLive(env, videoId, menos) {
-  const l = await db(env).all("SELECT titulo FROM cortex_cortes WHERE video_id = ? AND estado <> 'descartado' AND id <> ? ORDER BY inicio_s LIMIT 40", videoId, menos || 0);
-  return l.length ? '\nTítulos já usados em outros cortes desta live (não repita a estrutura):\n' + l.map((x) => '- ' + x.titulo).join('\n') : '';
+  const l = await db(env).all("SELECT inicio_s, titulo, motivo FROM cortex_cortes WHERE video_id = ? AND estado <> 'descartado' AND id <> ? ORDER BY inicio_s LIMIT 40", videoId, menos || 0);
+  return l.length ? '\nOutros cortes desta live (não repita o gancho nem a estrutura do título):\n' +
+    l.map((x) => `- [${hms(x.inicio_s)}] ${x.titulo}${x.motivo ? ' (gancho: ' + String(x.motivo).slice(0, 140) + ')' : ''}`).join('\n') : '';
+}
+// 21/11 (novo padrão editorial): mapa de assuntos da live INTEIRA, que o roteiro já resumiu por
+// trechos (cortex_roteiro_partes). Dá o contexto de antes e depois sem reler a transcrição toda.
+async function mapaDaLive(env, videoId, antesDe) {
+  const partes = await db(env).all('SELECT resumo FROM cortex_roteiro_partes WHERE video_id = ? ORDER BY parte', videoId);
+  const lista = partes.flatMap((p) => { try { return JSON.parse(p.resumo || '[]'); } catch { return []; } })
+    .filter((a) => a && a.a && (antesDe == null || a.i < antesDe)).sort((x, y) => x.i - y.i).slice(-120);
+  if (!lista.length) return '';
+  return `\nMapa de assuntos da live${antesDe != null ? ' até aqui' : ''} (só contexto; não é para cortar daqui):\n` +
+    lista.map((a) => `[${hms(a.i)} - ${hms(a.f)}] ${a.a}`).join('\n');
 }
 
 // Textos de publicação vindos da IA -> campos do corte (sem emoji, título da opção "melhor").
@@ -324,15 +371,24 @@ export async function refazerTextos(env, corte, video) {
   }
   if (!fala) throw new ErroRoteiro('Não há texto deste trecho para a IA ler (use "Transcrever para revisar" na legenda).');
   const usados = await titulosDaLive(env, video.id, corte.id);
-  const pedido = `${cabecalho(video)}${usados}
+  const mapa = await mapaDaLive(env, video.id);
+  // 21/11: a fala de ANTES (6 min) e DEPOIS (3 min) do corte, da transcrição que o painel já tem
+  // (nada é transcrito de novo), para entender o que levou ao momento e o desfecho.
+  const ao = await db(env).all(
+    'SELECT inicio_s, fim_s, texto FROM cortex_transcricao WHERE video_id = ? AND ((fim_s > ? AND inicio_s < ?) OR (fim_s > ? AND inicio_s < ?)) ORDER BY inicio_s',
+    video.id, corte.inicio_s - 360, corte.inicio_s, corte.fim_s, corte.fim_s + 180);
+  const ln = (l) => `[${hms(l.inicio_s)}] ${l.texto}`;
+  const antesTx = ao.filter((l) => l.fim_s <= corte.inicio_s).map(ln).join('\n').slice(-12000);
+  const depoisTx = ao.filter((l) => l.inicio_s >= corte.fim_s).map(ln).join('\n').slice(0, 6000);
+  const pedido = `${cabecalho(video)}${mapa}${usados}
 
 Corte ${corte.tipo === 'longo' ? 'LONGO (vídeo horizontal no YouTube)' : 'CURTO (Short vertical)'} de ${hms(corte.inicio_s)} a ${hms(corte.fim_s)}.
 Título atual (sugestão inicial; não troque à toa um título que já é bom): ${corte.titulo}
 ${corte.gancho ? 'Gancho: ' + corte.gancho + '\n' : ''}
 Escreva os textos de publicação deste corte seguindo o padrão do canal.
 
-Fala do trecho (cada linha começa com o tempo):
-${fala.slice(0, 60000)}`;
+${antesTx ? `Contexto: fala ANTES do corte (não está no vídeo publicado):\n${antesTx}\n\n` : ''}Fala DO CORTE (é isto que o público vai ver; cada linha começa com o tempo):
+${fala.slice(0, 60000)}${depoisTx ? `\n\nContexto: fala DEPOIS do corte (não está no vídeo publicado; o título não pode prometer isto):\n${depoisTx}` : ''}`;
   const { dados } = await perguntar(env, pedido, ESQ_TEXTOS);
   return lerTextos(dados);
 }

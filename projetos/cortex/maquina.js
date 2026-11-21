@@ -27,7 +27,7 @@ import { passoRoteiro } from './roteiro.js';
 import { receberFoto, MAX_FOTO } from './cena.js';
 import { arquivos, temDeposito } from '../../lib/arquivos.js';
 
-export const AGENTE_VERSAO = '2.7.1';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+export const AGENTE_VERSAO = '2.7.2';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
 const PRAZO_MIN = { texto: 30, baixar_corte: 60, roteiro: 20, quadros: 15, legenda: 15 };
 const VERSAO_ROTEIRO = [1, 3, 0];       // agente mais velho nao sabe fazer 'roteiro': nao recebe
 const VERSAO_TRECHO = [1, 7, 0];        // 16/11: so a 1.7.0+ respeita "analisar de/ate"; a velha buscaria a live inteira
