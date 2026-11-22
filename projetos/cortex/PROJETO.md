@@ -553,3 +553,11 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   botão "Classificar com a IA" (rota `POST /cortes/:id/classificar`, guarda a nota antiga em
   `nota_antiga`, não mexe em título, tempo, legenda nem arquivo). Migration 0022 só acrescenta
   colunas. Duração, tempos, transcrição, arquivos e o agente do PC não mudaram.
+- 22/11 (dono: "tudo ficou bem devagar"): conferido daqui o que dá para medir. A página e a API
+  no ar respondem em 0,1-0,2 s. As consultas novas (outros cortes da live, mapa, fala ao redor)
+  usam índice (EXPLAIN). As instruções da IA cresceram de ~1.400 para ~3.200 tokens, contra
+  ~10.000 da transcrição de um trecho. Risco achado e corrigido: a resposta por trecho cresceu
+  (categoria + critérios) e o limite continuou em 8192 tokens, contando o "pensamento"; se viesse
+  cortada, `perguntar` caía nas tentativas seguintes (até 6, de até 150 s). Limite agora em
+  16384. Daqui não dá para ver as cotas do Gemini e da Groq nem as métricas do D1 (painel da
+  Cloudflare do dono).

@@ -596,10 +596,13 @@ export function seg(t) {
 // junto (cena.js: qual e a cena do corte). Sem `opc`, e o roteiro de sempre.
 export async function perguntar(env, pedido, esquema, opc = {}) {
   const modelos = [env.CORTEX_MODELO || 'gemini-3.8-flash', env.CORTEX_MODELO_RESERVA || 'gemini-3.5-flash-lite'];
+  // 22/11: 8192 -> 16384. Desde 21/11 cada corte volta com categoria, motivo e 8 critérios além dos
+  // textos; com o "pensamento" contando no mesmo limite, um trecho com 4 curtos podia vir cortado
+  // ("fora do formato") e cair nas tentativas seguintes (até 6, de até 2,5 min cada).
   const configs = [
-    { responseMimeType: 'application/json', responseSchema: esquema, maxOutputTokens: 8192, thinkingConfig: { thinkingLevel: 'LOW' } },
-    { responseMimeType: 'application/json', responseSchema: esquema, maxOutputTokens: 8192 },
-    { responseMimeType: 'application/json', maxOutputTokens: 8192 },
+    { responseMimeType: 'application/json', responseSchema: esquema, maxOutputTokens: 16384, thinkingConfig: { thinkingLevel: 'LOW' } },
+    { responseMimeType: 'application/json', responseSchema: esquema, maxOutputTokens: 16384 },
+    { responseMimeType: 'application/json', maxOutputTokens: 16384 },
   ];
   // 18/11: "ocupado" = falha passageira do Google (503 alta demanda, 500/502/504, rede, demora).
   // Antes contava como falha e, depois de 3, o video parava com erro; agora o PC espera e repete.
