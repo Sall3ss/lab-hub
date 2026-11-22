@@ -27,7 +27,7 @@ import { passoRoteiro } from './roteiro.js';
 import { receberFoto, MAX_FOTO } from './cena.js';
 import { arquivos, temDeposito } from '../../lib/arquivos.js';
 
-export const AGENTE_VERSAO = '2.8.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+export const AGENTE_VERSAO = '2.9.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
 // 22/11 (dono: "bem devagar da Entrada até o Roteiro IA"): a fila do PC era por ordem de
 // chegada, então um vídeo novo esperava TODOS os downloads aprovados antes (cada curto hoje é
 // download + legenda + vertical + logo), e o roteiro voltava para o fim da fila depois do texto.

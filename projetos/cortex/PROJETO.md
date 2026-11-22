@@ -580,3 +580,11 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   faltarem mais de 90 s de espera. O texto continua pego por este PC (sinal de vida renova o
   prazo) e volta na mesma parte. "Desligar" devolve as duas tarefas. Testado com Groq falsa
   (espera de 5 min): o PC fez as fotos no meio e retomou a parte 1 depois.
+- 22/11 (agente 2.9.0, dono: "pegando uma live da Kick e usando a Groq, é porque não tem legenda?"):
+  a legenda da Kick só era tentada no link do CANAL (live rolando). Vídeo GRAVADO
+  (kick.com/<canal>/videos/<uuid>) ia direto para o áudio (Groq): o yt-dlp não enxerga a legenda
+  da Kick. Agora `kickGravado` acha o vídeo na lista do canal (mesma API da live), pega o HLS e a
+  língua e tenta `legendaHls` antes; não achou ou sem legenda = áudio como antes. Língua do canal
+  desconhecida passou a tentar "pt" (antes ia direto ao áudio). `CORTEX_KICK_API` (env) só para
+  teste. Testado com Kick falsa: com legenda, 30 frases e nenhum pedido à Groq; vídeo fora da
+  lista, áudio pela Groq. Não conferido com a Kick de verdade se TODO vídeo gravado traz a legenda.

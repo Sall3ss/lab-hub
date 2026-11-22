@@ -54,7 +54,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '2.8.0';
+const VERSAO = '2.9.0';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -181,17 +181,28 @@ async function tarefaTexto(cfg, t, pasta) {
   if (m3u8) {
     // Legenda da própria Kick, na língua do canal (as outras são tradução automática).
     // Baixada em paralelo: pelo yt-dlp, uma live de 9 h levava muitos minutos (um arquivo por vez).
-    if (idioma) {
-      try {
-        log(`Buscando a legenda da Kick (${idioma})…`);
-        const segs = await legendaHls(cfg, t, alvo, idioma, de, ateEf);
-        // Mínimo proporcional: no "Puxar o resto" de poucos minutos, 20 frases era exigir demais.
-        const minimo = ateEf ? Math.min(20, Math.max(3, Math.floor((ateEf - de) / 20))) : 20;
-        if (segs.length >= minimo) { await enviarLegenda(segs); return; }
-        log('Legenda da Kick vazia ou curta demais; vou pelo áudio.');
-      } catch (e) { log(`Legenda da Kick falhou (${e.message}); vou pelo áudio.`); }
-    } else log('Língua do canal desconhecida; vou pelo áudio.');
+    // 2.9.0: língua desconhecida (ex.: "Puxar o resto" de live que já saiu da lista) tenta português.
+    const lg = idioma || 'pt';
+    try {
+      log(`Buscando a legenda da Kick (${lg}${idioma ? '' : ', língua do canal desconhecida'})…`);
+      const segs = await legendaHls(cfg, t, alvo, lg, de, ateEf);
+      if (segs.length >= minimoFrases(de, ateEf)) { await enviarLegenda(segs); return; }
+      log('Esta live da Kick não tem legenda (ou veio curta demais); vou pelo áudio.');
+    } catch (e) { log(`Legenda da Kick falhou (${e.message}); vou pelo áudio.`); }
   } else {
+    if (v.plataforma === 'kick') {
+      try {
+        const k = await kickGravado(v);
+        if (!k) log('Vídeo não achado na lista do canal na Kick; sem legenda da Kick.');
+        else {
+          const lg = k.idioma || 'pt';
+          log(`Vídeo gravado da Kick: buscando a legenda da Kick (${lg})…`);
+          const segs = await legendaHls(cfg, t, k.fonte, lg, de, ateEf);
+          if (segs.length >= minimoFrases(de, ateEf)) { await enviarLegenda(segs); return; }
+          log('Este vídeo da Kick não tem legenda (ou veio curta demais).');
+        }
+      } catch (e) { if (parando) throw e; log(`Legenda da Kick falhou (${e.message}).`); }
+    }
     const lingua = escolherLegenda(info);
     if (lingua) {
       log(`Legenda nativa encontrada (${lingua.codigo}${lingua.auto ? ', automática' : ''}). Baixando o texto…`);
@@ -279,11 +290,12 @@ const IDIOMAS = { english: 'en', portuguese: 'pt', spanish: 'es', french: 'fr', 
 // Nome honesto do programa: fingir ser o Chrome faz a proteção da Kick responder 403 (testado
 // em 18/11: "Mozilla/5.0 ... Chrome/131" = 403; "cortex-agente/1.8.0" = 200).
 const NAVEGADOR = 'cortex-agente/' + VERSAO;
+const KICK_API = process.env.CORTEX_KICK_API || 'https://kick.com/api/v2';   // trocável só para teste
 async function liveKick(v) {
   const canal = v.ao_vivo_canal;
   let r;
   try {
-    r = await fetch(`https://kick.com/api/v2/channels/${encodeURIComponent(canal)}/videos`, {
+    r = await fetch(`${KICK_API}/channels/${encodeURIComponent(canal)}/videos`, {
       headers: { 'user-agent': NAVEGADOR, accept: 'application/json' }, signal: AbortSignal.timeout(30000) });
   } catch { throw new Error('sem resposta da Kick ao procurar a live'); }
   if (r.status === 404) throw Object.assign(new Error(`canal "${canal}" não existe na Kick`), { definitivo: true });
@@ -299,6 +311,24 @@ async function liveKick(v) {
   return { uuid: item.video.uuid, fonte: item.source, aoVivo: !!item.is_live, titulo: item.session_title || null,
     idioma: IDIOMAS[String(item.language || '').toLowerCase()] || null };
 }
+
+// 2.9.0 (22/11, dono: "ta pegando uma live da kick e usando a Groq"): vídeo GRAVADO da Kick
+// (kick.com/<canal>/videos/<uuid>) nunca tentava a legenda da Kick, só a da live pelo link do
+// canal. A mesma lista do canal traz o endereço HLS (com a legenda, quando existe) e a língua.
+// Devolve null se o vídeo não está na lista (o caminho normal segue).
+async function kickGravado(v) {
+  const m = String(v.url).match(/kick\.com\/([^/?#]+)\/videos\/([0-9a-f-]{36})/i);
+  if (!m) return null;
+  const r = await fetch(`${KICK_API}/channels/${encodeURIComponent(m[1])}/videos`, {
+    headers: { 'user-agent': NAVEGADOR, accept: 'application/json' }, signal: AbortSignal.timeout(30000) });
+  if (!r.ok) throw new Error(`a Kick respondeu ${r.status}`);
+  const lista = await r.json().catch(() => []);
+  const item = (Array.isArray(lista) ? lista : []).find((x) => x && x.video && String(x.video.uuid).toLowerCase() === m[2].toLowerCase());
+  if (!item || !item.source) return null;
+  return { fonte: item.source, idioma: IDIOMAS[String(item.language || '').toLowerCase()] || null };
+}
+// Mínimo de frases para aceitar a legenda (proporcional: no "Puxar o resto" curto, 20 é demais).
+const minimoFrases = (de, ateEf) => ateEf ? Math.min(20, Math.max(3, Math.floor((ateEf - de) / 20))) : 20;
 
 // Legenda HLS (WebVTT em pedaços de 10 s) na língua pedida, só os pedaços entre "de" e "até".
 // Os tempos dentro dos arquivos já são do vídeo inteiro (conferido numa live real em 18/11).
