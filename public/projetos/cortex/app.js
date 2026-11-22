@@ -181,6 +181,24 @@
   $('pc').addEventListener('click', abrirPCs);
 
   // O que o PC está fazendo com este cartão, em uma linha.
+  // 22/11: quantas tarefas o PC faz antes desta, na mesma ordem do servidor (maquina.js, PRIORIDADE):
+  // legenda > roteiro > fotos > texto > download; empate pela ordem de chegada.
+  var PRIO_FILA = { legenda: 0, roteiro: 1, quadros: 2, texto: 3, baixar_corte: 4 };
+  function naFrente(x) {
+    var fila = estado.fila || [];
+    var t = fila.find(function (f) {
+      return f.estado === 'pendente' && (x.corte_id ? f.corte_id === x.corte_id && f.tipo === 'baixar_corte'
+        : f.video_id === x.id && (f.tipo === 'texto' || f.tipo === 'roteiro'));
+    });
+    if (!t) return '';
+    var p = PRIO_FILA[t.tipo], antes = fila.filter(function (f) {
+      var q = PRIO_FILA[f.tipo];
+      return f.estado === 'pendente' && f.id !== t.id && (q < p || (q === p && f.id < t.id));
+    });
+    var baixando = fila.filter(function (f) { return f.estado === 'pega'; }).length;
+    var n = antes.length;
+    return n ? ' · ' + n + (n === 1 ? ' tarefa' : ' tarefas') + ' na frente' : baixando ? ' · é a próxima' : '';
+  }
   function situacao(x, esperaTxt) {
     if (x.erro) return '<div class="c-estado falha"><span class="ponto"></span>' + esc(x.erro) + '</div>';
     if (x.tarefa_estado === 'pega') {
@@ -192,7 +210,7 @@
     }
     if (x.tarefa_estado === 'pendente') {
       var pc = estado.pc || {};
-      var txt = !pc.total ? 'Conecte um PC para começar' : !pc.online ? 'Esperando um PC ligar' : 'Na fila do PC';
+      var txt = !pc.total ? 'Conecte um PC para começar' : !pc.online ? 'Esperando um PC ligar' : 'Na fila do PC' + naFrente(x);
       if (x.corte_fila && pc.total && !pc.baixam) txt = 'Nenhum PC recebe downloads (ver PCs)';
       return '<div class="c-estado espera"><span class="ponto"></span>' + txt + '</div>';
     }
@@ -332,7 +350,7 @@
     else if (c.estado === 'download' && c.erro) acoes = '<button type="button" class="mini sim" data-tentar-corte="' + c.id + '">↻ Tentar de novo</button><button type="button" class="mini nao" data-acao="triagem" data-corte="' + c.id + '">Cancelar</button>';
     else if (c.estado === 'download' && c.tarefa_estado !== 'pega') acoes = '<button type="button" class="mini nao" data-acao="triagem" data-corte="' + c.id + '">Cancelar</button>';
     else if (c.estado === 'edicao') acoes = '<button type="button" class="mini sim" data-acao="publicado" data-corte="' + c.id + '">✓ Publicado</button>';
-    var st = c.estado === 'download' || c.erro ? situacao({ erro: c.erro, tarefa_estado: c.tarefa_estado, tarefa_pc: c.tarefa_pc, tarefa_progresso: c.tarefa_progresso, tarefa_atualizada: c.tarefa_atualizada, corte_fila: true }, 'baixando…') : '';
+    var st = c.estado === 'download' || c.erro ? situacao({ erro: c.erro, tarefa_estado: c.tarefa_estado, tarefa_pc: c.tarefa_pc, tarefa_progresso: c.tarefa_progresso, tarefa_atualizada: c.tarefa_atualizada, corte_fila: true, corte_id: c.id }, 'baixando…') : '';
     return '<div role="button" tabindex="0" class="cartao ' + c.tipo + '" data-corte-abrir="' + c.id + '">' +
       '<div class="c-linha"><span class="tipo ' + c.tipo + '">' + (c.tipo === 'longo' ? 'LONGO' : 'CURTO') + '</span>' +
       '<span class="c-tc">' + tc(c.inicio_s) + '</span><span>' + duracao(c.fim_s - c.inicio_s) + '</span>' +

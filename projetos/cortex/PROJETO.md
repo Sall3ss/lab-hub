@@ -561,3 +561,12 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   cortada, `perguntar` caía nas tentativas seguintes (até 6, de até 150 s). Limite agora em
   16384. Daqui não dá para ver as cotas do Gemini e da Groq nem as métricas do D1 (painel da
   Cloudflare do dono).
+- 22/11 (dono: "bem devagar da Entrada até o Roteiro IA"): causa achada na fila do PC. Era uma
+  fila só, por ordem de chegada (`/maquina/proxima`, ORDER BY id): vídeo novo esperava todos os
+  downloads aprovados antes (cada curto hoje = download + legenda + vertical + logo), e o roteiro,
+  criado quando o texto termina, ia para o fim da fila de novo. Agora `PRIORIDADE` em maquina.js:
+  legenda (revisão, o dono espera na tela) > roteiro (o PC só espera a nuvem) > fotos > texto >
+  baixar_corte; empate pela chegada. Tarefa já em andamento não é interrompida. O quadro ganhou
+  `fila` (pendentes + em andamento, pelo índice da fila) e o cartão diz "Na fila do PC · N
+  tarefas na frente" / "é a próxima". Testado: com 3 downloads na fila, o PC pegou o texto do
+  vídeo novo primeiro. Sem mudança no agente do PC.

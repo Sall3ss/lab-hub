@@ -67,7 +67,7 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
   if (rota === 'ping' && metodo === 'GET') return json({ ok: true, projeto: 'cortex' });
 
   if (rota === 'quadro' && metodo === 'GET') {
-    const [videos, cortes, pc] = await Promise.all([
+    const [videos, cortes, pc, fila] = await Promise.all([
       db(env).all(
         `SELECT v.id, v.url, v.plataforma, v.titulo, v.canal, v.duracao_s, v.etapa, v.erro, v.criado_em, v.atualizado_em,
                 v.analisar_de_s, v.analisar_ate_s, v.ao_vivo_canal, v.ao_vivo, v.capturado_ate_s, v.continuar_de_s, v.layout_id,
@@ -83,9 +83,14 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
           WHERE c.usuario_id = ? AND c.estado <> 'descartado' AND v.arquivado = 0
           ORDER BY c.atualizado_em DESC LIMIT 500`, u.id),
       listarAgentes(env, u.id),
+      // 22/11: a fila do PC (só o que está pendente ou em andamento), para o cartão dizer quantas
+      // tarefas estão na frente. Usa o índice idx_cortex_tarefas_fila (usuario_id, estado, id).
+      db(env).all(
+        `SELECT id, tipo, video_id, corte_id, estado FROM cortex_tarefas
+          WHERE usuario_id = ? AND estado IN ('pendente', 'pega') ORDER BY id LIMIT 500`, u.id),
     ]);
     const online = pc.filter((a) => a.online);
-    return json({ videos, cortes, pc: {
+    return json({ videos, cortes, fila, pc: {
       total: pc.length, online: online.length, nomes_online: online.map((a) => a.nome),
       baixam: pc.filter((a) => a.baixa_cortes).length,
     } });

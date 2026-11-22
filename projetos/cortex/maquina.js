@@ -28,6 +28,12 @@ import { receberFoto, MAX_FOTO } from './cena.js';
 import { arquivos, temDeposito } from '../../lib/arquivos.js';
 
 export const AGENTE_VERSAO = '2.7.2';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+// 22/11 (dono: "bem devagar da Entrada até o Roteiro IA"): a fila do PC era por ordem de
+// chegada, então um vídeo novo esperava TODOS os downloads aprovados antes (cada curto hoje é
+// download + legenda + vertical + logo), e o roteiro voltava para o fim da fila depois do texto.
+// Agora: o que o dono espera na tela e é curto vai antes; downloads pesados por último.
+// legenda (revisão, ~1 min) > roteiro (o PC só espera a nuvem) > fotos > texto > baixar_corte.
+const PRIORIDADE = "CASE tipo WHEN 'legenda' THEN 0 WHEN 'roteiro' THEN 1 WHEN 'quadros' THEN 2 WHEN 'texto' THEN 3 ELSE 4 END";
 const PRAZO_MIN = { texto: 30, baixar_corte: 60, roteiro: 20, quadros: 15, legenda: 15 };
 const VERSAO_ROTEIRO = [1, 3, 0];       // agente mais velho nao sabe fazer 'roteiro': nao recebe
 const VERSAO_TRECHO = [1, 7, 0];        // 16/11: so a 1.7.0+ respeita "analisar de/ate"; a velha buscaria a live inteira
@@ -119,7 +125,7 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     for (let i = 0; i < 2; i++) {
       const t = await db(env).first(
         `SELECT id, tipo, video_id, corte_id, tentativas FROM cortex_tarefas
-          WHERE usuario_id = ? AND estado = 'pendente' AND tipo IN ${tipos}${semTrecho} ORDER BY id LIMIT 1`, ag.usuario_id);
+          WHERE usuario_id = ? AND estado = 'pendente' AND tipo IN ${tipos}${semTrecho} ORDER BY ${PRIORIDADE}, id LIMIT 1`, ag.usuario_id);
       if (!t) return json({ tarefa: null });
       const prazo = new Date(agora.getTime() + PRAZO_MIN[t.tipo] * 60000).toISOString();
       const r = await db(env).run(
