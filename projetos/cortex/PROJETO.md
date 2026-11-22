@@ -570,3 +570,13 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   `fila` (pendentes + em andamento, pelo índice da fila) e o cartão diz "Na fila do PC · N
   tarefas na frente" / "é a próxima". Testado: com 3 downloads na fila, o PC pegou o texto do
   vídeo novo primeiro. Sem mudança no agente do PC.
+- 22/11 (agente 2.8.0, dono: "travando bastante no groq desde hoje à tarde"): o limite grátis da
+  Groq é por modelo e apertado (texto = whisper-large-v3-turbo, legenda = whisper-large-v3; na
+  ordem de 2 h de áudio por hora e 8 h por dia cada). Uma live longa bate nele, o que é normal.
+  O que piorou hoje foi a fila com prioridade: o texto do vídeo novo passa na frente e, na espera
+  da Groq (até 30 min por vez), o PC dormia segurando tudo. Agora `aproveitarEspera`: durante a
+  espera ele pede `/proxima` com `sem: ['texto','roteiro']` (servidor aceita a lista desde hoje)
+  e adianta fotos, legendas e downloads, olhando a fila a cada 20 s; só começa outra tarefa se
+  faltarem mais de 90 s de espera. O texto continua pego por este PC (sinal de vida renova o
+  prazo) e volta na mesma parte. "Desligar" devolve as duas tarefas. Testado com Groq falsa
+  (espera de 5 min): o PC fez as fotos no meio e retomou a parte 1 depois.

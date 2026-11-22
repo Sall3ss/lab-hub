@@ -54,7 +54,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '2.7.2';
+const VERSAO = '2.8.0';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -241,13 +241,36 @@ async function tarefaTexto(cfg, t, pasta) {
         const aviso = `limite da Groq: retoma em ${Math.ceil(s / 60)} min (parte ${i + 1}/${total})`;
         log(aviso[0].toUpperCase() + aviso.slice(1) + '.');
         await painel(cfg, `/tarefas/${t.id}/prorrogar`, { corpo: { progresso: aviso } }).catch(() => {});
-        await dorme(s * 1000);
+        await aproveitarEspera(cfg, s * 1000);
       }
     }
     unlinkSync(parte);
   }
   log('Áudio transcrito. O vídeo segue para o roteiro.');
 }
+
+// 2.8.0 (22/11, dono: "travando bastante no groq"): com a fila por prioridade, o texto de um vídeo
+// novo vem antes dos downloads; quando a Groq grátis pede para esperar (até 30 min por vez), o PC
+// ficava dormindo e nada mais andava. Agora, nessa espera, ele adianta fotos, legendas e downloads
+// (o roteiro não, que pode esperar o Gemini por horas). O texto continua "pego" por este PC (o
+// sinal de vida de 1 min segue renovando o prazo) e volta de onde parou, na mesma parte.
+async function aproveitarEspera(cfg, ms) {
+  const fim = Date.now() + ms;
+  while (!parando && fim - Date.now() > 90000) {
+    let tarefa = null;
+    try { ({ tarefa } = await painel(cfg, '/proxima', { corpo: { sem: ['texto', 'roteiro'] } })); } catch { tarefa = null; }
+    if (parando) break;
+    if (!tarefa) { await dorme(Math.min(20000, fim - Date.now())); continue; }   // fila vazia: olha de novo em 20 s
+    const espera = atual;
+    log(`Enquanto a Groq libera, adianto outra tarefa (${NOME_TAREFA[tarefa.tipo] || tarefa.tipo}).`);
+    atual = null;
+    try { await executar(cfg, tarefa, espera); } finally { atual = espera; }
+    if (!parando) log('Volto a esperar a Groq para o texto.');
+  }
+  const resto = fim - Date.now();
+  if (resto > 0 && !parando) await dorme(resto);
+}
+const NOME_TAREFA = { baixar_corte: 'download de corte', legenda: 'legenda para revisar', quadros: 'fotos dos cortes' };
 
 // 1.8.0 (18/11): a live do canal na Kick, pela API pública do site (a mesma que a página usa).
 // Quem pergunta é o PC (IP de casa); servidor de nuvem a Kick pode bloquear.
@@ -980,10 +1003,10 @@ async function tarefaLegenda(cfg, t, pasta) {
 }
 
 // ---------------------------------------------------------------- laço principal
-async function executar(cfg, t) {
+async function executar(cfg, t, emEspera) {
   const pasta = join(tmpdir(), 'cortex-' + t.id + '-' + Date.now());
   mkdirSync(pasta, { recursive: true });
-  atual = { cfg, tarefa: t, pasta };
+  atual = { cfg, tarefa: t, pasta, emEspera };
   // Sinal de vida a cada 1 min enquanto a tarefa roda: renova o prazo e mantém o PC "online"
   // na tela (15/11: com 5 min, a tela mostrava "offline" no meio de um download longo).
   const vivo = setInterval(() => painel(cfg, `/tarefas/${t.id}/prorrogar`, { corpo: {} }).catch(() => {}), 60000);
@@ -1020,8 +1043,8 @@ async function parar(motivo) {
   parando = true;
   log(motivo || 'Desligando…');
   matarFilhos();
-  const a = atual;
-  if (a) {
+  // 2.8.0: pode haver duas (o texto esperando a Groq + a tarefa adiantada); as duas voltam.
+  for (let a = atual; a; a = a.emEspera) {
     await painel(a.cfg, `/tarefas/${a.tarefa.id}/devolver`, { corpo: {} }).catch(() => {});
     rmSync(a.pasta, { recursive: true, force: true });
     log('O trabalho em andamento voltou para a fila do painel.');

@@ -27,7 +27,7 @@ import { passoRoteiro } from './roteiro.js';
 import { receberFoto, MAX_FOTO } from './cena.js';
 import { arquivos, temDeposito } from '../../lib/arquivos.js';
 
-export const AGENTE_VERSAO = '2.7.2';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+export const AGENTE_VERSAO = '2.8.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
 // 22/11 (dono: "bem devagar da Entrada até o Roteiro IA"): a fila do PC era por ordem de
 // chegada, então um vídeo novo esperava TODOS os downloads aprovados antes (cada curto hoje é
 // download + legenda + vertical + logo), e o roteiro voltava para o fim da fila depois do texto.
@@ -101,11 +101,15 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     await db(env).run(
       "UPDATE cortex_tarefas SET estado = 'pendente', agente_id = NULL, pega_ate = NULL, progresso = NULL WHERE usuario_id = ? AND estado = 'pega' AND pega_ate < ?",
       ag.usuario_id, iso);
-    const lista = ['texto'];
+    let lista = ['texto'];
     if (ag.baixa_cortes) lista.push('baixar_corte');
     if (versaoMin(ag.versao, VERSAO_ROTEIRO)) lista.push('roteiro');
     if (versaoMin(ag.versao, VERSAO_QUADROS)) lista.push('quadros');
     if (versaoMin(ag.versao, VERSAO_LEGENDA)) lista.push('legenda');
+    // 22/11 (agente 2.8.0): o PC esperando a Groq no texto pede "qualquer coisa menos texto e roteiro".
+    const pedido = await request.json().catch(() => ({}));
+    if (Array.isArray(pedido.sem)) lista = lista.filter((x) => !pedido.sem.includes(x));
+    if (!lista.length) return json({ tarefa: null });
     const tipos = '(' + lista.map((x) => `'${x}'`).join(', ') + ')';
     // Agente antigo nao pega texto de video com trecho marcado (atualiza sozinho em ate 10 min).
     let semTrecho = versaoMin(ag.versao, VERSAO_TRECHO) ? '' :
