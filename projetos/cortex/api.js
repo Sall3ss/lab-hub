@@ -656,7 +656,14 @@ async function refazerDoZero({ request, env, data, u, id, json, agora }) {
   if (!video) return json({ erro: 'vídeo não encontrado' }, 404);
   const corpo = await request.json().catch(() => ({}));
   const so = corpo.so === 'roteiro' ? 'roteiro' : 'texto';
-  const pega = await db(env).first("SELECT tipo FROM cortex_tarefas WHERE video_id = ? AND estado = 'pega' LIMIT 1", video.id);
+  // Só bloqueia o que não pode ser interrompido: texto, roteiro, e download/legenda de corte que vai
+  // sair. Fotos ('quadros') são só a prévia: a tarefa sai e o PC segue ("a tarefa saiu deste PC").
+  // Tarefa com o prazo vencido (PC que sumiu) também não bloqueia. (23/11: o dono travou numa foto.)
+  const pega = await db(env).first(
+    `SELECT tipo FROM cortex_tarefas t WHERE t.video_id = ? AND t.estado = 'pega' AND t.pega_ate >= ?
+        AND (t.tipo IN ('texto', 'roteiro') OR (t.tipo IN ('baixar_corte', 'legenda')
+             AND EXISTS (SELECT 1 FROM cortex_cortes c WHERE c.id = t.corte_id AND c.estado <> 'publicado'))) LIMIT 1`,
+    video.id, agora);
   if (pega) return json({ erro: 'O PC está trabalhando neste vídeo agora (' + pega.tipo.replace('_', ' ') + '). Espere terminar e tente de novo.' }, 409);
   if (so === 'roteiro') {
     const tx = await db(env).first('SELECT COUNT(*) AS n FROM cortex_transcricao WHERE video_id = ?', video.id);

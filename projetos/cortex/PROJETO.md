@@ -640,3 +640,8 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   - Testado local: bloqueio com o PC baixando; refazer tudo (11 apagados, 1 publicado mantido,
     texto apagado, tarefa de texto nova); "só os cortes" recusado sem texto; vídeo concluído
     reaberto; auditoria; botão do gancho mantendo 1 min; telas no PC e no celular.
+  - 23/11, ajuste: o dono travou em "O PC está trabalhando neste vídeo agora (quadros)" num vídeo
+    concluído. Agora só bloqueiam texto, roteiro e download/legenda de corte que vai sair, e só
+    dentro do prazo; foto em andamento sai junto (o agente trata como "a tarefa saiu deste PC")
+    e tarefa vencida não bloqueia. Testado: foto em andamento passa, roteiro em andamento
+    bloqueia, roteiro vencido passa.
