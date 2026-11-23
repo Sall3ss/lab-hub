@@ -443,3 +443,14 @@ button, input, textarea { font: inherit; color: inherit; }
 /* 23/11: curto que demora a chegar no gancho (no Shorts a pessoa decide em 2 s) */
 .c-frio { margin-top: .3rem; font: .7rem var(--mono); color: var(--aviso, #f5b942); }
 .dica-gancho .frio { color: var(--aviso, #f5b942); }
+
+/* 23/11: voltar cortes do Download/Edição para a Triagem, em lote, por canal */
+.col-volta { font: .64rem/1 var(--mono); padding: .3rem .4rem; border: 1px solid var(--fio-2); border-radius: 3px; background: transparent; color: var(--suave); cursor: pointer; white-space: nowrap; }
+.col-volta:hover { color: var(--cor); border-color: var(--cor); }
+.volta-txt { font-size: .82rem; color: var(--suave); margin: 0 0 .8rem; }
+.volta-grupo { border: 1px solid var(--fio); border-radius: 6px; padding: .5rem .6rem; margin-bottom: .6rem; }
+.volta-canal { display: flex; align-items: center; gap: .45rem; padding: .3rem 0; cursor: pointer; }
+.volta-canal span { font: .72rem var(--mono); color: var(--suave); }
+.volta-item { display: flex; align-items: center; gap: .45rem; padding: .35rem 0 .35rem 1.2rem; font-size: .82rem; cursor: pointer; border-top: 1px solid var(--fio); }
+.volta-item small { margin-left: auto; font: .68rem var(--mono); color: var(--suave); white-space: nowrap; }
+.volta-item input, .volta-canal input { width: 1.1rem; height: 1.1rem; flex-shrink: 0; }

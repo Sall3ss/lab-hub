@@ -77,7 +77,7 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
           ORDER BY v.atualizado_em DESC LIMIT 300`, u.id),
       db(env).all(
         `SELECT c.id, c.video_id, c.tipo, c.origem, c.inicio_s, c.fim_s, c.titulo, c.gancho, c.gancho_inicio_s, c.nota, c.categoria, c.estado,
-                c.erro, c.qualidade, c.baixar_fora, c.cena, c.cena_conf, c.cena_auto, c.quadro_em, c.layout_id, c.legenda IS NOT NULL AS tem_legenda, c.legenda_editada, v.layout_id AS video_layout_id, c.atualizado_em, v.titulo AS video_titulo, v.plataforma,
+                c.erro, c.qualidade, c.baixar_fora, c.cena, c.cena_conf, c.cena_auto, c.quadro_em, c.layout_id, c.legenda IS NOT NULL AS tem_legenda, c.legenda_editada, v.layout_id AS video_layout_id, v.canal AS video_canal, c.atualizado_em, v.titulo AS video_titulo, v.plataforma,
                 ${TAREFA_SQL('t.corte_id = c.id AND t.tipo = \'baixar_corte\'')}
            FROM cortex_cortes c JOIN cortex_videos v ON v.id = c.video_id
           WHERE c.usuario_id = ? AND c.estado <> 'descartado' AND v.arquivado = 0
@@ -310,6 +310,29 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
 
   // 19/11: "Refazer textos" - a IA reescreve título (3 opções), descrição, tags e thumbnail deste
   // corte no padrão do canal. Só DEVOLVE: o dono revisa na gaveta e decide se salva.
+  // 23/11 (pedido do dono): voltar cortes do Download e da Edição para a Triagem, em lote, para
+  // refazer aos poucos com as regras novas (curto começando no gancho, títulos pelo público). O
+  // arquivo que o PC já baixou continua lá; ao aprovar de novo, o PC baixa a versão nova. A
+  // legenda revisada e os textos ficam. Corte que o PC está baixando AGORA fica de fora.
+  if (rota === 'cortes' && id === 'voltar-triagem' && metodo === 'POST') {
+    const corpo = await request.json().catch(() => ({}));
+    const ids = [...new Set((Array.isArray(corpo.ids) ? corpo.ids : []).map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+    if (!ids.length || ids.length > 300) return json({ erro: 'Escolha de 1 a 300 cortes.' }, 400);
+    const marcas = ids.map(() => '?').join(',');
+    const lista = await db(env).all(
+      `SELECT c.id, c.estado, c.titulo FROM cortex_cortes c WHERE c.usuario_id = ? AND c.id IN (${marcas}) AND c.estado IN ('download', 'edicao')
+          AND NOT EXISTS (SELECT 1 FROM cortex_tarefas t WHERE t.corte_id = c.id AND t.tipo = 'baixar_corte' AND t.estado = 'pega')`, u.id, ...ids);
+    if (!lista.length) return json({ erro: 'Nenhum desses cortes pode voltar agora (o PC pode estar baixando).' }, 409);
+    const ok = lista.map((c) => c.id), m2 = ok.map(() => '?').join(',');
+    await db(env).batch([
+      [`UPDATE cortex_cortes SET estado = 'triagem', baixar_fora = 0, qualidade = NULL, erro = NULL, atualizado_em = ? WHERE id IN (${m2})`, [agora, ...ok]],
+      [`DELETE FROM cortex_tarefas WHERE corte_id IN (${m2}) AND tipo = 'baixar_corte' AND estado IN ('pendente', 'falhou')`, ok],
+    ]);
+    await auditar(env, { quem: u.email, acao: 'voltar-triagem', entidade: 'cortex_cortes', entidade_id: ok.join(',').slice(0, 200),
+      antes: lista.map((c) => ({ id: c.id, estado: c.estado })), depois: { estado: 'triagem' }, ip: data.ip });
+    return json({ ok: true, voltaram: ok.length, ficaram: ids.length - ok.length });
+  }
+
   if (rota === 'cortes' && id && partes[2] === 'textos' && metodo === 'POST') {
     const c = await db(env).first('SELECT * FROM cortex_cortes WHERE id = ? AND usuario_id = ?', Number(id), u.id);
     if (!c) return json({ erro: 'corte não encontrado' }, 404);

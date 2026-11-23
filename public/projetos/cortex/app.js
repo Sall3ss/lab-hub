@@ -233,7 +233,10 @@
         : estado.cortes.filter(function (c) { return c.estado === col.id; }).sort(ordemCortes);
       html += '<section class="coluna' + (i === 3 ? ' divisa' : '') + '" data-grupo="' + col.grupo + '" aria-label="' + esc(col.nome) + '">' +
         '<header class="col-topo"><span class="faixa">' + col.faixa + '</span><span class="col-nome">' + esc(col.nome) + '</span>' +
-        '<span class="col-qtd">' + itens.length + '</span></header><div class="col-lista">' +
+        '<span class="col-qtd">' + itens.length + '</span>' +
+        // 23/11: voltar cortes para a Triagem em lote (refazer com as regras novas)
+        ((col.id === 'download' || col.id === 'edicao') && itens.length ? '<button type="button" class="col-volta" data-voltar="1" title="Voltar cortes para a Triagem">↩ Triagem</button>' : '') +
+        '</header><div class="col-lista">' +
         (itens.length ? itens.map(col.grupo === 'video' ? cartaoVideo : cartaoCorte).join('') : '<p class="col-vazia">' + esc(VAZIO[col.id]) + '</p>') +
         '</div></section>';
       atalhos += '<button type="button" data-col="' + i + '">' + col.faixa + ' ' + esc(col.nome.split(' ')[0]) + '<b>' + itens.length + '</b></button>';
@@ -375,6 +378,7 @@
   }
 
   quadroEl.addEventListener('click', function (ev) {
+    if (ev.target.closest('[data-voltar]')) { ev.stopPropagation(); abrirVoltar(); return; }
     var tn = ev.target.closest('[data-tentar-corte]');
     if (tn) { ev.stopPropagation(); tentar('cortes', Number(tn.dataset.tentarCorte), tn); return; }
     var b = ev.target.closest('[data-acao]');
@@ -384,6 +388,54 @@
     var c = ev.target.closest('[data-corte-abrir]');
     if (c) abrirCorte(Number(c.dataset.corteAbrir), true);
   });
+  // 23/11 (pedido do dono): voltar cortes do Download e da Edição para a Triagem, escolhendo por
+  // canal, para refazer aos poucos com as regras novas. Só grava ao confirmar.
+  function abrirVoltar() {
+    var lista = estado.cortes.filter(function (c) { return c.estado === 'download' || c.estado === 'edicao'; });
+    var grupos = {};
+    lista.forEach(function (c) { var k = c.video_canal || c.video_titulo || 'sem canal'; (grupos[k] = grupos[k] || []).push(c); });
+    var nomes = Object.keys(grupos).sort(function (a, b) { return grupos[b].length - grupos[a].length; });
+    var html = '<p class="volta-txt">Os cortes marcados voltam para a <b>Triagem</b> com título, textos e legenda. O arquivo que o PC já baixou continua na pasta; ao aprovar de novo, o PC baixa a versão nova (apague a antiga no PC se o nome mudar).</p>' +
+      nomes.map(function (n, g) {
+        return '<div class="volta-grupo"><label class="volta-canal"><input type="checkbox" data-grupo-todo="' + g + '"> <b>' + esc(n) + '</b> <span>' + grupos[n].length + ' corte(s)</span></label>' +
+          grupos[n].map(function (c) {
+            return '<label class="volta-item"><input type="checkbox" data-g="' + g + '" value="' + c.id + '"> <span class="tipo ' + c.tipo + '">' + (c.tipo === 'longo' ? 'L' : 'C') + '</span> ' +
+              esc(c.titulo) + ' <small>' + (c.estado === 'download' ? 'download' : 'edição') + '</small></label>';
+          }).join('') + '</div>';
+      }).join('') +
+      '<p class="msg-form" id="volta-msg"></p><div class="acoes"><button class="btn btn-cor" type="button" id="volta-ok" disabled>Voltar para a Triagem</button>' +
+      '<button class="btn btn-fino" type="button" id="volta-cancelar">Cancelar</button></div>';
+    abrirGaveta('Voltar para a Triagem', html, function (box) {
+      var ok = box.querySelector('#volta-ok');
+      function marcados() { return Array.prototype.filter.call(box.querySelectorAll('input[data-g]'), function (i) { return i.checked; }); }
+      function contar() {
+        var n = marcados().length; ok.disabled = !n; ok.textContent = n ? 'Voltar ' + n + ' para a Triagem' : 'Voltar para a Triagem';
+        box.querySelectorAll('[data-grupo-todo]').forEach(function (t) {
+          var itens = box.querySelectorAll('input[data-g="' + t.dataset.grupoTodo + '"]'), m = Array.prototype.filter.call(itens, function (i) { return i.checked; }).length;
+          t.checked = m === itens.length; t.indeterminate = m > 0 && m < itens.length;
+        });
+      }
+      box.addEventListener('change', function (ev) {
+        var t = ev.target;
+        if (t.dataset.grupoTodo != null) box.querySelectorAll('input[data-g="' + t.dataset.grupoTodo + '"]').forEach(function (i) { i.checked = t.checked; });
+        contar();
+      });
+      box.querySelector('#volta-cancelar').onclick = fecharGaveta;
+      ok.onclick = function () {
+        var ids = marcados().map(function (i) { return Number(i.value); });
+        confirmar('Voltar ' + ids.length + ' corte(s) para a Triagem? Para baixar de novo, aprove cada um quando estiver pronto.', 'Voltar').then(function (sim) {
+          if (!sim) return;
+          ok.disabled = true; ok.textContent = 'Voltando…';
+          api('/cortes/voltar-triagem', { metodo: 'POST', corpo: { ids: ids } }).then(function (r) {
+            fecharGaveta(); return carregar().then(function () {
+              if (r.ficaram) alertaQuadro(r.voltaram + ' voltaram para a Triagem; ' + r.ficaram + (r.ficaram === 1 ? ' ficou' : ' ficaram') + ' porque o PC estava baixando.');
+            });
+          }).catch(function (e) { var m = box.querySelector('#volta-msg'); m.textContent = e.message; m.className = 'msg-form erro'; contar(); });
+        });
+      };
+    });
+  }
+  function alertaQuadro(txt) { var m = $('msg-link'); if (m) { m.textContent = txt; m.className = 'ingest-msg ok'; } }
   // Celular: uma coluna por vez; os atalhos levam direto a ela.
   function marcarAtalho() {
     var col = quadroEl.querySelector('.coluna'); if (!col) return;

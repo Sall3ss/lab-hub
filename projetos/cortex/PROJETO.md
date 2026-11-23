@@ -612,3 +612,13 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
     tempo, corte que ficaria curto e longo ficam iguais); aviso, botão e Salvar no PC e no
     celular, legenda corrigida deslocada (palavras do começo frio saem). Não testado com o Gemini
     de verdade: o efeito nas views só se vê depois de alguns dias de publicação.
+- 23/11 (dono: "voltar os vídeos do Coringa que estão no download e na edição para a triagem,
+  para refazer aos poucos os downloads"): botão "↩ Triagem" no topo das colunas Download e
+  Edição abre a gaveta "Voltar para a Triagem", com os cortes agrupados por canal do vídeo
+  (marcar o canal inteiro ou corte a corte; só grava ao confirmar). Rota
+  `POST /cortes/voltar-triagem {ids}` (até 300, com `auditar` acao 'voltar-triagem'): estado
+  'triagem', `baixar_fora` 0, `qualidade` e `erro` limpos, tarefa de download pendente/falhou
+  apagada; textos, legenda e `arquivo_local` ficam. Corte que o PC está baixando AGORA não volta.
+  O arquivo antigo continua no PC (se o título mudar, o novo sai com outro nome e o antigo precisa
+  ser apagado à mão). Testado local: 5 do "coringa" voltaram, 1 em download ativo ficou, os de
+  outro canal intactos, auditoria gravada; gaveta no PC e no celular.
