@@ -454,3 +454,11 @@ button, input, textarea { font: inherit; color: inherit; }
 .volta-item { display: flex; align-items: center; gap: .45rem; padding: .35rem 0 .35rem 1.2rem; font-size: .82rem; cursor: pointer; border-top: 1px solid var(--fio); }
 .volta-item small { margin-left: auto; font: .68rem var(--mono); color: var(--suave); white-space: nowrap; }
 .volta-item input, .volta-canal input { width: 1.1rem; height: 1.1rem; flex-shrink: 0; }
+
+/* 23/11: "Refazer do zero" (gaveta do vídeo e lista de concluídos) */
+.caixa-refazer .acoes { flex-wrap: wrap; }
+.lista-conc li { flex-wrap: wrap; }
+.conc-acoes { display: flex; flex-wrap: wrap; gap: .4rem; }
+@media (max-width: 720px) { .conc-acoes { width: 100%; } .conc-acoes .btn { flex: 1; } }
+.caixa-refazer { border: 1px solid var(--fio-2); border-radius: var(--raio); padding: .7rem; margin-top: .6rem; }
+.lista-conc li > div { flex-basis: 14rem; }

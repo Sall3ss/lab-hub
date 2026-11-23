@@ -523,6 +523,35 @@
     if (!detalhe) return;
     abrirVideo(function (box) { var a = box.querySelector('#resto-ate'); if (a) { a.scrollIntoView({ block: 'center' }); a.focus(); } });
   });
+  // ---------- "Refazer do zero" (23/11) ----------
+  // Apaga os cortes NÃO publicados do vídeo e refaz desde o começo; os publicados ficam (a IA os vê
+  // para não repetir o mesmo momento). Contexto, layout e trecho ficam. Só grava ao confirmar.
+  function caixaRefazer() {
+    return '<div class="bloco caixa-refazer"><b class="resto-tit">↻ Refazer do zero</b>' +
+      '<p class="dica-trecho">Apaga os cortes deste vídeo que ainda <b>não foram publicados</b> e a IA corta tudo de novo, desde o começo, com as regras novas (curto começando no gancho, títulos pelo público do canal). Os publicados ficam e a IA não repete o mesmo momento. Contexto e layout ficam. Os arquivos já baixados no PC também ficam.</p>' +
+      '<div class="acoes"><button class="btn btn-cor" type="button" data-refazer="texto">Refazer tudo (texto + cortes)</button>' +
+      '<button class="btn" type="button" data-refazer="roteiro">Só os cortes (mais rápido)</button></div>' +
+      '<small class="dica-layout"><b>Refazer tudo</b> (recomendado) busca o texto de novo, mais detalhado, para o corte começar no segundo certo. Com legenda da Kick sai em minutos; sem legenda gasta a cota grátis da Groq (live longa pode levar horas). <b>Só os cortes</b> usa o texto que já existe.</small>' +
+      '<p class="msg-form" id="msg-refazer"></p></div>';
+  }
+  function ligarRefazer(box, v) {
+    box.querySelectorAll('[data-refazer]').forEach(function (b) {
+      b.onclick = function () { refazerVideo(v, b.dataset.refazer, b, box.querySelector('#msg-refazer')); };
+    });
+  }
+  function refazerVideo(v, so, botao, msgEl) {
+    var txt = (so === 'texto' ? 'Refazer tudo neste vídeo (texto e cortes)? ' : 'Refazer só os cortes deste vídeo? ') +
+      'Os cortes que não foram publicados são apagados (inclusive os aprovados e os que estão na edição); os publicados ficam.';
+    return confirmar(txt, 'Refazer').then(function (sim) {
+      if (!sim) return;
+      botao.disabled = true;
+      return api('/videos/' + v.id + '/refazer', { metodo: 'POST', corpo: { so: so } }).then(function (r) {
+        aviso('Refazendo: ' + r.saiu + ' corte(s) apagado(s)' + (r.ficou ? ', ' + r.ficou + ' publicado(s) mantido(s)' : '') + '. ' +
+          (so === 'texto' ? 'O PC busca o texto de novo.' : 'A IA lê de novo.'));
+        fecharGaveta(); selVideo = v.id; detalhe = null; return carregar();
+      }).catch(function (e) { botao.disabled = false; if (msgEl) { msgEl.textContent = e.message; msgEl.className = 'msg-form erro'; } else aviso(e.message, true); });
+    });
+  }
   function abrirConcluidos() {
     api('/concluidos').then(function (j) {
       var lista = j.videos || [];
@@ -530,11 +559,27 @@
         (lista.length ? '<ul class="lista-conc">' + lista.map(function (v) {
           return '<li><div><span class="tag-plat ' + v.plataforma + '">' + PLAT[v.plataforma] + '</span> <b>' + esc(v.titulo || v.url) + '</b>' +
             '<small>' + v.publicados + ' publicado(s) de ' + v.cortes + ' corte(s) · concluído em ' + data(v.atualizado_em) + '</small></div>' +
-            '<button class="btn btn-fino" type="button" data-reabrir="' + v.id + '">Reabrir</button></li>';
+            '<span class="conc-acoes"><button class="btn btn-fino" type="button" data-reabrir="' + v.id + '">Reabrir</button>' +
+            '<button class="btn btn-fino" type="button" data-refazer-conc="' + v.id + '" title="Apaga os cortes não publicados e corta tudo de novo, desde o começo">↻ Refazer do zero</button>' +
+            '<button class="btn btn-perigo" type="button" data-excluir-conc="' + v.id + '">Excluir</button></span></li>';
         }).join('') + '</ul>' : '<p style="color:var(--suave);margin:0">Nenhum vídeo concluído ainda. Quando todos os cortes aprovados de um vídeo estiverem publicados, use <b>Concluir vídeo</b> na linha do tempo.</p>') +
         '<div class="acoes"><button class="btn btn-fino" type="button" id="conc-fechar">Fechar</button></div>',
         function (box) {
           box.querySelector('#conc-fechar').onclick = fecharGaveta;
+          // 23/11: refazer do zero (refaz o texto também) e excluir, direto da lista de concluídos
+          box.querySelectorAll('[data-refazer-conc]').forEach(function (b) {
+            b.onclick = function () { refazerVideo({ id: Number(b.dataset.refazerConc) }, 'texto', b, null); };
+          });
+          box.querySelectorAll('[data-excluir-conc]').forEach(function (b) {
+            b.onclick = function () {
+              confirmar('Excluir este vídeo, a transcrição e todos os cortes dele (inclusive os publicados, do painel)? Os arquivos no PC e os vídeos no YouTube ficam. Depois dá para colar o link de novo.').then(function (sim) {
+                if (!sim) return;
+                b.disabled = true;
+                api('/videos/' + b.dataset.excluirConc, { metodo: 'DELETE' }).then(function () { aviso('Vídeo excluído.'); abrirConcluidos(); carregar(); })
+                  .catch(function (e) { aviso(e.message, true); b.disabled = false; });
+              });
+            };
+          });
           box.querySelectorAll('[data-reabrir]').forEach(function (b) {
             b.onclick = function () {
               b.disabled = true;
@@ -775,6 +820,8 @@
         '<label class="campo"><span>Até (vazio = até o fim)</span><input class="tc-campo" name="ate" inputmode="numeric" autocomplete="off" placeholder="fim do vídeo" value="' + (v.analisar_ate_s ? tc(v.analisar_ate_s) : '') + '"></label></div>' +
         '<p class="dica-trecho">' + (v.etapa === 'entrada' ? 'O PC ainda não começou: muda sem custo.' : 'Mudar o trecho refaz a análise (o painel avisa o que muda antes).') + '</p>' +
         '<p class="msg-form" id="msg-trecho"></p><div class="acoes"><button class="btn" type="submit">Salvar trecho</button></div></form>' +
+        // 23/11: refazer todos os cortes do vídeo com as regras novas, sem mexer um a um
+        (v.etapa === 'cortado' || v.etapa === 'roteiro' || v.erro ? caixaRefazer() : '') +
         '<div class="acoes"><button class="btn btn-fino esq" type="button" id="v-arquivar">Concluir vídeo</button><button class="btn btn-perigo" type="button" id="v-excluir">Excluir vídeo</button></div>',
         function (box) {
           box.querySelector('#f-video').onsubmit = function (ev) {
@@ -829,6 +876,7 @@
           var vt = box.querySelector('#v-tentar');
           if (vt) vt.onclick = function () { tentar('videos', v.id, vt).then(fecharGaveta); };
           box.querySelector('#v-arquivar').onclick = function () { concluirVideo(v); };
+          ligarRefazer(box, v);
           box.querySelector('#v-excluir').onclick = function () {
             confirmar('Excluir este vídeo, a transcrição e todos os cortes dele? Os arquivos já baixados no PC ficam lá.').then(function (sim) {
               if (!sim) return;
@@ -1205,10 +1253,14 @@
             d.textContent = 'No arquivo do corte (Movavi): ' + tc(gi - a) + ' → ' + tc(gf - a) + ' · ' + duracao(gf - gi);
             // 23/11 (YouTube Studio: o Short se decide nos 2 primeiros segundos): curto que demora a
             // chegar no gancho ganha o aviso e o botão que puxa o começo para 1 s antes dele.
-            if (tipo === 'curto' && gi - a > 3 && b - (gi - 1) >= 15) {
+            // O corte inteiro anda para a frente com a MESMA duração (dono, 23/11: só adiantar o início
+            // transformava um corte de 1 min em 22 s); no fim do vídeo, encurta só o que não cabe.
+            if (tipo === 'curto' && gi - a > 3) {
+              var durV = detalhe && detalhe.video && detalhe.video.duracao_s, novoIni = gi - 1;
+              var novoFim = durV ? Math.min(durV, novoIni + (b - a)) : novoIni + (b - a);
               d.innerHTML = '<span class="frio">⚠ O gancho só aparece aos ' + Math.round(gi - a) + ' s do corte. No Shorts a pessoa decide em 2 s se fica.</span> ' +
-                '<button type="button" class="mini" id="g-comecar">Começar no gancho</button>';
-              d.querySelector('#g-comecar').onclick = function () { f.inicio.value = tc(gi - 1); mostrarDur(); };
+                '<button type="button" class="mini" id="g-comecar">Começar no gancho (' + duracao(novoFim - novoIni) + ')</button>';
+              d.querySelector('#g-comecar').onclick = function () { f.inicio.value = tc(novoIni); f.fim.value = tc(novoFim); mostrarDur(); };
             }
           }
         }

@@ -366,7 +366,10 @@ Tarefa:
    até 15 palavras, forca de 0 a 100 = quanto aquilo prende quem assiste). Cubra o trecho todo.
 2. "curtos": de 0 a 4 cortes CURTOS de 45 a 90 segundos (vertical, Shorts/TikTok/Reels), só os
    que valem de verdade. O corte começa já no gancho, sem introdução: "inicio" = o tempo do
-   gancho (no máximo 1 s antes), nunca o começo do assunto.
+   gancho (no máximo 1 s antes), nunca o começo do assunto. Os 45 a 90 s contam A PARTIR do
+   gancho: depois dele vêm o desenvolvimento e o desfecho ou a reação. Se o momento forte é o
+   final de uma conversa longa, o gancho é uma fala forte do meio, não o desfecho (senão o
+   corte fica curto demais).
    Para os textos de cada corte, use o resto do trecho (antes e depois dele) e o mapa da live
    como contexto, seguindo o padrão editorial.
 
@@ -570,8 +573,9 @@ function limpar(lista, tipo, min, max) {
     const { gi, gf } = tempoGancho(c, tipo, i, f);
     // 23/11 (dados do Studio: o Short se decide nos 2 primeiros segundos): curto cujo gancho cai
     // mais de 3 s depois do começo passa a começar 1 s antes do gancho ("entrada fria" cortada),
-    // desde que sobrem ao menos 20 s de corte.
-    if (tipo === 'curto' && gi != null && gi - i > 3 && f - (gi - 1) >= 20) i = gi - 1;
+    // desde que sobrem ao menos 40 s de corte (dono: com 20 s, um corte de 1 min virava 22 s).
+    // Sobrando menos, o gancho é o clímax: o corte fica como a IA escolheu (o cartão avisa).
+    if (tipo === 'curto' && gi != null && gi - i > 3 && f - (gi - 1) >= 40) i = gi - 1;
     const cl = lerClasse(c);
     return {
       gancho_inicio_s: gi, gancho_fim_s: gf,

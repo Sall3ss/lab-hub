@@ -224,6 +224,9 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
     return await puxarResto({ request, env, data, u, id, json, agora });
   }
 
+  if (rota === 'videos' && id && partes[2] === 'refazer' && metodo === 'POST') {
+    return await refazerDoZero({ request, env, data, u, id, json, agora });
+  }
   if (rota === 'videos' && id && partes[2] === 'trecho' && metodo === 'POST') {
     return await mudarTrecho({ request, env, data, u, id, json, agora });
   }
@@ -639,6 +642,44 @@ async function mudarTrecho({ request, env, data, u, id, json, agora }) {
   await db(env).batch(lotes);
   await auditoria();
   return json({ ok: true, refez: so });
+}
+
+// ---------- "Refazer do zero" (23/11) ----------
+// Pedido do dono: refazer todos os cortes de uma live com as regras novas (curto no gancho,
+// títulos pelo público do canal) sem mexer corte a corte. Saem os cortes NÃO publicados (com as
+// fotos no R2) e o roteiro; os publicados ficam, e a IA os recebe na lista "outros cortes desta
+// live" para não repetir o mesmo momento. Contexto, layout e trecho do vídeo ficam.
+// so = 'texto' (recomendado: busca o texto de novo, em blocos de 10 s) ou 'roteiro' (só a IA lê
+// de novo o texto que já existe, mais rápido e sem gastar a Groq).
+async function refazerDoZero({ request, env, data, u, id, json, agora }) {
+  const video = await db(env).first('SELECT * FROM cortex_videos WHERE id = ? AND usuario_id = ?', Number(id), u.id);
+  if (!video) return json({ erro: 'vídeo não encontrado' }, 404);
+  const corpo = await request.json().catch(() => ({}));
+  const so = corpo.so === 'roteiro' ? 'roteiro' : 'texto';
+  const pega = await db(env).first("SELECT tipo FROM cortex_tarefas WHERE video_id = ? AND estado = 'pega' LIMIT 1", video.id);
+  if (pega) return json({ erro: 'O PC está trabalhando neste vídeo agora (' + pega.tipo.replace('_', ' ') + '). Espere terminar e tente de novo.' }, 409);
+  if (so === 'roteiro') {
+    const tx = await db(env).first('SELECT COUNT(*) AS n FROM cortex_transcricao WHERE video_id = ?', video.id);
+    if (!tx.n) return json({ erro: 'Este vídeo ainda não tem texto: use "Refazer tudo".' }, 400);
+  }
+  const n = await db(env).first(
+    "SELECT SUM(estado <> 'publicado') AS saem, SUM(estado = 'publicado') AS ficam FROM cortex_cortes WHERE video_id = ?", video.id);
+  await apagarFotos(env, "video_id = ? AND estado <> 'publicado'", [video.id]);
+  const lotes = [
+    [`DELETE FROM cortex_tarefas WHERE video_id = ? AND (corte_id IS NULL OR corte_id IN
+        (SELECT id FROM cortex_cortes WHERE video_id = ? AND estado <> 'publicado'))`, [video.id, video.id]],
+    ["DELETE FROM cortex_cortes WHERE video_id = ? AND estado <> 'publicado'", [video.id]],
+    ['DELETE FROM cortex_roteiro_partes WHERE video_id = ?', [video.id]],
+    ['UPDATE cortex_videos SET etapa = ?, roteiro_de_s = NULL, continuar_de_s = NULL, erro = NULL, arquivado = 0, atualizado_em = ? WHERE id = ?',
+      [so === 'roteiro' ? 'roteiro' : 'entrada', agora, video.id]],
+  ];
+  if (so === 'texto') lotes.push(['DELETE FROM cortex_transcricao WHERE video_id = ?', [video.id]]);
+  lotes.push(['INSERT INTO cortex_tarefas (usuario_id, tipo, video_id, criada_em, atualizada_em) VALUES (?, ?, ?, ?, ?)',
+    [u.id, so, video.id, agora, agora]]);
+  await db(env).batch(lotes);
+  await auditar(env, { quem: u.email, acao: 'refazer-do-zero', entidade: 'cortex_videos', entidade_id: video.id,
+    antes: { etapa: video.etapa, cortes_apagados: n.saem || 0, publicados_mantidos: n.ficam || 0 }, depois: { refaz: so }, ip: data.ip });
+  return json({ ok: true, refaz: so, saiu: n.saem || 0, ficou: n.ficam || 0 });
 }
 
 // ---------- "Puxar o resto" (18/11) ----------

@@ -622,3 +622,21 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   O arquivo antigo continua no PC (se o título mudar, o novo sai com outro nome e o antigo precisa
   ser apagado à mão). Testado local: 5 do "coringa" voltaram, 1 em download ativo ficou, os de
   outro canal intactos, auditoria gravada; gaveta no PC e no celular.
+- 23/11 (dono: "começar no gancho transforma um corte de 1 min em 22 s"; quer refazer todos os
+  cortes de uma vez, desde o começo da live, sem pedir corte a corte):
+  - "Começar no gancho" agora ANDA o corte inteiro com a mesma duração (só encurta se bater no
+    fim do vídeo); o botão mostra a duração final.
+  - `limpar`: a entrada fria só é cortada se sobrarem 40 s ou mais (era 20 s); menos que isso, o
+    gancho é o clímax e o corte fica como a IA escolheu. Prompt: os 45-90 s contam a partir do
+    gancho; se o forte é o fim de uma conversa longa, o gancho é uma fala forte do meio.
+  - "↻ Refazer do zero" na gaveta do vídeo (Roteiro/Cortado ou com erro) e na lista de
+    Concluídos (ali, junto com "Excluir", que já existia só na gaveta). Rota
+    `POST /videos/:id/refazer {so: 'texto'|'roteiro'}` (`auditar` 'refazer-do-zero'): apaga os
+    cortes NÃO publicados (fotos no R2 incluídas), as tarefas deles e o roteiro; publicados
+    ficam (a IA os vê em "outros cortes desta live" e não repete o momento); contexto, layout e
+    trecho ficam; vídeo volta ao quadro (`arquivado` 0). 'texto' (recomendado) apaga o texto e
+    busca de novo, já em blocos de 10 s; 'roteiro' só faz a IA ler de novo. Recusa se o PC
+    estiver trabalhando no vídeo. Arquivos no PC ficam.
+  - Testado local: bloqueio com o PC baixando; refazer tudo (11 apagados, 1 publicado mantido,
+    texto apagado, tarefa de texto nova); "só os cortes" recusado sem texto; vídeo concluído
+    reaberto; auditoria; botão do gancho mantendo 1 min; telas no PC e no celular.
