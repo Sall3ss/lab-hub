@@ -439,3 +439,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .ia-nota { margin: .5rem 0 0; font-size: .74rem; color: var(--suave); line-height: 1.4; }
 .ia-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; margin-top: .6rem; }
 .ia-acoes small { color: var(--suave); font-size: .74rem; }
+
+/* 23/11: curto que demora a chegar no gancho (no Shorts a pessoa decide em 2 s) */
+.c-frio { margin-top: .3rem; font: .7rem var(--mono); color: var(--aviso, #f5b942); }
+.dica-gancho .frio { color: var(--aviso, #f5b942); }

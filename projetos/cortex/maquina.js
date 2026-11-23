@@ -460,8 +460,9 @@ function versaoMin(v, min) {
   return true;
 }
 
-// Junta frases curtas em blocos de ~30 s: menos linhas no banco e o roteiro da IA continua
-// com o minuto exato de cada trecho.
+// Junta frases curtas em blocos de ~10 s: menos linhas no banco e o roteiro da IA continua
+// com o tempo de cada trecho. 23/11: era 30 s, e a IA só conseguia começar o curto no começo do
+// bloco (até 30 s antes do momento-chave: o Short "começava frio"). Vale para textos novos.
 function juntar(segs) {
   const limpos = segs
     .map((s) => ({ i: Number(s.i), f: Number(s.f), t: String(s.t || '').replace(/\s+/g, ' ').trim() }))
@@ -470,7 +471,7 @@ function juntar(segs) {
   const blocos = [];
   let atual = null;
   for (const s of limpos) {
-    if (atual && s.i - atual.i < 30 && atual.t.length < 1200) {
+    if (atual && s.i - atual.i < 10 && atual.t.length < 600) {
       atual.f = Math.max(atual.f, s.f);
       atual.t += ' ' + s.t;
     } else {

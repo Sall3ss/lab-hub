@@ -357,6 +357,9 @@
       (c.categoria || c.nota != null ? '<span class="c-ia">' + etiquetaCat(c.categoria) +
         (c.nota != null ? '<span class="nota' + (c.nota < NOTA_FRACA ? ' fraca' : '') + '" title="Potencial estimado pela leitura do texto (0-100). Não é previsão de views.">' + c.nota + '</span>' : '') + '</span>' : '') + '</div>' +
       '<p class="c-titulo">' + esc(c.titulo) + '</p>' +
+      // 23/11: curto que demora a chegar no gancho (no Shorts a pessoa decide em 2 s)
+      (c.tipo === 'curto' && c.gancho_inicio_s != null && c.gancho_inicio_s - c.inicio_s > 3 && ['triagem', 'edicao'].includes(c.estado)
+        ? '<div class="c-frio" title="Abra o corte e use Começar no gancho">⚠ começa frio · gancho aos ' + Math.round(c.gancho_inicio_s - c.inicio_s) + ' s</div>' : '') +
       '<div class="c-sub">' + esc(c.video_titulo || NOME_PLAT[c.plataforma]) + '</div>' +
       (c.baixar_fora && c.estado === 'edicao' ? '<div class="c-fora">↗ BAIXAR FORA · ' + tc(c.inicio_s) + ' → ' + tc(c.fim_s) + '</div>' : '') +
       (layoutEfetivo(c, c.video_layout_id) && nomeLayout(layoutEfetivo(c, c.video_layout_id)) && !c.baixar_fora
@@ -1146,7 +1149,16 @@
             if (be) be.onclick = estimarGancho;
           }
           else if (a == null || b == null || gi < a || gf > b || gf <= gi) d.textContent = '⚠ O gancho precisa ficar dentro do corte (' + (a != null ? tc(a) : '?') + ' → ' + (b != null ? tc(b) : '?') + ').';
-          else d.textContent = 'No arquivo do corte (Movavi): ' + tc(gi - a) + ' → ' + tc(gf - a) + ' · ' + duracao(gf - gi);
+          else {
+            d.textContent = 'No arquivo do corte (Movavi): ' + tc(gi - a) + ' → ' + tc(gf - a) + ' · ' + duracao(gf - gi);
+            // 23/11 (YouTube Studio: o Short se decide nos 2 primeiros segundos): curto que demora a
+            // chegar no gancho ganha o aviso e o botão que puxa o começo para 1 s antes dele.
+            if (tipo === 'curto' && gi - a > 3 && b - (gi - 1) >= 15) {
+              d.innerHTML = '<span class="frio">⚠ O gancho só aparece aos ' + Math.round(gi - a) + ' s do corte. No Shorts a pessoa decide em 2 s se fica.</span> ' +
+                '<button type="button" class="mini" id="g-comecar">Começar no gancho</button>';
+              d.querySelector('#g-comecar').onclick = function () { f.inicio.value = tc(gi - 1); mostrarDur(); };
+            }
+          }
         }
         // 17/11: corte sem tempo do gancho -> começo do corte + duração da frase (~2,5 palavras/s).
         // O curto começa no gancho; o resto se acerta com os botões ±1 s.

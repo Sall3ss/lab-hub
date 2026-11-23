@@ -588,3 +588,27 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   desconhecida passou a tentar "pt" (antes ia direto ao áudio). `CORTEX_KICK_API` (env) só para
   teste. Testado com Kick falsa: com legenda, 30 frases e nenhum pedido à Groq; vídeo fora da
   lista, áudio pela Groq. Não conferido com a Kick de verdade se TODO vídeo gravado traz a legenda.
+- 23/11 (dono, com a orientação do YouTube Studio do canal NoClipz: poucas views; o que rende é o
+  Coringa, Shorts com 60-75% de "continuaram assistindo", o Short se decide nos 2 primeiros
+  segundos, tags quase não pesam, vários Shorts no mesmo minuto competem entre si). Sem mudar o
+  agente (continua 2.9.0):
+  - **Causa achada do "começo frio":** o texto da live era guardado em blocos de ~30 s
+    (`juntar` em maquina.js), então a IA só conseguia começar o curto no começo de um bloco, até
+    30 s antes do momento-chave. Agora blocos de ~10 s (vale para textos novos; ~3x mais linhas
+    em `cortex_transcricao`, leitura continua pelo índice `video_id, inicio_s`).
+  - Roteiro: "o inicio do curto é o tempo do gancho (no máximo 1 s antes)"; gancho forte sozinho
+    (fala absurda, susto, reação, conflito); contexto vem depois do gancho. Critério `retencao`
+    passa a olhar os 2 primeiros segundos.
+  - Servidor (`limpar`): curto com gancho mais de 3 s depois do começo passa a começar 1 s antes
+    do gancho, se sobrarem 20 s ou mais. Longo não muda.
+  - Padrão editorial ganhou "PÚBLICO DO CANAL": com o Coringa no momento, CORINGA no título (de
+    preferência no começo, Tainá junto quando faz parte); outro criador sem o Coringa, o título se
+    apoia na situação (conflito, reação, absurdo, o que estava em jogo), nome só de apoio, e a
+    escolha fica mais exigente. Vale para cortes novos e para "Refazer textos".
+  - Tela: cartão de curto na Triagem/Edição com "⚠ começa frio · gancho aos N s" e, na gaveta, o
+    botão "Começar no gancho" (põe o início 1 s antes do gancho; só grava no Salvar). No PATCH, se
+    só o começo andou para a frente, a legenda revisada é DESLOCADA em vez de apagada.
+  - Testado local: regra do `limpar` (gancho aos 12 s -> começa aos 11 s; gancho no começo, sem
+    tempo, corte que ficaria curto e longo ficam iguais); aviso, botão e Salvar no PC e no
+    celular, legenda corrigida deslocada (palavras do começo frio saem). Não testado com o Gemini
+    de verdade: o efeito nas views só se vê depois de alguns dias de publicação.

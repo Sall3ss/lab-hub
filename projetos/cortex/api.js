@@ -76,7 +76,7 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
            FROM cortex_videos v WHERE v.usuario_id = ? AND v.arquivado = 0
           ORDER BY v.atualizado_em DESC LIMIT 300`, u.id),
       db(env).all(
-        `SELECT c.id, c.video_id, c.tipo, c.origem, c.inicio_s, c.fim_s, c.titulo, c.gancho, c.nota, c.categoria, c.estado,
+        `SELECT c.id, c.video_id, c.tipo, c.origem, c.inicio_s, c.fim_s, c.titulo, c.gancho, c.gancho_inicio_s, c.nota, c.categoria, c.estado,
                 c.erro, c.qualidade, c.baixar_fora, c.cena, c.cena_conf, c.cena_auto, c.quadro_em, c.layout_id, c.legenda IS NOT NULL AS tem_legenda, c.legenda_editada, v.layout_id AS video_layout_id, c.atualizado_em, v.titulo AS video_titulo, v.plataforma,
                 ${TAREFA_SQL('t.corte_id = c.id AND t.tipo = \'baixar_corte\'')}
            FROM cortex_cortes c JOIN cortex_videos v ON v.id = c.video_id
@@ -445,7 +445,19 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
         extras.push(['UPDATE cortex_cortes SET categoria = ? WHERE id = ?', [corpo.categoria, corte.id]]);
       }
       // 19/11: tempo novo = a legenda revisada deixa de bater (as palavras contam do início do corte).
-      if (corte.legenda && (novo.inicio_s !== corte.inicio_s || novo.fim_s !== corte.fim_s || novo.tipo !== 'curto')) {
+      // 23/11: só o começo andou para a frente ("Começar no gancho"): a legenda é deslocada em vez de
+      // apagada, para não perder as correções do dono (palavras que ficaram antes do novo começo saem).
+      const corta = novo.tipo === 'curto' && novo.fim_s === corte.fim_s && novo.inicio_s > corte.inicio_s;
+      if (corte.legenda && corta) {
+        let lista = [];
+        try { lista = JSON.parse(corte.legenda) || []; } catch { lista = []; }
+        const d = novo.inicio_s - corte.inicio_s;
+        const desloc = lista.filter((w) => Number(w.f) > d).map((w) => ({
+          p: w.p, i: Math.max(0, Math.round((Number(w.i) - d) * 100) / 100), f: Math.round((Number(w.f) - d) * 100) / 100 }));
+        extras.push(desloc.length
+          ? ['UPDATE cortex_cortes SET legenda = ? WHERE id = ?', [JSON.stringify(desloc), corte.id]]
+          : ['UPDATE cortex_cortes SET legenda = NULL, legenda_em = NULL, legenda_editada = 0 WHERE id = ?', [corte.id]]);
+      } else if (corte.legenda && (novo.inicio_s !== corte.inicio_s || novo.fim_s !== corte.fim_s || novo.tipo !== 'curto')) {
         extras.push(['UPDATE cortex_cortes SET legenda = NULL, legenda_em = NULL, legenda_editada = 0 WHERE id = ?', [corte.id]]);
       }
       if (novo.tipo === 'curto' && corte.estado === 'triagem' && (novo.inicio_s !== corte.inicio_s || novo.fim_s !== corte.fim_s)) {

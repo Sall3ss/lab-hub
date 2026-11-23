@@ -94,6 +94,25 @@ destaque, curiosidade sem inventar nem exagerar.
    forte e natural, rosto do criador em destaque, elementos do acontecimento, no máximo 2 ou 3
    pontos focais, texto opcional de poucas palavras.
 
+PÚBLICO DO CANAL (23/11/2026, dados do YouTube Studio do canal; vale para os títulos e para a
+   escolha dos cortes):
+- Quem assiste o canal é, antes de tudo, público do CORINGA. Os cortes que mais rendem são dele:
+  fugas, susto/medo, reações, resenha e momentos de casal com a Tainá, exploração do GTA 6 e
+  conflito claro. Ex. que deram certo: "CORINGA FICOU COM MEDO DO FUNDO DO MAR NO GTA 6",
+  "TAINÁ COLOCOU KIBE NO TOP 3 E O CORINGA NÃO ACEITOU", "CORINGA EXPÕE MENTIRA DO LUPAC AO VIVO".
+  O que eles têm em comum: QUEM + um conflito, reação ou situação concreta entendida em 1 segundo.
+- Corte em que o Coringa está no momento (confirmado pela fala ou pelo contexto): o nome CORINGA
+  vai no título, de preferência no começo; a Tainá também, quando faz parte do momento.
+- Corte de OUTRO criador, sem o Coringa: o público do canal não clica pelo nome dele. O título se
+  apoia na SITUAÇÃO: conflito claro, reação cômica evidente, algo absurdo, o que estava em jogo
+  ou o resultado que dá curiosidade. O nome entra como apoio, sem abrir o título se a situação
+  for mais forte. Se houver ligação REAL com o Coringa ou a Tainá (estão juntos, falam dele,
+  mesmo evento), use. Evite gameplay sem narrativa evidente (ex. fraco: "ALLAN TENTOU BANCAR O
+  JUSTICEIRO NO TRÂNSITO"): diga o conflito, a consequência ou a reação. Na escolha, com outro
+  criador seja mais exigente: só momentos com conflito, reação ou absurdo claros.
+- Tags quase não pesam na descoberta: o que decide é o gancho inicial e o tema. Capriche no
+  título e no começo do corte.
+
 CATEGORIA NOS TEXTOS (21/11; orienta a abordagem, não é fórmula de título): HYPE destaca a
    tensão, o risco ou o momento decisivo; ENGRAÇADO, a situação cômica, a piada ou a reação que
    faz rir; ÉPICO, a habilidade, a dificuldade ou o feito; CURIOSIDADE, o detalhe ou a descoberta;
@@ -147,7 +166,7 @@ QUALIDADE ("criterios", de 0 a 10 cada; é separada da categoria: um corte engra
 - contexto: quem não viu a live entende o que está acontecendo?
 - desenvolvimento: a situação evolui durante o corte?
 - desfecho: há conclusão, reação, surpresa ou resultado que recompensa quem assistiu até o fim?
-- retencao: segura o espectador até o final?
+- retencao: os 2 primeiros segundos já têm fala ou ação de impacto, e o corte segura até o final?
 - compartilhamento: alguém mandaria isso para um amigo?
 - autonomia: funciona sozinho ou depende de algo que ficou fora do corte?
 - diferencial: tem algo que o diferencia dos outros cortes desta live?
@@ -172,9 +191,17 @@ Regras dos cortes:
 - Um corte precisa se sustentar sozinho: quem não viu a live entende.
 - Evite: silêncio, leitura de chat sem contexto, propaganda, pausas, papo arrastado.
 - Qualidade acima de quantidade. Se o trecho não tem nada bom, devolva lista vazia.
-- Gancho: a frase falada ou situação dos primeiros 3 segundos que segura quem está rolando o feed.
+- Gancho: a frase falada ou situação dos primeiros 2 segundos que segura quem está rolando o feed.
   "gancho_inicio" e "gancho_fim" = onde essa frase é dita no vídeo (HH:MM:SS, dentro do corte,
   de 2 a 20 segundos), tirados da transcrição.
+- CURTO COMEÇA NO GANCHO (23/11, dados do YouTube Studio do canal: no feed de Shorts a pessoa
+  decide em 2 segundos se fica, e os curtos que dão certo seguram 60-75% de quem viu o começo):
+  o "inicio" do curto é o tempo do gancho (no máximo 1 segundo antes). Comece já na fala mais
+  absurda, no susto, na reação ou no conflito. Nada de cumprimento, "então...", silêncio,
+  carregamento, explicação ou preparação no começo. Se o momento precisa de contexto, o
+  contexto vem DEPOIS do gancho, dentro do corte; se não funciona assim, escolha outro momento.
+  O gancho tem que ser forte sozinho: frase de impacto, susto, reação ou conflito, não uma fala
+  comum que só faz sentido mais tarde.
 - Tempos no formato HH:MM:SS, contados desde o começo do vídeo.
 - Personalidade principal: o dono do canal, salvo se o contexto/transcrição mostrar outra.
 
@@ -338,7 +365,8 @@ Tarefa:
 1. "assuntos": divida o trecho em assuntos/momentos de 2 a 10 minutos (inicio, fim, assunto em
    até 15 palavras, forca de 0 a 100 = quanto aquilo prende quem assiste). Cubra o trecho todo.
 2. "curtos": de 0 a 4 cortes CURTOS de 45 a 90 segundos (vertical, Shorts/TikTok/Reels), só os
-   que valem de verdade. O corte começa já no gancho, sem introdução.
+   que valem de verdade. O corte começa já no gancho, sem introdução: "inicio" = o tempo do
+   gancho (no máximo 1 s antes), nunca o começo do assunto.
    Para os textos de cada corte, use o resto do trecho (antes e depois dele) e o mapa da live
    como contexto, seguindo o padrão editorial.
 
@@ -540,6 +568,10 @@ function limpar(lista, tipo, min, max) {
     const tx = lerTextos(c);
     if (!tx.titulo) return null;
     const { gi, gf } = tempoGancho(c, tipo, i, f);
+    // 23/11 (dados do Studio: o Short se decide nos 2 primeiros segundos): curto cujo gancho cai
+    // mais de 3 s depois do começo passa a começar 1 s antes do gancho ("entrada fria" cortada),
+    // desde que sobrem ao menos 20 s de corte.
+    if (tipo === 'curto' && gi != null && gi - i > 3 && f - (gi - 1) >= 20) i = gi - 1;
     const cl = lerClasse(c);
     return {
       gancho_inicio_s: gi, gancho_fim_s: gf,
