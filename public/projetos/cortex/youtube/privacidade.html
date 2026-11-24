@@ -1,0 +1,30 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="../icone-32.png"><title>Cortex - Política de Privacidade</title><style>:root{color-scheme:dark}body{margin:0;background:#0b0e14;color:#e6e9ef;font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}main{max-width:44rem;margin:0 auto;padding:2rem 1rem 4rem}h1{font-size:1.7rem;line-height:1.25;margin:.2rem 0 1rem}h2{font-size:1.15rem;margin:2rem 0 .5rem;color:#9fe8ff}a{color:#5fd6ff}nav{display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem;font-size:.95rem}small{color:#8a93a6}ul{padding-left:1.2rem}</style></head><body><main>
+<!-- Política de privacidade do app OAuth do Cortex. Lab Hub, Claude (Opus 5.5), 24/11/2026. -->
+<nav><a href="./">Início</a><a href="privacidade.html">Política de Privacidade</a><a href="termos.html">Termos de Serviço</a></nav>
+<h1>Política de Privacidade</h1>
+<p>Esta política explica como o Cortex usa os dados da conta Google quando o dono do canal conecta o YouTube.</p>
+<h2>Dados acessados</h2>
+<ul>
+<li><strong>youtube.upload</strong>: enviar ao canal os Shorts que o dono aprovou no Cortex.</li>
+<li><strong>youtube.readonly</strong>: ler o nome e o ID do canal conectado, para mostrar ao dono onde os vídeos serão publicados.</li>
+</ul>
+<p>O Cortex não lê e-mail, contatos, comentários, estatísticas nem qualquer outro dado da conta.</p>
+<h2>Onde os dados ficam</h2>
+<ul>
+<li>A autorização do Google (token) fica <strong>só no computador do dono</strong>, protegida pela criptografia do Windows do usuário. Ela nunca é enviada ao servidor do Cortex.</li>
+<li>Os vídeos saem do computador do dono direto para o YouTube.</li>
+<li>O servidor do Cortex guarda apenas o nome do canal, o ID de cada vídeo enviado, a privacidade escolhida e o título e a descrição usados. Esses dados servem para mostrar o andamento e evitar o envio do mesmo vídeo duas vezes.</li>
+</ul>
+<h2>Compartilhamento</h2>
+<p>Nenhum dado é vendido, compartilhado com terceiros ou usado para publicidade. Os dados também não são usados para treinar modelos de inteligência artificial.</p>
+<p>O uso e a transferência de informações recebidas das APIs do Google seguem a <a href="https://developers.google.com/terms/api-services-user-data-policy">Política de Dados do Usuário dos Serviços de API do Google</a>, incluindo os requisitos de Uso Limitado.</p>
+<h2>Como revogar e apagar</h2>
+<ul>
+<li>O acesso pode ser revogado a qualquer momento em <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>, ou no próprio computador, com o comando <code>node cortex-agente.mjs youtube-sair</code>, que apaga o token local.</li>
+<li>Os registros de envio guardados no Cortex podem ser apagados pelo dono no painel.</li>
+</ul>
+<p>O uso do YouTube também está sujeito aos <a href="https://www.youtube.com/t/terms">Termos de Serviço do YouTube</a> e à <a href="https://policies.google.com/privacy">Política de Privacidade do Google</a>.</p>
+<h2>Contato</h2>
+<p>Pelo e-mail de suporte que aparece na tela de autorização do Google.</p>
+<p><small>Atualizado em 24/11/2026.</small></p>
+</main></body></html>

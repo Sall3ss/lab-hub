@@ -688,3 +688,7 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
     envio não reaproveita o ID antigo; cota esgotada pausa e devolve; aviso atrasado pelo registro
     local; refazer mantém o enviado; auditoria; telas no PC (1280) e celular (390) sem erro e sem
     rolagem lateral. Não testado com o Google de verdade (depende do acesso do dono).
+  - Para publicar o app OAuth, o Google exige na tela Branding página inicial, Política de
+    Privacidade e Termos no domínio autorizado. Páginas públicas (sem login) em
+    `public/projetos/cortex/youtube/` (index, privacidade, termos); domínio autorizado
+    `lab-hub-9uh.pages.dev`. Sem verificação: o dono vê o aviso "app não verificado" e segue.
