@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 24/11/2026 (Cortex: envio dos Shorts direto ao canal do YouTube, agente 3.0.0).**
+**Atualizado em 24/11/2026 (cabeçalhos de segurança; Cortex: Shorts ao YouTube, agente 3.0.1).**
 
 ## Pronto
 
@@ -42,6 +42,9 @@
 - Repositório: `github.com/Sall3ss/lab-hub` (privado, conta pessoal). Push desta máquina
   com chave própria do repo (`~/.ssh/id_ed25519_labhub`, host `github-labhub`).
 - Como funciona e como migrar: `PROJETO.md`.
+- 24/11: cabeçalhos de segurança em todas as páginas (`public/_headers`): não abre dentro de
+  outro site, nosniff, HSTS, Referrer-Policy, câmera/localização desligadas e microfone só no
+  próprio site (voz da Jean). Conferido no PC (1280) e celular (390) sem erro.
 
 ## O que falta
 

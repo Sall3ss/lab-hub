@@ -1,0 +1,12 @@
+# Cabeçalhos de segurança de todas as páginas do hub (Cloudflare Pages). Lab Hub, Claude (Opus 5.5), 24/11/2026.
+# - ninguém abre o painel dentro de outro site (frame-ancestors/X-Frame-Options): evita clique enganado;
+# - o navegador não "adivinha" tipo de arquivo (nosniff); só HTTPS (HSTS);
+# - outros sites não recebem o caminho das páginas (Referrer-Policy);
+# - câmera, localização e pagamento desligados; microfone só para o próprio site (a voz da Jean).
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'; object-src 'none'; base-uri 'self'
+  Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=31536000
+  Permissions-Policy: camera=(), geolocation=(), payment=(), usb=(), microphone=(self)

@@ -692,3 +692,8 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
     Privacidade e Termos no domínio autorizado. Páginas públicas (sem login) em
     `public/projetos/cortex/youtube/` (index, privacidade, termos); domínio autorizado
     `lab-hub-9uh.pages.dev`. Sem verificação: o dono vê o aviso "app não verificado" e segue.
+- 24/11, revisão de segurança (pedido do dono): agente **3.0.1** guarda a chave do agente no
+  `config.json` protegida pelo Windows (DPAPI do usuário, como o token do YouTube); chave antiga em
+  texto é protegida sozinha na primeira leitura. Decisões do dono: VPS continua publicando direto
+  (A, mantido); login do painel sem autenticador por enquanto (D). Contas Google e GitHub com
+  verificação em 2 etapas: o dono vai fazer.

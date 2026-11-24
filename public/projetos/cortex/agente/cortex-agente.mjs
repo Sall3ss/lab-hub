@@ -59,7 +59,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '3.0.0';
+const VERSAO = '3.0.1';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -85,9 +85,31 @@ function nomeSeguro(s, max = 80) {
     .slice(0, max).replace(/[. ]+$/, '') || 'sem titulo';
 }
 
+// 3.0.1 (24/11): a chave do agente fica no config.json PROTEGIDA pelo Windows (DPAPI do usuário,
+// como o acesso ao YouTube): copiar o arquivo para outro PC ou usuário não serve para nada.
+// Chave antiga em texto aberto é protegida sozinha na primeira leitura. Fora do Windows, fica como está.
+let cfgCache = null, cfgMtime = 0;
 function lerConfig() {
   if (!existsSync(ARQ_CONFIG)) return null;
-  try { return JSON.parse(readFileSync(ARQ_CONFIG, 'utf8')); } catch { return null; }
+  try {
+    const m = statSync(ARQ_CONFIG).mtimeMs;
+    if (cfgCache && m === cfgMtime) return { ...cfgCache };
+    const c = JSON.parse(readFileSync(ARQ_CONFIG, 'utf8'));
+    if (typeof c.chave === 'string' && c.chave.startsWith('dpapi:')) c.chave = abrirTexto(c.chave).trim();
+    else if (WIN && typeof c.chave === 'string' && c.chave.startsWith('cx_')) {
+      try { gravarConfig(c); log('Chave do agente protegida pelo Windows no config.json.'); } catch (e) { log('Não consegui proteger a chave (segue em texto):', e.message); }
+    }
+    cfgCache = c; cfgMtime = statSync(ARQ_CONFIG).mtimeMs;
+    return { ...c };
+  } catch (e) { if (typeof log === 'function') log('config.json:', e.message); return null; }
+}
+function gravarConfig(c) {
+  const salvo = { ...c };
+  if (WIN && typeof salvo.chave === 'string' && salvo.chave.startsWith('cx_')) {
+    try { salvo.chave = protegerTexto(salvo.chave); } catch { /* sem PowerShell: fica em texto, como antes */ }
+  }
+  writeFileSync(ARQ_CONFIG, JSON.stringify(salvo, null, 2));
+  cfgCache = null;
 }
 
 const filhos = new Set();   // yt-dlp/ffmpeg rodando agora (para interromper ao desligar)
@@ -466,7 +488,7 @@ function adotarPasta(cfg, nova) {
   try {
     const salvo = lerConfig() || {};
     salvo.pasta = nova;
-    writeFileSync(ARQ_CONFIG, JSON.stringify(salvo, null, 2));
+    gravarConfig(salvo);
   } catch (e) { log('Não consegui gravar a pasta no config.json:', e.message); }
   log(`Pasta dos cortes trocada pelo painel: ${nova}`);
   return true;
@@ -1602,7 +1624,7 @@ if (cmd === 'conectar') {
     process.exit(1);
   }
   const antigo = lerConfig() || {};
-  writeFileSync(ARQ_CONFIG, JSON.stringify({ painel: a1.replace(/\/$/, ''), chave: a2, pasta: antigo.pasta || join(homedir(), 'Videos', 'Cortex') }, null, 2));
+  gravarConfig({ painel: a1.replace(/\/$/, ''), chave: a2, pasta: antigo.pasta || join(homedir(), 'Videos', 'Cortex') });
   try {
     const cfg = lerConfig();
     const oi = await painel(cfg, '/oi', { corpo: { versao: VERSAO, ferramentas: await ferramentas() } });
@@ -1627,7 +1649,7 @@ if (cmd === 'conectar') {
 } else if (cmd === 'pasta') {
   const cfg = lerConfig();
   if (!cfg || !a1) { console.log('Uso: node cortex-agente.mjs pasta "D:\\Videos\\Cortex"'); process.exit(1); }
-  cfg.pasta = resolve(a1); writeFileSync(ARQ_CONFIG, JSON.stringify(cfg, null, 2));
+  cfg.pasta = resolve(a1); gravarConfig(cfg);
   console.log('Os cortes agora vão para:', cfg.pasta);
 } else if (cmd === 'youtube') {
   await conectarYoutube().catch((e) => { console.log('Não conectei:', e.message); process.exit(1); });
