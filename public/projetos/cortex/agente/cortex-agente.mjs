@@ -28,6 +28,9 @@
 //     passa pela régua rígida do painel (em gameplay, buraco é quase sempre barulho do jogo).
 //     2.7.1: na legenda gravada, cada palavra só aparece quando é dita (as próximas ficam
 //     invisíveis no lugar delas) e o bloco sai 0,35 s depois da última palavra.
+//   - "enviar_youtube" (3.0.0, 24/11): envia o vertical pronto de um curto (Short) ao canal do dono
+//     pela YouTube Data API v3. O acesso ao canal fica SÓ neste PC (youtube-token.dat, protegido
+//     pelo Windows); o painel manda só os textos e a privacidade. Ver a seção YouTube abaixo.
 //   - "quadros" (2.1.0): UMA foto pequena do meio de cada curto da Triagem, tirada direto do
 //     endereço do vídeo (não baixa o vídeo). O painel guarda e a IA diz a cena (full cam, jogo
 //     com webcam, só o jogo), para o corte já chegar com o layout vertical certo.
@@ -38,6 +41,8 @@
 //   node cortex-agente.mjs criar-atalho                            cria "Cortex - ligar e desligar" na área de trabalho
 //   node cortex-agente.mjs alternar                                liga se estiver desligado, desliga se estiver ligado
 //   node cortex-agente.mjs iniciar-com-windows | parar-de-iniciar  (opcional) ligar sozinho ao entrar no Windows
+//   node cortex-agente.mjs youtube                                 conecta este PC ao canal do YouTube (uma vez)
+//   node cortex-agente.mjs youtube-sair                            desconecta (revoga o acesso no Google)
 //
 // Desligado, o agente não roda nem consome nada do PC; as tarefas esperam na fila do painel.
 // Ao desligar no meio de um trabalho, ele interrompe, devolve a tarefa para a fila (sem
@@ -54,7 +59,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '2.9.0';
+const VERSAO = '3.0.0';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -269,7 +274,7 @@ async function aproveitarEspera(cfg, ms) {
   const fim = Date.now() + ms;
   while (!parando && fim - Date.now() > 90000) {
     let tarefa = null;
-    try { ({ tarefa } = await painel(cfg, '/proxima', { corpo: { sem: ['texto', 'roteiro'] } })); } catch { tarefa = null; }
+    try { ({ tarefa } = await painel(cfg, '/proxima', { corpo: { sem: ['texto', 'roteiro'], youtube: ytPronto() } })); } catch { tarefa = null; }
     if (parando) break;
     if (!tarefa) { await dorme(Math.min(20000, fim - Date.now())); continue; }   // fila vazia: olha de novo em 20 s
     const espera = atual;
@@ -281,7 +286,7 @@ async function aproveitarEspera(cfg, ms) {
   const resto = fim - Date.now();
   if (resto > 0 && !parando) await dorme(resto);
 }
-const NOME_TAREFA = { baixar_corte: 'download de corte', legenda: 'legenda para revisar', quadros: 'fotos dos cortes' };
+const NOME_TAREFA = { baixar_corte: 'download de corte', legenda: 'legenda para revisar', quadros: 'fotos dos cortes', enviar_youtube: 'envio ao YouTube' };
 
 // 1.8.0 (18/11): a live do canal na Kick, pela API pública do site (a mesma que a página usa).
 // Quem pergunta é o PC (IP de casa); servidor de nuvem a Kick pode bloquear.
@@ -1032,6 +1037,316 @@ async function tarefaLegenda(cfg, t, pasta) {
   log(`Legenda pronta para revisar: ${palavras.length} palavras.`);
 }
 
+// ---------------------------------------------------------------- YouTube (3.0.0, 24/11/2026)
+// Envio dos Shorts direto para o canal do dono (YouTube Data API v3, grátis). Tudo aqui no PC:
+//   - youtube-cliente.json: o "ID do cliente OAuth" (tipo App para computador) que o dono baixou
+//     do Google Cloud DIRETO neste PC. Nunca vai para o painel.
+//   - youtube-token.dat: o acesso ao canal, guardado protegido pelo Windows (DPAPI: só o usuário
+//     do Windows que conectou consegue ler). Nunca vai para o painel.
+//   - youtube-envios.json: registro local de cada envio (ID do vídeo, sessão de retomada). É ele
+//     que impede subir o mesmo Short duas vezes se o painel não receber a resposta.
+// Falha de rede retoma de onde parou; cota esgotada ou acesso vencido pausam SÓ os envios.
+const ARQ_YT_CLIENTE = join(AQUI, 'youtube-cliente.json');
+const ARQ_YT_TOKEN = join(AQUI, 'youtube-token.dat');
+const ARQ_YT_ENVIOS = join(AQUI, 'youtube-envios.json');
+const YT_ESCOPOS = 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly';
+const YT_API = process.env.CORTEX_YT_API || 'https://www.googleapis.com';            // trocável só para teste
+const YT_TOKEN_URL = process.env.CORTEX_YT_TOKEN || 'https://oauth2.googleapis.com/token';
+const YT_PEDACO = 8 * 1024 * 1024;     // múltiplo de 256 KB (exigência do envio em partes)
+let ytToken = null;                    // { acesso, expira } em memória
+let ytConta = null;                    // o que está no youtube-token.dat (lido uma vez)
+let ytPausaAte = 0, ytAviso = null, ytTokenMtime = 0;
+let pedirOi = false;                   // conta ao painel já na próxima volta (pausa, reconexão)
+
+class ErroYT extends Error {
+  constructor(tipo, msg) { super(msg); this.tipo = tipo; this.definitivo = tipo === 'definitivo'; }
+}
+
+function protegerTexto(txt) {
+  if (!WIN) return Buffer.from(txt, 'utf8').toString('base64');
+  const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+    "Add-Type -AssemblyName System.Security; $b = [Text.Encoding]::UTF8.GetBytes([Console]::In.ReadToEnd()); " +
+    "[Convert]::ToBase64String([Security.Cryptography.ProtectedData]::Protect($b, $null, 'CurrentUser'))"],
+  { input: txt, encoding: 'utf8', windowsHide: true });
+  if (r.status !== 0) throw new Error('não consegui proteger o acesso com o Windows: ' + (r.stderr || '').trim().slice(0, 200));
+  return 'dpapi:' + r.stdout.trim();
+}
+function abrirTexto(dado) {
+  if (!dado.startsWith('dpapi:')) return Buffer.from(dado, 'base64').toString('utf8');
+  const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+    "Add-Type -AssemblyName System.Security; $b = [Convert]::FromBase64String([Console]::In.ReadToEnd().Trim()); " +
+    "[Text.Encoding]::UTF8.GetString([Security.Cryptography.ProtectedData]::Unprotect($b, $null, 'CurrentUser'))"],
+  { input: dado.slice(6), encoding: 'utf8', windowsHide: true });
+  if (r.status !== 0) throw new Error('não consegui abrir o acesso guardado (foi conectado por outro usuário do Windows?)');
+  return r.stdout;
+}
+
+function lerContaYT() {
+  if (!existsSync(ARQ_YT_TOKEN)) { ytConta = null; return null; }
+  const m = statSync(ARQ_YT_TOKEN).mtimeMs;
+  if (ytConta && m === ytTokenMtime) return ytConta;
+  try { ytConta = JSON.parse(abrirTexto(readFileSync(ARQ_YT_TOKEN, 'utf8').trim())); } catch (e) { log('YouTube:', e.message); ytConta = null; }
+  // Arquivo novo (reconectou): sai da pausa por acesso vencido.
+  if (ytTokenMtime && m !== ytTokenMtime && ytPausaAte === Infinity) { ytPausaAte = 0; ytAviso = null; pedirOi = true; }
+  ytTokenMtime = m; ytToken = null;
+  return ytConta;
+}
+function ytPronto() { return !!lerContaYT() && Date.now() >= ytPausaAte; }
+function estadoYT() {
+  const c = lerContaYT();
+  if (ytPausaAte && Date.now() >= ytPausaAte && ytPausaAte !== Infinity) { ytPausaAte = 0; ytAviso = null; }
+  return { canal: c ? c.canal : null, aviso: c ? ytAviso : null };
+}
+
+function lerCliente() {
+  let arq = existsSync(ARQ_YT_CLIENTE) ? ARQ_YT_CLIENTE : null;
+  if (!arq) {   // o Google baixa como client_secret_....json: aceito com esse nome também
+    const n = readdirSync(AQUI).find((x) => /^client_secret.*\.json$/i.test(x));
+    if (n) arq = join(AQUI, n);
+  }
+  if (!arq) return null;
+  try {
+    const j = JSON.parse(readFileSync(arq, 'utf8'));
+    const c = j.installed || j.web || j;
+    return c.client_id && c.client_secret ? { id: c.client_id, segredo: c.client_secret } : null;
+  } catch { return null; }
+}
+
+async function pedirToken(campos) {
+  const r = await fetch(YT_TOKEN_URL, {
+    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(campos).toString(), signal: AbortSignal.timeout(60000),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    if (j.error === 'invalid_grant' || j.error === 'invalid_client' || j.error === 'unauthorized_client') {
+      throw new ErroYT('auth', 'O acesso ao YouTube venceu ou foi revogado. No PC, rode: node cortex-agente.mjs youtube');
+    }
+    throw new ErroYT('rede', `o Google recusou o acesso (${j.error || r.status})`);
+  }
+  return j;
+}
+
+async function acessoYT(forcar) {
+  const conta = lerContaYT();
+  if (!conta) throw new ErroYT('auth', 'Este PC não está conectado ao YouTube. Rode: node cortex-agente.mjs youtube');
+  if (!forcar && ytToken && ytToken.expira - Date.now() > 120000) return ytToken.acesso;
+  const cli = lerCliente();
+  if (!cli) throw new ErroYT('auth', 'Falta o youtube-cliente.json na pasta do agente (baixe do Google Cloud de novo).');
+  const j = await pedirToken({ client_id: cli.id, client_secret: cli.segredo, refresh_token: conta.refresh, grant_type: 'refresh_token' });
+  ytToken = { acesso: j.access_token, expira: Date.now() + (Number(j.expires_in) || 3600) * 1000 };
+  return ytToken.acesso;
+}
+
+// Meia-noite no horário do Pacífico: quando a cota diária do YouTube renova.
+function renovaCotaYT() {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hourCycle: 'h23', hour: 'numeric', minute: 'numeric', second: 'numeric' })
+    .formatToParts(new Date()).map((x) => [x.type, x.value]));
+  const passou = (Number(p.hour) % 24) * 3600 + Number(p.minute) * 60 + Number(p.second);
+  return Date.now() + (24 * 3600 - passou) * 1000 + 5 * 60000;
+}
+
+// Conectar (uma vez): login no navegador, a resposta volta para este próprio PC (127.0.0.1),
+// com PKCE. Sem servidor externo e sem copiar código à mão.
+async function conectarYoutube() {
+  const cli = lerCliente();
+  if (!cli) {
+    console.log('Falta o arquivo do Google nesta pasta:', AQUI);
+    console.log('No Google Cloud: Credenciais > ID do cliente OAuth (tipo "App para computador") > baixar JSON.');
+    console.log('Salve aqui com o nome youtube-cliente.json e rode de novo.');
+    process.exit(1);
+  }
+  const { createServer } = await import('node:http');
+  const { randomBytes, createHash } = await import('node:crypto');
+  const b64 = (b) => b.toString('base64url');
+  const verificador = b64(randomBytes(48)), estadoOk = b64(randomBytes(16));
+  const servidor = createServer();
+  await new Promise((ok) => servidor.listen(0, '127.0.0.1', ok));
+  const retorno = `http://127.0.0.1:${servidor.address().port}`;
+  const url = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({
+    client_id: cli.id, redirect_uri: retorno, response_type: 'code', scope: YT_ESCOPOS, access_type: 'offline', prompt: 'consent',
+    code_challenge: b64(createHash('sha256').update(verificador).digest()), code_challenge_method: 'S256', state: estadoOk,
+  });
+  const codigo = new Promise((ok, falha) => {
+    const prazo = setTimeout(() => falha(new Error('passaram 5 min sem o login; rode de novo')), 5 * 60000);
+    servidor.on('request', (req, res) => {
+      const q = new URL(req.url, retorno).searchParams;
+      if (!q.get('code') && !q.get('error')) { res.writeHead(404); res.end(); return; }
+      const certo = q.get('state') === estadoOk && q.get('code');
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(`<meta charset="utf-8"><body style="font:16px system-ui;padding:2rem;background:#0d0e11;color:#eee">` +
+        (certo ? '<h2>Pronto: YouTube conectado ao Cortex.</h2><p>Pode fechar esta aba e voltar à janela do agente.</p>'
+               : '<h2>Não deu certo.</h2><p>Volte à janela do agente para ver o motivo.</p>') + '</body>');
+      clearTimeout(prazo);
+      if (certo) ok(q.get('code')); else falha(new Error(q.get('error') === 'access_denied' ? 'você recusou o acesso na tela do Google' : 'resposta do Google não confere'));
+    });
+  });
+  console.log('Abrindo o navegador para entrar na conta do Google do canal…');
+  console.log('Se não abrir, copie este endereço no navegador:\n' + url + '\n');
+  if (WIN) spawn('rundll32', ['url.dll,FileProtocolHandler', url], { detached: true, stdio: 'ignore' }).unref();
+  else spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [url], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
+  try {
+    const code = await codigo;
+    const tk = await pedirToken({ code, client_id: cli.id, client_secret: cli.segredo, redirect_uri: retorno, grant_type: 'authorization_code', code_verifier: verificador });
+    if (!tk.refresh_token) throw new Error('o Google não devolveu o acesso permanente; em myaccount.google.com > Segurança > Apps com acesso, remova o Cortex e rode de novo');
+    const r = await fetch(YT_API + '/youtube/v3/channels?part=snippet&mine=true', { headers: { authorization: 'Bearer ' + tk.access_token }, signal: AbortSignal.timeout(60000) });
+    const j = await r.json().catch(() => ({}));
+    const canal = j.items && j.items[0];
+    if (!canal) throw new Error('essa conta do Google não tem canal no YouTube (escolha o canal certo na tela do Google)');
+    writeFileSync(ARQ_YT_TOKEN, protegerTexto(JSON.stringify({ refresh: tk.refresh_token, canal: canal.snippet.title, canal_id: canal.id, em: new Date().toISOString() })), { mode: 0o600 });
+    console.log(`\nConectado ao canal "${canal.snippet.title}".`);
+    console.log('O acesso ficou guardado só neste PC (protegido pelo Windows). O painel só fica sabendo o nome do canal.');
+    const cfg = lerConfig();
+    if (cfg) await painel(cfg, '/oi', { corpo: { versao: VERSAO, youtube: { canal: canal.snippet.title, aviso: null } } }).catch(() => {});
+  } finally { servidor.close(); }
+}
+
+async function desconectarYoutube() {
+  const conta = lerContaYT();
+  if (!conta) { console.log('Este PC não está conectado ao YouTube.'); return; }
+  // Revoga no Google também (o acesso deixa de valer em qualquer lugar).
+  await fetch('https://oauth2.googleapis.com/revoke?' + new URLSearchParams({ token: conta.refresh }), { method: 'POST', signal: AbortSignal.timeout(30000) }).catch(() => {});
+  unlinkSync(ARQ_YT_TOKEN);
+  const cfg = lerConfig();
+  if (cfg) await painel(cfg, '/oi', { corpo: { versao: VERSAO, youtube: { canal: null, aviso: null } } }).catch(() => {});
+  console.log(`Desconectado do canal "${conta.canal}". O registro dos envios (youtube-envios.json) continua aqui.`);
+}
+
+function lerEnvios() { try { return JSON.parse(readFileSync(ARQ_YT_ENVIOS, 'utf8')); } catch { return {}; } }
+function gravarEnvio(corteId, dados) {
+  const todos = lerEnvios();
+  todos[corteId] = { ...(todos[corteId] || {}), ...dados };
+  writeFileSync(ARQ_YT_ENVIOS + '.novo', JSON.stringify(todos, null, 1));
+  renameSync(ARQ_YT_ENVIOS + '.novo', ARQ_YT_ENVIOS);
+}
+
+// Envios que subiram mas o painel não ficou sabendo (tarefa venceu, painel fora): avisa agora.
+async function sincronizarEnvios(cfg) {
+  const todos = lerEnvios();
+  for (const [corteId, e] of Object.entries(todos)) {
+    if (!e.video || e.avisado) continue;
+    try {
+      await painel(cfg, '/youtube/registrar', { corpo: { corte_id: Number(corteId), youtube_id: e.video } });
+      gravarEnvio(corteId, { avisado: true });
+      log(`YouTube: o painel ficou sabendo do envio do corte ${corteId} (${e.video}).`);
+    } catch (err) { if (!(err instanceof ErroPainel) || err.status >= 500) return; gravarEnvio(corteId, { avisado: true }); }
+  }
+}
+
+// Erro da API do YouTube -> o que fazer (cota: pausa; acesso: pausa até reconectar; texto: definitivo).
+async function erroDaApi(r) {
+  const j = await r.json().catch(() => ({}));
+  const motivo = (j.error && j.error.errors && j.error.errors[0] && j.error.errors[0].reason) || (j.error && j.error.status) || '';
+  const msg = (j.error && j.error.message) || `YouTube respondeu ${r.status}`;
+  if (/quotaExceeded|uploadLimitExceeded|dailyLimitExceeded/i.test(motivo)) return new ErroYT('cota', 'cota diária de envios do YouTube esgotada');
+  if (r.status === 401) return new ErroYT('auth', 'o YouTube recusou o acesso deste PC: rode node cortex-agente.mjs youtube');
+  if (r.status === 429 || r.status >= 500 || /rateLimitExceeded|backendError/i.test(motivo)) return new ErroYT('rede', `YouTube ocupado (${motivo || r.status})`);
+  if (/youtubeSignupRequired|forbidden|insufficientPermissions/i.test(motivo)) return new ErroYT('auth', `o YouTube recusou o envio para este canal (${motivo}): rode node cortex-agente.mjs youtube`);
+  return new ErroYT('definitivo', `o YouTube recusou o vídeo: ${msg} (${motivo || r.status})`);
+}
+
+async function ytFetch(url, init, tentouAcesso) {
+  let r;
+  try {
+    r = await fetch(url, { ...init, headers: { ...init.headers, authorization: 'Bearer ' + await acessoYT() }, signal: AbortSignal.timeout(5 * 60000) });
+  } catch (e) {
+    if (e instanceof ErroYT) throw e;
+    throw new ErroYT('rede', 'sem conexão com o YouTube (' + (e.cause && e.cause.code || e.message) + ')');
+  }
+  if (r.status === 401 && !tentouAcesso) { await acessoYT(true); return ytFetch(url, init, true); }
+  return r;
+}
+
+async function enviarYoutube(cfg, t) {
+  const e = t.envio, c = t.corte;
+  if (!e || !c) throw new ErroYT('definitivo', 'tarefa de envio sem os dados do Short');
+  const chave = String(c.id);
+  const concluir = async (video) => {
+    gravarEnvio(chave, { video, em: new Date().toISOString(), sessao: null });
+    await painel(cfg, `/tarefas/${t.id}/concluir`, { corpo: { youtube_id: video } });
+    gravarEnvio(chave, { avisado: true });
+    log(`YouTube: Short enviado (${e.privacidade}): https://youtu.be/${video}`);
+  };
+  if (e.ja_enviado) return concluir(e.ja_enviado);
+  const reg = lerEnvios()[chave] || {};
+  if (reg.video && !(e.ignorar || []).includes(reg.video)) {
+    log(`YouTube: este Short já tinha subido (${reg.video}); só aviso o painel.`);
+    return concluir(reg.video);
+  }
+  if (!e.arquivo || !existsSync(e.arquivo)) throw new ErroYT('definitivo', `o arquivo do Short não está mais em ${e.arquivo || '(sem caminho)'}: foi movido ou apagado. Use "Baixar de novo"`);
+  const st = statSync(e.arquivo), tamanho = st.size;
+  if (tamanho < 1000) throw new ErroYT('definitivo', 'o arquivo do Short está vazio');
+
+  // Sessão de envio (vale ~1 semana): reaproveita se o arquivo é o mesmo; senão abre outra.
+  let sessao = reg.sessao && reg.tamanho === tamanho && reg.mtime === st.mtimeMs && Date.now() - Date.parse(reg.sessao_em || 0) < 5 * 86400000 ? reg.sessao : null;
+  const abrirSessao = async () => {
+    const r = await ytFetch(YT_API + '/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json; charset=UTF-8', 'x-upload-content-length': String(tamanho), 'x-upload-content-type': 'video/mp4' },
+      body: JSON.stringify({
+        snippet: { title: e.titulo, description: e.descricao, tags: e.tags, categoryId: '20', defaultLanguage: 'pt-BR', defaultAudioLanguage: 'pt-BR' },
+        status: { privacyStatus: e.privacidade || 'private', selfDeclaredMadeForKids: false, embeddable: true },
+      }),
+    });
+    if (!r.ok) throw await erroDaApi(r);
+    const loc = r.headers.get('location');
+    if (!loc) throw new ErroYT('rede', 'o YouTube não abriu a sessão de envio');
+    gravarEnvio(chave, { sessao: loc, sessao_em: new Date().toISOString(), tamanho, mtime: st.mtimeMs });
+    return loc;
+  };
+  // Onde o envio parou: 308 + Range = continuar daí; 200/201 = já terminou.
+  const conferir = async () => {
+    const r = await ytFetch(sessao, { method: 'PUT', headers: { 'content-range': `bytes */${tamanho}` }, body: Buffer.alloc(0) });
+    if (r.status === 200 || r.status === 201) return { video: (await r.json()).id };
+    if (r.status === 308) { const m = (r.headers.get('range') || '').match(/bytes=0-(\d+)/); return { de: m ? Number(m[1]) + 1 : 0 }; }
+    if (r.status === 404 || r.status === 410) return { velha: true };
+    throw await erroDaApi(r);
+  };
+
+  const { openSync, readSync, closeSync } = await import('node:fs');
+  const fd = openSync(e.arquivo, 'r');
+  let falhas = 0, de = 0, ultimoAviso = 0;
+  try {
+    for (;;) {
+      if (parando) throw new Error('desligando');
+      try {
+        if (!sessao) { sessao = await abrirSessao(); de = 0; }
+        else {
+          const s = await conferir();
+          if (s.video) return await concluir(s.video);
+          if (s.velha) { sessao = null; continue; }
+          de = s.de;
+        }
+        while (de < tamanho) {
+          if (parando) throw new Error('desligando');
+          const n = Math.min(YT_PEDACO, tamanho - de), buf = Buffer.alloc(n);
+          readSync(fd, buf, 0, n, de);
+          const r = await ytFetch(sessao, { method: 'PUT', headers: { 'content-range': `bytes ${de}-${de + n - 1}/${tamanho}` }, body: buf });
+          if (r.status === 200 || r.status === 201) {
+            const j = await r.json().catch(() => ({}));
+            if (!j.id) throw new ErroYT('rede', 'o YouTube terminou o envio mas não mandou o ID');
+            return await concluir(j.id);
+          }
+          if (r.status !== 308) throw await erroDaApi(r);
+          const m = (r.headers.get('range') || '').match(/bytes=0-(\d+)/);
+          de = m ? Number(m[1]) + 1 : 0;
+          falhas = 0;
+          if (Date.now() - ultimoAviso > 10000) {
+            ultimoAviso = Date.now();
+            painel(cfg, `/tarefas/${t.id}/prorrogar`, { corpo: { progresso: `enviando ao YouTube ${Math.floor(de / tamanho * 100)}%` } }).catch(() => {});
+          }
+        }
+        // Mandou tudo sem resposta final: confere na volta.
+      } catch (err) {
+        if (!(err instanceof ErroYT) || err.tipo !== 'rede' || ++falhas > 6) throw err;
+        const espera = Math.min(60, 2 ** falhas) * 1000;
+        log(`YouTube: ${err.message}; retomo de onde parou em ${espera / 1000}s (tentativa ${falhas} de 6).`);
+        await dorme(espera);
+      }
+    }
+  } finally { closeSync(fd); }
+}
+
 // ---------------------------------------------------------------- laço principal
 async function executar(cfg, t, emEspera) {
   const pasta = join(tmpdir(), 'cortex-' + t.id + '-' + Date.now());
@@ -1043,6 +1358,7 @@ async function executar(cfg, t, emEspera) {
   try {
     if (t.tipo === 'texto') await tarefaTexto(cfg, t, pasta);
     else if (t.tipo === 'roteiro') await tarefaRoteiro(cfg, t);
+    else if (t.tipo === 'enviar_youtube') await enviarYoutube(cfg, t);    // conclui lá dentro (registro local primeiro)
     else if (t.tipo === 'legenda') {
       await tarefaLegenda(cfg, t, pasta);
       await painel(cfg, `/tarefas/${t.id}/concluir`, { corpo: {} });
@@ -1056,6 +1372,19 @@ async function executar(cfg, t, emEspera) {
   } catch (e) {
     if (parando) return;    // interrompida pelo "desligar": quem devolve a tarefa é parar()
     if (e instanceof ErroPainel && e.dados.perdida) { log('A tarefa saiu deste PC (cancelada ou venceu o prazo).'); return; }
+    // 3.0.0: cota esgotada ou acesso vencido pausam SÓ os envios ao YouTube; o Short volta para a
+    // fila (sem contar falha) e o resto do trabalho do PC segue normal.
+    if (e instanceof ErroYT && (e.tipo === 'cota' || e.tipo === 'auth')) {
+      if (e.tipo === 'cota') {
+        ytPausaAte = renovaCotaYT();
+        const h = new Date(ytPausaAte);
+        ytAviso = `cota do YouTube esgotada: os envios voltam às ${dois(h.getHours())}:${dois(h.getMinutes())}`;
+      } else { ytPausaAte = Infinity; ytAviso = 'YouTube desconectado: no PC, rode node cortex-agente.mjs youtube'; }
+      pedirOi = true;
+      log(`YouTube: ${e.message}. Envios pausados; o resto da fila continua.`);
+      await painel(cfg, `/tarefas/${t.id}/devolver`, { corpo: { motivo: ytAviso } }).catch(() => {});
+      return;
+    }
     const definitivo = !!(e.definitivo || (e instanceof ErroPainel && e.dados.definitivo));
     log(`FALHOU (tentativa ${t.tentativa}): ${e.message}`);
     await painel(cfg, `/tarefas/${t.id}/falhar`, { corpo: { erro: e.message, definitivo } }).catch((e2) => log('Não consegui avisar o painel da falha:', e2.message));
@@ -1117,14 +1446,17 @@ async function principal() {
   let espera = 20000, oiEm = 0;
   while (!parando) {
     try {
-      if (Date.now() - oiEm > 10 * 60000) {
-        const oi = await painel(cfg, '/oi', { corpo: { versao: VERSAO, ferramentas: f, pasta: cfg.pasta } });
+      lerContaYT();      // reconectou em outra janela? sai da pausa e avisa o painel
+      if (pedirOi || Date.now() - oiEm > 10 * 60000) {
+        pedirOi = false;
+        const oi = await painel(cfg, '/oi', { corpo: { versao: VERSAO, ferramentas: f, pasta: cfg.pasta, youtube: estadoYT() } });
+        await sincronizarEnvios(cfg);
         oiEm = Date.now();
         if (adotarPasta(cfg, oi.pasta)) oiEm = 0;      // conta a pasta nova ao painel na próxima volta
         log(`Conectado como PC "${oi.nome}"${oi.baixa_cortes ? '' : ' (sem receber downloads de corte)'}.`);
         if (oi.versao_atual && oi.versao_atual !== VERSAO) await atualizar(cfg, oi.versao_atual);
       }
-      const { tarefa } = await painel(cfg, '/proxima');
+      const { tarefa } = await painel(cfg, '/proxima', { corpo: { youtube: ytPronto() } });
       espera = 20000;
       if (parando) break;            // pediu para desligar enquanto perguntava: não pega nada
       if (tarefa) { await executar(cfg, tarefa); continue; }   // terminou uma: já pede a próxima
@@ -1297,8 +1629,12 @@ if (cmd === 'conectar') {
   if (!cfg || !a1) { console.log('Uso: node cortex-agente.mjs pasta "D:\\Videos\\Cortex"'); process.exit(1); }
   cfg.pasta = resolve(a1); writeFileSync(ARQ_CONFIG, JSON.stringify(cfg, null, 2));
   console.log('Os cortes agora vão para:', cfg.pasta);
+} else if (cmd === 'youtube') {
+  await conectarYoutube().catch((e) => { console.log('Não conectei:', e.message); process.exit(1); });
+} else if (cmd === 'youtube-sair') {
+  await desconectarYoutube();
 } else if (!cmd) {
   principal().catch((e) => { log('Erro inesperado:', e.stack || e.message); process.exit(1); });
 } else {
-  console.log('Comandos: conectar | criar-atalho | alternar | pasta "<caminho>" | iniciar-com-windows | parar-de-iniciar | (vazio para rodar)');
+  console.log('Comandos: conectar | criar-atalho | alternar | pasta "<caminho>" | iniciar-com-windows | parar-de-iniciar | youtube | youtube-sair | (vazio para rodar)');
 }

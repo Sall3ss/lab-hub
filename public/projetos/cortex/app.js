@@ -183,7 +183,7 @@
   // O que o PC está fazendo com este cartão, em uma linha.
   // 22/11: quantas tarefas o PC faz antes desta, na mesma ordem do servidor (maquina.js, PRIORIDADE):
   // legenda > roteiro > fotos > texto > download; empate pela ordem de chegada.
-  var PRIO_FILA = { legenda: 0, roteiro: 1, quadros: 2, texto: 3, baixar_corte: 4 };
+  var PRIO_FILA = { legenda: 0, roteiro: 1, enviar_youtube: 2, quadros: 3, texto: 4, baixar_corte: 5 };   // igual a PRIORIDADE em maquina.js
   function naFrente(x) {
     var fila = estado.fila || [];
     var t = fila.find(function (f) {
@@ -236,6 +236,8 @@
         '<span class="col-qtd">' + itens.length + '</span>' +
         // 23/11: voltar cortes para a Triagem em lote (refazer com as regras novas)
         ((col.id === 'download' || col.id === 'edicao') && itens.length ? '<button type="button" class="col-volta" data-voltar="1" title="Voltar cortes para a Triagem">↩ Triagem</button>' : '') +
+        // 24/11: enviar Shorts da Edição ao YouTube, em lote
+        (col.id === 'edicao' && itens.some(podeEnviarYT) ? '<button type="button" class="col-volta" data-yt-lote="1" title="Enviar Shorts ao YouTube">▲ YouTube</button>' : '') +
         '</header><div class="col-lista">' +
         (itens.length ? itens.map(col.grupo === 'video' ? cartaoVideo : cartaoCorte).join('') : '<p class="col-vazia">' + esc(VAZIO[col.id]) + '</p>') +
         '</div></section>';
@@ -352,7 +354,8 @@
       '<button type="button" class="mini nao" data-acao="descartado" data-corte="' + c.id + '">✕ Descartar</button>';
     else if (c.estado === 'download' && c.erro) acoes = '<button type="button" class="mini sim" data-tentar-corte="' + c.id + '">↻ Tentar de novo</button><button type="button" class="mini nao" data-acao="triagem" data-corte="' + c.id + '">Cancelar</button>';
     else if (c.estado === 'download' && c.tarefa_estado !== 'pega') acoes = '<button type="button" class="mini nao" data-acao="triagem" data-corte="' + c.id + '">Cancelar</button>';
-    else if (c.estado === 'edicao') acoes = '<button type="button" class="mini sim" data-acao="publicado" data-corte="' + c.id + '">✓ Publicado</button>';
+    else if (c.estado === 'edicao') acoes = '<button type="button" class="mini sim" data-acao="publicado" data-corte="' + c.id + '">✓ Publicado</button>' +
+      (podeEnviarYT(c) ? '<button type="button" class="mini yt" data-yt-enviar="' + c.id + '" title="Enviar este Short ao canal pelo PC">▲ YouTube</button>' : '');
     var st = c.estado === 'download' || c.erro ? situacao({ erro: c.erro, tarefa_estado: c.tarefa_estado, tarefa_pc: c.tarefa_pc, tarefa_progresso: c.tarefa_progresso, tarefa_atualizada: c.tarefa_atualizada, corte_fila: true, corte_id: c.id }, 'baixando…') : '';
     return '<div role="button" tabindex="0" class="cartao ' + c.tipo + '" data-corte-abrir="' + c.id + '">' +
       '<div class="c-linha"><span class="tipo ' + c.tipo + '">' + (c.tipo === 'longo' ? 'LONGO' : 'CURTO') + '</span>' +
@@ -373,12 +376,15 @@
         : c.tipo === 'curto' && !c.baixar_fora && c.estado !== 'publicado'
           ? '<div class="c-layout sem" title="Abra o corte e escolha um layout para o PC gerar o vertical legendado">▭ só horizontal · sem layout</div>' : '') +
       (c.qualidade ? '<div class="c-qual" title="' + esc(c.qualidade) + '">▣ ' + esc(c.qualidade.split(' · ').slice(0, 2).join(' · ')) +
-        (/· legendado/.test(c.qualidade) ? ' · legendado' : /legenda FALHOU/.test(c.qualidade) ? ' · <span style="color:var(--perigo)">sem legenda</span>' : '') + '</div>' : '') + st +
+        (/· legendado/.test(c.qualidade) ? ' · legendado' : /legenda FALHOU/.test(c.qualidade) ? ' · <span style="color:var(--perigo)">sem legenda</span>' : '') + '</div>' : '') + linhaYT(c) + st +
       (acoes ? '<div class="c-acoes">' + acoes + '</div>' : '') + '</div>';
   }
 
   quadroEl.addEventListener('click', function (ev) {
     if (ev.target.closest('[data-voltar]')) { ev.stopPropagation(); abrirVoltar(); return; }
+    if (ev.target.closest('[data-yt-lote]')) { ev.stopPropagation(); abrirEnvioYT(); return; }
+    var ye = ev.target.closest('[data-yt-enviar]');
+    if (ye) { ev.stopPropagation(); enviarUmYT(Number(ye.dataset.ytEnviar), ye); return; }
     var tn = ev.target.closest('[data-tentar-corte]');
     if (tn) { ev.stopPropagation(); tentar('cortes', Number(tn.dataset.tentarCorte), tn); return; }
     var b = ev.target.closest('[data-acao]');
@@ -1109,7 +1115,7 @@
               (c.arquivo_local ? '<dt>No PC</dt><dd style="font-family:var(--mono);font-size:.78rem">' + esc(c.arquivo_local) + '</dd>' : '') +
               (c.qualidade ? '<dt>Qualidade</dt><dd style="font-family:var(--mono);font-size:.78rem">' + esc(c.qualidade) + '</dd>' : '') +
               (c.erro ? '<dt>Falha</dt><dd style="color:var(--perigo)">' + esc(c.erro) + '</dd>' : '') + '</dl>') +
-      ia + (fora ? blocoFora(c, v) : '') +
+      ia + (fora ? blocoFora(c, v) : '') + (novo ? '' : blocoYT(c)) +
       (acoesEstado ? '<div class="acoes">' + acoesEstado + '</div>' : '') +
       '<form class="bloco" id="f-corte" novalidate>' +
       '<div class="campo"><span>Tipo</span><div class="escolha" id="esc-tipo"><button type="button" data-v="curto">Curto · 45-90 s</button><button type="button" data-v="longo">Longo · 30-40 min</button></div></div>' +
@@ -1144,6 +1150,7 @@
       (novo ? '' : '<button class="btn btn-perigo" type="button" id="c-excluir" style="margin-left:auto">Excluir</button>') + '</div></form>',
       function (box) {
         var f = box.querySelector('#f-corte'), tipo = c.tipo;
+        if (!novo) ligarBlocoYT(box, c);
         box.querySelectorAll('[data-copia]').forEach(function (b) { b.onclick = function () { copiar(b, b.dataset.copia); }; });
         var bf = box.querySelector('#c-ficha');
         if (bf) bf.onclick = function () {
@@ -1332,6 +1339,250 @@
         };
       });
   }
+
+  // ---------- YouTube: envio dos Shorts ao canal (24/11) ----------
+  // O painel só pede: quem envia é o PC que tem o arquivo, com o acesso ao canal guardado nele.
+  var PRIV = { private: 'Privado', unlisted: 'Não listado', public: 'Público' };
+  var MARCA_TXT = { descricao: 'texto da IA, sem as hashtags', hashtags: 'até 5, sempre com #Shorts', titulo: 'título do corte', criador: 'canal da live', link_live: 'link da live original' };
+  function cfgYoutube() { return api('/youtube'); }
+  function podeEnviarYT(c) {
+    return c.tipo === 'curto' && c.estado === 'edicao' && !!(c.tem_arquivo || c.arquivo_local) && !c.baixar_fora && !c.youtube_id &&
+      c.youtube_estado !== 'fila' && c.youtube_estado !== 'enviando' && !/vertical FALHOU/.test(c.qualidade || '');
+  }
+  function semPC(t) { return String(t || '').replace(/^[^:]{1,40}: /, ''); }
+  function linhaYT(c) {
+    if (c.tipo !== 'curto') return '';
+    if (c.youtube_id) return '<div class="c-yt ok" title="ID ' + esc(c.youtube_id) + '">▶ No YouTube · ' + esc((PRIV[c.youtube_privacidade] || 'enviado').toLowerCase()) + '</div>';
+    if (c.youtube_estado === 'enviando' && c.youtube_progresso) return '<div class="c-yt">▲ ' + esc(c.youtube_progresso) + '</div>';
+    if (c.youtube_estado === 'fila' || c.youtube_estado === 'enviando') {
+      return '<div class="c-yt"' + (c.youtube_erro ? ' title="' + esc(c.youtube_erro) + '"' : '') + '>▲ YouTube: na fila' + (c.youtube_erro ? ' · ' + esc(semPC(c.youtube_erro)) : '') + '</div>';
+    }
+    if (c.youtube_estado === 'erro') return '<div class="c-yt erro" title="' + esc(c.youtube_erro || '') + '">✕ YouTube: ' + esc(semPC(c.youtube_erro) || 'falhou') + '</div>';
+    return '';
+  }
+  function escolhaPriv(id, valor) {
+    return '<div class="escolha esc-priv" id="' + id + '">' + Object.keys(PRIV).map(function (k) {
+      return '<button type="button" data-v="' + k + '"' + (k === valor ? ' class="on"' : '') + '>' + PRIV[k] + '</button>';
+    }).join('') + '</div>';
+  }
+  function ligarPriv(el, aoMudar) {
+    el.addEventListener('click', function (ev) {
+      var b = ev.target.closest('button[data-v]'); if (!b) return;
+      el.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
+      if (aoMudar) aoMudar(b.dataset.v);
+    });
+    return function () { var on = el.querySelector('button.on'); return on ? on.dataset.v : 'private'; };
+  }
+  function resultadoEnvio(r) {
+    var txt = r.na_fila ? r.na_fila + (r.na_fila === 1 ? ' Short foi' : ' Shorts foram') + ' para a fila de envio do PC.' : 'Nenhum Short foi para a fila.';
+    if (r.ficaram && r.ficaram.length) txt += ' ' + r.ficaram.length + ' ficou' + (r.ficaram.length > 1 ? 'aram' : '') + ' de fora: ' + r.ficaram.slice(0, 3).map(function (f) { return f.motivo; }).join('; ') + (r.ficaram.length > 3 ? '…' : '') + '.';
+    return txt;
+  }
+  function enviarYT(ids, priv) { return api('/youtube/enviar', { metodo: 'POST', corpo: { ids: ids, privacidade: priv } }); }
+
+  // Botão do cartão: um Short, com a privacidade padrão (confirma antes).
+  function enviarUmYT(id, botao) {
+    botao.disabled = true;
+    cfgYoutube().then(function (cfg) {
+      var ok = cfg.pcs.filter(function (p) { return p.youtube_canal; });
+      return confirmar('Enviar este Short ao YouTube como ' + PRIV[cfg.privacidade].toUpperCase() + '?' +
+        (ok.length ? ' Quem envia é o PC que tem o arquivo (canal "' + ok[0].youtube_canal + '").' : ' Atenção: nenhum PC está conectado ao YouTube ainda; o envio espera na fila (veja ▲ YouTube no topo).'), 'Enviar').then(function (sim) {
+        if (!sim) { botao.disabled = false; return; }
+        return enviarYT([id], cfg.privacidade).then(function (r) { (r.na_fila ? aviso : function (t) { aviso(t, true); })(resultadoEnvio(r)); return carregar(); });
+      });
+    }).catch(function (e) { botao.disabled = false; aviso(e.message, true); });
+  }
+
+  // Envio em lote, da coluna Edição: escolhe por canal, como no "↩ Triagem".
+  function abrirEnvioYT() {
+    cfgYoutube().then(function (cfg) {
+      var lista = estado.cortes.filter(podeEnviarYT);
+      var grupos = {};
+      lista.forEach(function (c) { var k = c.video_canal || c.video_titulo || 'sem canal'; (grupos[k] = grupos[k] || []).push(c); });
+      var nomes = Object.keys(grupos).sort(function (a, b) { return grupos[b].length - grupos[a].length; });
+      var conectados = cfg.pcs.filter(function (p) { return p.youtube_canal; });
+      var html = '<p style="margin:0;color:var(--metal);font-size:.84rem">Só Shorts (curtos) da Edição, já baixados pelo PC. Quem envia é o PC que tem o arquivo; o mesmo Short nunca sobe duas vezes.</p>' +
+        (conectados.length ? '' : '<p class="alerta">Nenhum PC conectado ao YouTube ainda. Os envios esperam na fila até você conectar (botão ▲ YouTube no topo).</p>') +
+        (lista.length ? '<div class="campo"><span>Privacidade</span>' + escolhaPriv('lote-priv', cfg.privacidade) +
+          '<small class="dica-layout">Privado: só você vê; revise no YouTube Studio e publique de lá.</small></div>' +
+          '<div class="volta-lista">' + nomes.map(function (n, g) {
+            return '<div class="volta-grupo"><label class="volta-cab"><input type="checkbox" data-grupo-todo="' + g + '" checked> <b>' + esc(n) + '</b> <span>' + grupos[n].length + '</span></label>' +
+              grupos[n].map(function (c) {
+                return '<label class="volta-item"><input type="checkbox" data-g="' + g + '" value="' + c.id + '" checked> <span>' + esc(c.titulo) + '</span></label>';
+              }).join('') + '</div>';
+          }).join('') + '</div>' +
+          '<p class="msg-form" id="lote-msg"></p><div class="acoes"><button class="btn btn-cor" type="button" id="lote-ok">Enviar</button><button class="btn btn-fino" type="button" id="lote-nao">Cancelar</button></div>'
+          : '<p class="col-vazia">Nenhum Short pronto para enviar: precisa estar na Edição, baixado pelo PC e ainda sem envio.</p><div class="acoes"><button class="btn btn-fino" type="button" id="lote-nao">Fechar</button></div>');
+      abrirGaveta('Enviar Shorts ao YouTube', html, function (box) {
+        box.querySelector('#lote-nao').onclick = fecharGaveta;
+        if (!lista.length) return;
+        var priv = ligarPriv(box.querySelector('#lote-priv'));
+        var ok = box.querySelector('#lote-ok');
+        function marcados() { return Array.prototype.filter.call(box.querySelectorAll('input[data-g]'), function (i) { return i.checked; }); }
+        function contar() {
+          var n = marcados().length; ok.disabled = !n; ok.textContent = n ? 'Enviar ' + n + (n === 1 ? ' Short' : ' Shorts') : 'Enviar';
+          box.querySelectorAll('[data-grupo-todo]').forEach(function (t) {
+            var itens = box.querySelectorAll('input[data-g="' + t.dataset.grupoTodo + '"]'), m = Array.prototype.filter.call(itens, function (i) { return i.checked; }).length;
+            t.checked = m === itens.length; t.indeterminate = m > 0 && m < itens.length;
+          });
+        }
+        box.addEventListener('change', function (ev) {
+          var t = ev.target;
+          if (t.dataset.grupoTodo != null) box.querySelectorAll('input[data-g="' + t.dataset.grupoTodo + '"]').forEach(function (i) { i.checked = t.checked; });
+          contar();
+        });
+        contar();
+        ok.onclick = function () {
+          var ids = marcados().map(function (i) { return Number(i.value); }), p = priv();
+          confirmar('Enviar ' + ids.length + (ids.length === 1 ? ' Short' : ' Shorts') + ' ao YouTube como ' + PRIV[p].toUpperCase() + '? O PC envia um por vez (a cota grátis do YouTube é de cerca de 100 envios por dia).', 'Enviar').then(function (sim) {
+            if (!sim) return;
+            ok.disabled = true;
+            enviarYT(ids, p).then(function (r) { fecharGaveta(); alertaQuadro(resultadoEnvio(r)); carregar(); })
+              .catch(function (e) { var m = box.querySelector('#lote-msg'); m.textContent = e.message; m.className = 'msg-form erro'; contar(); });
+          });
+        };
+      });
+    }).catch(function (e) { aviso(e.message, true); });
+  }
+
+  // Na gaveta do curto: estado, links, enviar/cancelar/desvincular e o texto exato que vai.
+  function blocoYT(c) {
+    if (c.tipo !== 'curto' || c.baixar_fora || !(c.estado === 'edicao' || c.estado === 'publicado' || c.youtube_id || c.youtube_estado)) return '';
+    return '<div class="caixa-yt" id="caixa-yt"><b class="pub-tit">YOUTUBE · SHORT</b><div id="yt-corpo"><p class="leg-msg">Carregando…</p></div></div>';
+  }
+  function ligarBlocoYT(box, c) {
+    var el = box.querySelector('#yt-corpo'); if (!el) return;
+    var q = estado.cortes.find(function (x) { return x.id === c.id; }) || {};
+    ['youtube_progresso', 'tem_arquivo'].forEach(function (k) { if (q[k] != null) c[k] = q[k]; });
+    cfgYoutube().then(function (cfg) {
+      var h = '';
+      if (c.youtube_id) {
+        h = '<p class="leg-msg">▶ Enviado como <b>' + esc((PRIV[c.youtube_privacidade] || '?').toLowerCase()) + '</b>' + (c.youtube_em ? ' em ' + esc(data(c.youtube_em)) : '') + '. Revise e publique pelo YouTube Studio.</p>' +
+          '<div class="fora-acoes"><a class="btn btn-cor" href="https://studio.youtube.com/video/' + encodeURIComponent(c.youtube_id) + '/edit" target="_blank" rel="noopener">Abrir no Studio ↗</a>' +
+          '<a class="btn btn-fino" href="https://youtube.com/shorts/' + encodeURIComponent(c.youtube_id) + '" target="_blank" rel="noopener">Ver o Short ↗</a>' +
+          '<button type="button" class="btn btn-fino" id="yt-desv" title="Para enviar de novo (ex.: depois de Baixar de novo)">Desvincular</button></div>';
+      } else if (c.youtube_estado === 'fila' || c.youtube_estado === 'enviando') {
+        h = '<p class="leg-msg">▲ ' + esc(c.youtube_progresso || 'Na fila de envio do PC.') + (c.youtube_erro ? '<br><span style="color:var(--aviso,#f5b942)">' + esc(c.youtube_erro) + '</span>' : '') + '</p>' +
+          '<div class="fora-acoes"><button type="button" class="btn btn-fino" id="yt-cancelar">Tirar da fila</button></div>';
+      } else if (podeEnviarYT(c)) {
+        h = (c.youtube_estado === 'erro' ? '<p class="leg-msg erro">O último envio falhou: ' + esc(c.youtube_erro || '') + '</p>' : '') +
+          '<div class="campo"><span>Privacidade</span>' + escolhaPriv('yt-priv', cfg.privacidade) + '</div>' +
+          '<div class="fora-acoes"><button type="button" class="btn btn-cor" id="yt-enviar">▲ Enviar ao YouTube</button></div>';
+      } else {
+        h = '<p class="leg-msg">' + (c.estado === 'publicado' ? 'Marcado como publicado (enviado por fora do Cortex).' : 'Para enviar, o PC precisa ter baixado o vertical deste Short.') + '</p>';
+      }
+      el.innerHTML = h + '<details class="yt-texto"><summary>Ver o texto que vai para o YouTube</summary><div id="yt-prev"><p class="leg-msg">Carregando…</p></div></details>' +
+        '<p class="msg-form" id="yt-msg"></p>';
+      var msg = el.querySelector('#yt-msg');
+      function falha(e) { msg.textContent = e.message; msg.className = 'msg-form erro'; }
+      el.querySelector('details').addEventListener('toggle', function () {
+        if (!this.open) return;
+        api('/youtube/previa', { metodo: 'POST', corpo: { corte_id: c.id } }).then(function (p) { el.querySelector('#yt-prev').innerHTML = previaHTML(p); })
+          .catch(function (e) { el.querySelector('#yt-prev').innerHTML = '<p class="leg-msg erro">' + esc(e.message) + '</p>'; });
+      });
+      var priv = el.querySelector('#yt-priv') ? ligarPriv(el.querySelector('#yt-priv')) : null;
+      var be = el.querySelector('#yt-enviar');
+      if (be) be.onclick = function () {
+        var p = priv();
+        confirmar('Enviar este Short ao YouTube como ' + PRIV[p].toUpperCase() + '?', 'Enviar').then(function (sim) {
+          if (!sim) return;
+          be.disabled = true;
+          enviarYT([c.id], p).then(function (r) {
+            if (!r.na_fila) { be.disabled = false; falha(new Error(resultadoEnvio(r))); return; }
+            aviso(resultadoEnvio(r)); c.youtube_estado = 'fila'; c.youtube_erro = null; carregar(); ligarBlocoYT(box, c);
+          }).catch(function (e) { be.disabled = false; falha(e); });
+        });
+      };
+      var bc = el.querySelector('#yt-cancelar');
+      if (bc) bc.onclick = function () {
+        bc.disabled = true;
+        api('/youtube/cancelar', { metodo: 'POST', corpo: { id: c.id } }).then(function () {
+          aviso('Saiu da fila de envio.'); c.youtube_estado = null; c.youtube_erro = null; carregar(); ligarBlocoYT(box, c);
+        }).catch(function (e) { bc.disabled = false; falha(e); });
+      };
+      var bd = el.querySelector('#yt-desv');
+      if (bd) bd.onclick = function () {
+        confirmar('Desvincular o envio deste Short? O vídeo continua no YouTube (apague por lá se quiser); aqui ele volta a poder ser enviado, como um vídeo NOVO.', 'Desvincular').then(function (sim) {
+          if (!sim) return;
+          bd.disabled = true;
+          api('/youtube/desvincular', { metodo: 'POST', corpo: { id: c.id } }).then(function () {
+            aviso('Desvinculado.'); c.youtube_id = null; c.youtube_estado = null; carregar(); ligarBlocoYT(box, c);
+          }).catch(function (e) { bd.disabled = false; falha(e); });
+        });
+      };
+    }).catch(function (e) { el.innerHTML = '<p class="leg-msg erro">' + esc(e.message) + '</p>'; });
+  }
+  function previaHTML(p) {
+    return '<dl class="yt-prev"><dt>Título</dt><dd>' + esc(p.titulo) + '</dd><dt>Descrição</dt><dd><pre>' + esc(p.descricao) + '</pre></dd>' +
+      '<dt>Tags</dt><dd>' + (p.tags.length ? esc(p.tags.join(', ')) : '(nenhuma)') + '</dd></dl>';
+  }
+
+  // Tela "▲ YouTube": privacidade padrão, modelo da descrição (com prévia num Short real) e os PCs.
+  function abrirYoutube() {
+    cfgYoutube().then(function (cfg) {
+      var modelo = cfg.modelo_descricao || cfg.modelo_padrao;
+      var pcs = cfg.pcs.map(function (p) {
+        return '<div class="pc-item"><div class="pc-cab"><b>' + esc(p.nome) + '</b><span class="pc-st' + (p.youtube_canal && !p.youtube_aviso ? ' on' : '') + '">' +
+          (p.youtube_canal ? (p.youtube_aviso ? 'PAUSADO' : 'CONECTADO') : 'SEM YOUTUBE') + '</span></div>' +
+          '<div class="pc-det">' + (p.youtube_canal ? 'Canal: <b>' + esc(p.youtube_canal) + '</b>' : 'Ainda não conectado ao YouTube.') +
+          (p.youtube_aviso ? '<br><span style="color:var(--aviso,#f5b942)">' + esc(p.youtube_aviso) + '</span>' : '') +
+          (p.versao && p.versao < '3' ? '<br>Agente ' + esc(p.versao) + ': precisa do 3.0.0 (chega sozinho ao reiniciar).' : '') + '</div></div>';
+      }).join('');
+      abrirGaveta('YouTube · envio dos Shorts',
+        '<p style="margin:0;color:var(--metal);font-size:.84rem">O PC que baixou o Short envia o vertical direto ao canal. O acesso ao canal fica <b>só no PC</b>; aqui ficam a fila, o texto e o ID de cada envio (o mesmo Short não sobe duas vezes). Longos não entram.</p>' +
+        '<form class="bloco" id="f-yt" novalidate>' +
+        '<div class="campo"><span>Privacidade padrão</span>' + escolhaPriv('cfg-priv', cfg.privacidade) +
+        '<small class="dica-layout">Recomendado: <b>Privado</b>. Você revisa no YouTube Studio e publica (ou agenda) de lá.</small></div>' +
+        '<label class="campo"><span>Modelo da descrição</span><textarea id="yt-modelo" rows="8" maxlength="4000" spellcheck="false">' + esc(modelo) + '</textarea></label>' +
+        '<div class="yt-marcas"><span>Inserir onde está o cursor:</span>' + cfg.marcadores.map(function (k) {
+          return '<button type="button" class="mini" data-marca="' + k + '" title="' + esc(MARCA_TXT[k] || '') + '">{{' + k + '}}</button>';
+        }).join('') + '</div>' +
+        '<small class="dica-layout">' + cfg.marcadores.map(function (k) { return '<code>{{' + k + '}}</code> ' + esc(MARCA_TXT[k] || ''); }).join(' · ') + '</small>' +
+        '<div class="yt-previa"><b class="pub-tit">PRÉVIA · com um Short real</b><div id="cfg-prev"><p class="leg-msg">Carregando…</p></div></div>' +
+        '<p class="msg-form" id="cfg-msg"></p>' +
+        '<div class="acoes"><button class="btn btn-cor" type="submit">Salvar</button><button class="btn btn-fino" type="button" id="cfg-cancelar">Cancelar</button>' +
+        '<button class="btn btn-fino" type="button" id="cfg-padrao" style="margin-left:auto">Voltar ao padrão</button></div></form>' +
+        '<div class="passo"><h3><i>▲</i>PCs e o YouTube</h3>' + (pcs ? '<div class="pcs">' + pcs + '</div>' : '<p>Nenhum PC conectado ao Cortex.</p>') + '</div>' +
+        '<details class="passo yt-passos"><summary><h3 style="display:inline"><i>?</i>Conectar um PC ao YouTube (uma vez)</h3></summary>' +
+        '<p><b>1. Google Cloud</b> (na sua conta pessoal, em <a href="https://console.cloud.google.com" target="_blank" rel="noopener">console.cloud.google.com</a>): crie um projeto só para isto (ex.: cortex-youtube) e ative a <b>YouTube Data API v3</b>.</p>' +
+        '<p><b>2. Tela de consentimento OAuth:</b> tipo Externo, com o seu e-mail; acrescente as permissões <code>youtube.upload</code> e <code>youtube.readonly</code>; depois aperte <b>Publicar app</b> (em "Teste", o acesso vence a cada 7 dias).</p>' +
+        '<p><b>3. Credenciais › Criar › ID do cliente OAuth › App para computador.</b> Baixe o JSON <b>direto no PC</b> e salve em <code>C:\\Cortex</code> com o nome <code>youtube-cliente.json</code>. Ele não passa pelo painel.</p>' +
+        '<p><b>4. No PC</b> (PowerShell), rode e entre na conta do canal. O aviso "app não verificado" é normal (o app é seu): Avançado › continuar.</p>' +
+        blocoCmd('cmd-yt', 'cd C:\\Cortex\nnode cortex-agente.mjs youtube') +
+        '<p>Para desconectar este PC depois: <code>node cortex-agente.mjs youtube-sair</code></p></details>',
+        function (box) {
+          ligarCopiar(box);
+          var f = box.querySelector('#f-yt'), ta = box.querySelector('#yt-modelo'), prev = box.querySelector('#cfg-prev'), msg = box.querySelector('#cfg-msg');
+          var priv = ligarPriv(box.querySelector('#cfg-priv'));
+          var t = null;
+          function previa() {
+            clearTimeout(t);
+            t = setTimeout(function () {
+              api('/youtube/previa', { metodo: 'POST', corpo: { modelo: ta.value } }).then(function (p) { prev.innerHTML = previaHTML(p); })
+                .catch(function (e) { prev.innerHTML = '<p class="leg-msg">' + esc(e.message) + '</p>'; });
+            }, 500);
+          }
+          ta.addEventListener('input', previa);
+          previa();
+          box.querySelectorAll('[data-marca]').forEach(function (b) {
+            b.onclick = function () {
+              var m = '{{' + b.dataset.marca + '}}', i = ta.selectionStart, j = ta.selectionEnd;
+              ta.value = ta.value.slice(0, i) + m + ta.value.slice(j); ta.focus(); ta.selectionStart = ta.selectionEnd = i + m.length; previa();
+            };
+          });
+          box.querySelector('#cfg-padrao').onclick = function () { ta.value = cfg.modelo_padrao; previa(); msg.textContent = 'Modelo padrão no campo: aperte Salvar para usar.'; msg.className = 'msg-form'; };
+          box.querySelector('#cfg-cancelar').onclick = fecharGaveta;
+          f.onsubmit = function (ev) {
+            ev.preventDefault();
+            var btn = f.querySelector('[type=submit]'); btn.disabled = true; msg.textContent = '';
+            api('/youtube', { metodo: 'PUT', corpo: { privacidade: priv(), modelo_descricao: ta.value } }).then(function () {
+              aviso('Configuração do YouTube salva.'); fecharGaveta();
+            }).catch(function (e) { btn.disabled = false; msg.textContent = e.message; msg.className = 'msg-form erro'; });
+          };
+        });
+    }).catch(function (e) { aviso(e.message, true); });
+  }
+  $('btn-youtube').addEventListener('click', abrirYoutube);
 
   // ---------- PCs (agente que roda em casa e no trabalho) ----------
   var PAINEL = location.origin;

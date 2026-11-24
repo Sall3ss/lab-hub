@@ -32,6 +32,7 @@
 //   POST   /agentes                { nome } -> gera a chave do PC (mostrada UMA vez)
 //   PATCH  /agentes/:id            { baixa_cortes?, pasta? }  pasta dos cortes desse PC (18/11)
 //   DELETE /agentes/:id            desconecta (revoga a chave)
+//   /youtube/...                   envio dos Shorts ao canal (24/11): configuração, prévia, fila (youtube.js)
 //
 // As rotas do proprio PC (sem sessao, com a chave dele) ficam em maquina.js.
 //
@@ -44,6 +45,7 @@ import { hashChave, AGENTE_VERSAO } from './maquina.js';
 import { refazerTextos, classificarCorte } from './roteiro.js';
 import { pedirFotos, apagarFotos } from './cena.js';
 import { arquivos, temDeposito, chaveDe } from '../../lib/arquivos.js';
+import { rotasYoutube } from './youtube.js';
 
 export { maquina } from './maquina.js';
 
@@ -77,7 +79,9 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
           ORDER BY v.atualizado_em DESC LIMIT 300`, u.id),
       db(env).all(
         `SELECT c.id, c.video_id, c.tipo, c.origem, c.inicio_s, c.fim_s, c.titulo, c.gancho, c.gancho_inicio_s, c.nota, c.categoria, c.estado,
-                c.erro, c.qualidade, c.baixar_fora, c.cena, c.cena_conf, c.cena_auto, c.quadro_em, c.layout_id, c.legenda IS NOT NULL AS tem_legenda, c.legenda_editada, v.layout_id AS video_layout_id, v.canal AS video_canal, c.atualizado_em, v.titulo AS video_titulo, v.plataforma,
+                c.erro, c.qualidade, c.baixar_fora, c.cena, c.cena_conf, c.cena_auto, c.quadro_em, c.layout_id, c.legenda IS NOT NULL AS tem_legenda, c.legenda_editada, v.layout_id AS video_layout_id,
+                c.arquivo_local IS NOT NULL AS tem_arquivo, c.youtube_id, c.youtube_estado, c.youtube_erro, c.youtube_privacidade,
+                (SELECT t.progresso FROM cortex_tarefas t WHERE t.corte_id = c.id AND t.tipo = 'enviar_youtube' AND t.estado = 'pega' ORDER BY t.id DESC LIMIT 1) AS youtube_progresso, v.canal AS video_canal, c.atualizado_em, v.titulo AS video_titulo, v.plataforma,
                 ${TAREFA_SQL('t.corte_id = c.id AND t.tipo = \'baixar_corte\'')}
            FROM cortex_cortes c JOIN cortex_videos v ON v.id = c.video_id
           WHERE c.usuario_id = ? AND c.estado <> 'descartado' AND v.arquivado = 0
@@ -202,6 +206,8 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
   }
 
   if (rota === 'layouts') return await rotasLayouts({ request, env, data, u, id, metodo, json, agora });
+
+  if (rota === 'youtube') return await rotasYoutube({ request, env, data, u, id, metodo, json, agora });
 
   if (rota === 'agentes') return await rotasAgentes({ request, env, data, u, id, metodo, json, agora });
 
@@ -651,6 +657,9 @@ async function mudarTrecho({ request, env, data, u, id, json, agora }) {
 // live" para não repetir o mesmo momento. Contexto, layout e trecho do vídeo ficam.
 // so = 'texto' (recomendado: busca o texto de novo, em blocos de 10 s) ou 'roteiro' (só a IA lê
 // de novo o texto que já existe, mais rápido e sem gastar a Groq).
+// 24/11: corte já enviado ao YouTube conta como publicado no "Refazer do zero" (fica, com o ID do
+// envio; apagar faria o registro sumir e o mesmo Short poder subir de novo).
+const FICA = "(estado = 'publicado' OR youtube_id IS NOT NULL)";
 async function refazerDoZero({ request, env, data, u, id, json, agora }) {
   const video = await db(env).first('SELECT * FROM cortex_videos WHERE id = ? AND usuario_id = ?', Number(id), u.id);
   if (!video) return json({ erro: 'vídeo não encontrado' }, 404);
@@ -661,8 +670,8 @@ async function refazerDoZero({ request, env, data, u, id, json, agora }) {
   // Tarefa com o prazo vencido (PC que sumiu) também não bloqueia. (23/11: o dono travou numa foto.)
   const pega = await db(env).first(
     `SELECT tipo FROM cortex_tarefas t WHERE t.video_id = ? AND t.estado = 'pega' AND t.pega_ate >= ?
-        AND (t.tipo IN ('texto', 'roteiro') OR (t.tipo IN ('baixar_corte', 'legenda')
-             AND EXISTS (SELECT 1 FROM cortex_cortes c WHERE c.id = t.corte_id AND c.estado <> 'publicado'))) LIMIT 1`,
+        AND (t.tipo IN ('texto', 'roteiro', 'enviar_youtube') OR (t.tipo IN ('baixar_corte', 'legenda')
+             AND EXISTS (SELECT 1 FROM cortex_cortes c WHERE c.id = t.corte_id AND NOT ${FICA}))) LIMIT 1`,
     video.id, agora);
   if (pega) return json({ erro: 'O PC está trabalhando neste vídeo agora (' + pega.tipo.replace('_', ' ') + '). Espere terminar e tente de novo.' }, 409);
   if (so === 'roteiro') {
@@ -670,12 +679,12 @@ async function refazerDoZero({ request, env, data, u, id, json, agora }) {
     if (!tx.n) return json({ erro: 'Este vídeo ainda não tem texto: use "Refazer tudo".' }, 400);
   }
   const n = await db(env).first(
-    "SELECT SUM(estado <> 'publicado') AS saem, SUM(estado = 'publicado') AS ficam FROM cortex_cortes WHERE video_id = ?", video.id);
-  await apagarFotos(env, "video_id = ? AND estado <> 'publicado'", [video.id]);
+    `SELECT SUM(NOT ${FICA}) AS saem, SUM(${FICA}) AS ficam FROM cortex_cortes WHERE video_id = ?`, video.id);
+  await apagarFotos(env, `video_id = ? AND NOT ${FICA}`, [video.id]);
   const lotes = [
     [`DELETE FROM cortex_tarefas WHERE video_id = ? AND (corte_id IS NULL OR corte_id IN
-        (SELECT id FROM cortex_cortes WHERE video_id = ? AND estado <> 'publicado'))`, [video.id, video.id]],
-    ["DELETE FROM cortex_cortes WHERE video_id = ? AND estado <> 'publicado'", [video.id]],
+        (SELECT id FROM cortex_cortes WHERE video_id = ? AND NOT ${FICA}))`, [video.id, video.id]],
+    [`DELETE FROM cortex_cortes WHERE video_id = ? AND NOT ${FICA}`, [video.id]],
     ['DELETE FROM cortex_roteiro_partes WHERE video_id = ?', [video.id]],
     ['UPDATE cortex_videos SET etapa = ?, roteiro_de_s = NULL, continuar_de_s = NULL, erro = NULL, arquivado = 0, atualizado_em = ? WHERE id = ?',
       [so === 'roteiro' ? 'roteiro' : 'entrada', agora, video.id]],

@@ -27,6 +27,7 @@ Beta.
 | Tabelas | prefixo `cortex_`, `migrations/0006_cortex_base.sql` |
 | Rotas do PC (sem sessão, com chave do PC) | `projetos/cortex/maquina.js` |
 | Agente do PC | `public/projetos/cortex/agente/cortex-agente.mjs` (servido pelo site para o PC baixar; roda no Windows do dono, nunca na nuvem) |
+| Envio dos Shorts ao YouTube (24/11) | `projetos/cortex/youtube.js` (fila, modelo da descrição, prévia) + seção YouTube do agente; migration `0023_cortex_youtube.sql` |
 | Esta ficha | `projetos/cortex/PROJETO.md` |
 
 ## Arquitetura: quem faz o quê
@@ -160,6 +161,8 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
    1.3.0, migration 0008. Testado local com Google de mentira (recusa de config, limite em um
    modelo e nos dois, passos, longos, validação). Falta o teste real no ar.
 4. ⬜ Acabamento: tentar de novo em falha, filtro por vídeo/plataforma, copiar metadados.
+5. 🟡 **Envio dos Shorts ao YouTube (24/11, agente 3.0.0):** pronto e testado local com YouTube
+   simulado; falta o dono criar o acesso no Google Cloud e conectar o PC (`node cortex-agente.mjs youtube`).
 
 ## Estado
 
@@ -655,3 +658,33 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   assunto fraco, termina depois de um desfecho, menos longos se o material for fraco). `aparar()`:
   ponta do longo em assunto de força < 40 sai, desde que fiquem 25 min. Testado com IA simulada.
   Vale para os próximos roteiros e para "Refazer do zero"/"Só os cortes".
+- 24/11 (dono: enviar os Shorts direto ao canal pela YouTube Data API v3, OAuth 2.0; arquivo e token
+  SÓ no PC; privado por padrão; não subir o mesmo Short duas vezes; modelo de descrição com lugar
+  para o texto e as hashtags; falha clara sem travar a fila). Agente **3.0.0**, migration **0023**.
+  - Conferido na documentação do Google antes de começar: desde 02/11/2026 o projeto não verificado
+    não tem mais os vídeos travados em privado; o envio (`videos.insert`) tem cota própria, ~100 por
+    dia. O envio sempre manda `privacyStatus` (sem ele o padrão do YouTube agora é público).
+  - Onde fica o quê: painel = fila (`cortex_tarefas` tipo `enviar_youtube`, com `agente_alvo` = o
+    PC que tem o arquivo, lido de `arquivo_local` "NOME: caminho"), textos, estado e ID
+    (`cortex_cortes.youtube_*`, ID único no banco), configuração (`cortex_youtube`: privacidade
+    padrão e modelo). PC = `youtube-cliente.json` (o dono baixa do Google Cloud direto no PC),
+    `youtube-token.dat` (acesso permanente protegido pelo Windows/DPAPI) e `youtube-envios.json`
+    (registro local: ID e sessão de retomada). Nenhum segredo no painel nem nesta máquina.
+  - Modelo da descrição: marcadores `{{descricao}}` (texto da IA sem as hashtags), `{{hashtags}}`
+    (até 5, sempre com #Shorts), `{{titulo}}`, `{{criador}}`, `{{link_live}}`; prévia com um Short
+    real na tela "▲ YouTube". O texto é montado no SERVIDOR (o mesmo da prévia vai para o PC).
+  - Duplicidade, 3 camadas: o painel recusa corte com ID; o PC consulta o registro local antes de
+    enviar (subiu mas o painel não soube = só avisa, rota `/maquina/youtube/registrar`); o envio é
+    retomável (queda de rede continua do byte em que parou). "Desvincular" esquece o ID (o vídeo
+    fica no YouTube) e guarda em `youtube_antigos`, para o PC não reaproveitar o registro local.
+  - Falhas: rede/YouTube ocupado = retoma até 6 vezes, depois falha normal (3 tentativas); cota =
+    pausa SÓ os envios até a meia-noite do Pacífico (~5 h de Brasília) e o Short volta para a fila
+    com o aviso; acesso vencido = pausa os envios até reconectar; arquivo sumido ou texto recusado
+    = erro claro no cartão. O PC só recebe envio quando diz estar conectado e sem pausa.
+  - "Refazer do zero" passa a manter o corte já enviado ao YouTube (como o publicado) e espera um
+    envio em andamento terminar.
+  - Testado local (painel de teste + YouTube simulado + agente 3.0.0 real): envio em 3 partes com
+    queda no meio e retomada do byte 8.388.608, ID gravado; reenvio recusado; desvincular + novo
+    envio não reaproveita o ID antigo; cota esgotada pausa e devolve; aviso atrasado pelo registro
+    local; refazer mantém o enviado; auditoria; telas no PC (1280) e celular (390) sem erro e sem
+    rolagem lateral. Não testado com o Google de verdade (depende do acesso do dono).

@@ -18,6 +18,8 @@
 //   POST /tarefas/:id/falhar              { erro, definitivo? }
 //   POST /tarefas/:id/devolver            o dono desligou o PC no meio: volta para a fila sem contar falha
 //   POST /tchau                           o PC foi desligado pelo atalho: aparece offline na hora
+//   POST /youtube/registrar               { corte_id, youtube_id } envio que o PC fez mas não conseguiu
+//                                        avisar na hora (registro local do PC); 24/11, agente 3.0.0
 //
 // O PC nunca recebe nada que nao seja dele: toda consulta filtra pelo dono da chave.
 // Autoria: Claude (Opus 5.5), Lab Hub, 14/11/2026.
@@ -26,15 +28,19 @@ import { db } from '../../lib/db.js';
 import { passoRoteiro } from './roteiro.js';
 import { receberFoto, MAX_FOTO } from './cena.js';
 import { arquivos, temDeposito } from '../../lib/arquivos.js';
+import { textosYoutube, configYoutube, pcDoArquivo } from './youtube.js';
 
-export const AGENTE_VERSAO = '2.9.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+export const AGENTE_VERSAO = '3.0.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
 // 22/11 (dono: "bem devagar da Entrada até o Roteiro IA"): a fila do PC era por ordem de
 // chegada, então um vídeo novo esperava TODOS os downloads aprovados antes (cada curto hoje é
 // download + legenda + vertical + logo), e o roteiro voltava para o fim da fila depois do texto.
 // Agora: o que o dono espera na tela e é curto vai antes; downloads pesados por último.
 // legenda (revisão, ~1 min) > roteiro (o PC só espera a nuvem) > fotos > texto > baixar_corte.
-const PRIORIDADE = "CASE tipo WHEN 'legenda' THEN 0 WHEN 'roteiro' THEN 1 WHEN 'quadros' THEN 2 WHEN 'texto' THEN 3 ELSE 4 END";
-const PRAZO_MIN = { texto: 30, baixar_corte: 60, roteiro: 20, quadros: 15, legenda: 15 };
+// 24/11: envio ao YouTube (um Short de ~50 MB, rápido) entra depois do roteiro.
+const PRIORIDADE = "CASE tipo WHEN 'legenda' THEN 0 WHEN 'roteiro' THEN 1 WHEN 'enviar_youtube' THEN 2 WHEN 'quadros' THEN 3 WHEN 'texto' THEN 4 ELSE 5 END";
+const PRAZO_MIN = { texto: 30, baixar_corte: 60, roteiro: 20, quadros: 15, legenda: 15, enviar_youtube: 30 };
+const VERSAO_YOUTUBE = [3, 0, 0];      // 24/11: envio dos Shorts ao canal (token do YouTube só no PC)
+const ID_YOUTUBE = /^[A-Za-z0-9_-]{11}$/;
 const VERSAO_ROTEIRO = [1, 3, 0];       // agente mais velho nao sabe fazer 'roteiro': nao recebe
 const VERSAO_TRECHO = [1, 7, 0];        // 16/11: so a 1.7.0+ respeita "analisar de/ate"; a velha buscaria a live inteira
 const VERSAO_VERTICAL = [2, 0, 0];      // 19/11: curto com layout vertical 9:16 (o agente velho entregaria so o horizontal)
@@ -74,6 +80,12 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     await db(env).run('UPDATE cortex_agentes SET visto_em = ?, versao = ?, ferramentas = ?, pasta_atual = COALESCE(?, pasta_atual) WHERE id = ?',
       iso, String(corpo.versao || '').slice(0, 20), JSON.stringify(corpo.ferramentas || {}).slice(0, 500),
       corpo.pasta ? String(corpo.pasta).slice(0, 260) : null, ag.id);
+    // 24/11 (3.0.0): o PC conta se está conectado ao YouTube (só o nome do canal e o aviso; o token fica lá).
+    if (corpo.youtube && typeof corpo.youtube === 'object') {
+      await db(env).run('UPDATE cortex_agentes SET youtube_canal = ?, youtube_aviso = ? WHERE id = ?',
+        corpo.youtube.canal ? String(corpo.youtube.canal).slice(0, 120) : null,
+        corpo.youtube.aviso ? String(corpo.youtube.aviso).slice(0, 200) : null, ag.id);
+    }
     return json({ ok: true, nome: ag.nome, baixa_cortes: !!ag.baixa_cortes, versao_atual: AGENTE_VERSAO, intervalo_s: 20, pasta: ag.pasta || null });
   }
 
@@ -92,6 +104,22 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     return new Response(obj.body, { headers: { 'content-type': 'image/png' } });
   }
 
+  // 24/11: o PC enviou ao YouTube mas a tarefa saiu dele (prazo, painel fora do ar): o ID que ficou
+  // no registro local chega aqui. Só preenche corte deste dono que ainda não tem ID.
+  if (rota === 'youtube' && id === 'registrar') {
+    const c = await request.json().catch(() => ({}));
+    if (!ID_YOUTUBE.test(String(c.youtube_id || ''))) return json({ erro: 'ID do YouTube inválido' }, 400);
+    const r = await db(env).run(
+      `UPDATE cortex_cortes SET youtube_id = ?, youtube_estado = 'enviado', youtube_erro = NULL, youtube_em = ?
+        WHERE id = ? AND usuario_id = ? AND youtube_id IS NULL AND NOT EXISTS (SELECT 1 FROM cortex_cortes o WHERE o.youtube_id = ?)`,
+      c.youtube_id, iso, Number(c.corte_id), ag.usuario_id, c.youtube_id);
+    if (r.meta.changes) {
+      await db(env).run("UPDATE cortex_tarefas SET estado = 'feita', erro = NULL, progresso = NULL, atualizada_em = ? WHERE corte_id = ? AND tipo = 'enviar_youtube' AND estado IN ('pendente', 'falhou')",
+        iso, Number(c.corte_id));
+    }
+    return json({ ok: true, gravado: !!r.meta.changes });
+  }
+
   if (!ag.visto_em || agora - Date.parse(ag.visto_em) > VISTO_A_CADA_MS) {
     await db(env).run('UPDATE cortex_agentes SET visto_em = ? WHERE id = ?', iso, ag.id);
   }
@@ -108,9 +136,13 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     if (versaoMin(ag.versao, VERSAO_LEGENDA)) lista.push('legenda');
     // 22/11 (agente 2.8.0): o PC esperando a Groq no texto pede "qualquer coisa menos texto e roteiro".
     const pedido = await request.json().catch(() => ({}));
+    // 24/11: envio ao YouTube só para o PC que diz estar conectado e sem pausa (cota, acesso vencido).
+    if (versaoMin(ag.versao, VERSAO_YOUTUBE) && pedido.youtube === true) lista.push('enviar_youtube');
     if (Array.isArray(pedido.sem)) lista = lista.filter((x) => !pedido.sem.includes(x));
     if (!lista.length) return json({ tarefa: null });
     const tipos = '(' + lista.map((x) => `'${x}'`).join(', ') + ')';
+    // 24/11: tarefa com PC de destino (o envio vai para quem tem o arquivo) só sai para ele.
+    const alvo = ` AND (agente_alvo IS NULL OR agente_alvo = ${Number(ag.id)})`;
     // Agente antigo nao pega texto de video com trecho marcado (atualiza sozinho em ate 10 min).
     let semTrecho = versaoMin(ag.versao, VERSAO_TRECHO) ? '' :
       " AND NOT (tipo = 'texto' AND EXISTS (SELECT 1 FROM cortex_videos v WHERE v.id = video_id AND (v.analisar_de_s IS NOT NULL OR v.analisar_ate_s IS NOT NULL)))";
@@ -129,7 +161,7 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     for (let i = 0; i < 2; i++) {
       const t = await db(env).first(
         `SELECT id, tipo, video_id, corte_id, tentativas FROM cortex_tarefas
-          WHERE usuario_id = ? AND estado = 'pendente' AND tipo IN ${tipos}${semTrecho} ORDER BY ${PRIORIDADE}, id LIMIT 1`, ag.usuario_id);
+          WHERE usuario_id = ? AND estado = 'pendente' AND tipo IN ${tipos}${semTrecho}${alvo} ORDER BY ${PRIORIDADE}, id LIMIT 1`, ag.usuario_id);
       if (!t) return json({ tarefa: null });
       const prazo = new Date(agora.getTime() + PRAZO_MIN[t.tipo] * 60000).toISOString();
       const r = await db(env).run(
@@ -179,8 +211,20 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
           `SELECT id, inicio_s, fim_s FROM cortex_cortes WHERE video_id = ? AND tipo = 'curto' AND estado = 'triagem' AND quadro_em IS NULL
             ORDER BY inicio_s LIMIT 80`, t.video_id)).map((c) => ({ id: c.id, s: Math.round((c.inicio_s + c.fim_s) / 2) }));
       }
+      // 24/11: envio ao YouTube - os textos exatos (pelo modelo do dono), a privacidade, o caminho do
+      // arquivo neste PC e os IDs que o dono desvinculou (o registro local não vale para eles).
+      let envio;
+      if (t.tipo === 'enviar_youtube' && corte) {
+        const extra = await db(env).first('SELECT youtube_id, youtube_privacidade, youtube_antigos FROM cortex_cortes WHERE id = ?', corte.id);
+        const cfg = await configYoutube(env, ag.usuario_id);
+        const pc = pcDoArquivo(corte.arquivo_local);
+        let antigos = []; try { antigos = JSON.parse(extra.youtube_antigos || '[]'); } catch { antigos = []; }
+        envio = { ...textosYoutube(corte, video, cfg.modelo_descricao), privacidade: extra.youtube_privacidade || cfg.privacidade,
+          arquivo: pc ? pc.caminho : null, ja_enviado: extra.youtube_id || null, ignorar: antigos };
+        await db(env).run("UPDATE cortex_cortes SET youtube_estado = 'enviando', youtube_erro = NULL WHERE id = ?", corte.id);
+      }
       // pasta: a escolhida no painel vale ja neste download (sem esperar o proximo "oi").
-      return json({ tarefa: { id: t.id, tipo: t.tipo, tentativa: t.tentativas + 1, prazo, video, corte, cortes, pasta: ag.pasta || null } });
+      return json({ tarefa: { id: t.id, tipo: t.tipo, tentativa: t.tentativas + 1, prazo, video, corte, cortes, envio, pasta: ag.pasta || null } });
     }
     return json({ tarefa: null });
   }
@@ -404,6 +448,12 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
         "UPDATE cortex_cortes SET estado = 'edicao', arquivo_local = ?, qualidade = ?, erro = NULL, atualizado_em = ? WHERE id = ? AND estado = 'download'",
         [corpo.arquivo_local ? `${ag.nome}: ${String(corpo.arquivo_local).slice(0, 400)}` : null,
          corpo.qualidade ? String(corpo.qualidade).slice(0, 200) : null, iso, tarefa.corte_id]]);
+    } else if (tarefa.tipo === 'enviar_youtube' && tarefa.corte_id) {
+      // 24/11: o ID do vídeo no YouTube. O primeiro que chegar fica (nunca troca um ID por outro).
+      if (!ID_YOUTUBE.test(String(corpo.youtube_id || ''))) return json({ erro: 'o PC não mandou o ID do vídeo no YouTube' }, 400);
+      lotes.push([`UPDATE cortex_cortes SET youtube_id = COALESCE(youtube_id, ?), youtube_estado = 'enviado', youtube_erro = NULL, youtube_em = ?
+                    WHERE id = ? AND NOT EXISTS (SELECT 1 FROM cortex_cortes o WHERE o.youtube_id = ? AND o.id <> ?)`,
+        [corpo.youtube_id, iso, tarefa.corte_id, corpo.youtube_id, tarefa.corte_id]]);
     }
     await db(env).batch(lotes);
     return json({ ok: true });
@@ -413,6 +463,12 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     await db(env).run(
       "UPDATE cortex_tarefas SET estado = 'pendente', agente_id = NULL, pega_ate = NULL, progresso = NULL, atualizada_em = ? WHERE id = ?",
       iso, tarefa.id);
+    // 24/11: envio devolvido (desligou, cota, acesso vencido) volta a "na fila", com o motivo.
+    if (tarefa.tipo === 'enviar_youtube') {
+      const corpo = await request.json().catch(() => ({}));
+      await db(env).run("UPDATE cortex_cortes SET youtube_estado = 'fila', youtube_erro = ? WHERE id = ?",
+        corpo.motivo ? `${ag.nome}: ${String(corpo.motivo).slice(0, 250)}` : null, tarefa.corte_id);
+    }
     return json({ ok: true });
   }
 
@@ -424,10 +480,15 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     const lotes = [[
       'UPDATE cortex_tarefas SET estado = ?, tentativas = ?, erro = ?, agente_id = NULL, pega_ate = NULL, progresso = NULL, atualizada_em = ? WHERE id = ?',
       [fim ? 'falhou' : 'pendente', tentativas, erro, iso, tarefa.id]]];
+    // 24/11: envio que ainda vai ser tentado de novo mostra o motivo no cartão (sem virar erro).
+    if (!fim && tarefa.tipo === 'enviar_youtube') {
+      lotes.push(["UPDATE cortex_cortes SET youtube_estado = 'fila', youtube_erro = ? WHERE id = ?", [`${ag.nome}: ${erro} (tento de novo)`.slice(0, 300), tarefa.corte_id]]);
+    }
     if (fim) {
       const msg = `${ag.nome}: ${erro}`;
       // Foto que falhou nao e erro do video (o corte segue sem foto; "Tirar foto de novo" na gaveta).
       if (tarefa.tipo === 'legenda') lotes.push(['UPDATE cortex_cortes SET legenda_erro = ? WHERE id = ?', [msg.slice(0, 300), tarefa.corte_id]]);
+      else if (tarefa.tipo === 'enviar_youtube') lotes.push(["UPDATE cortex_cortes SET youtube_estado = 'erro', youtube_erro = ? WHERE id = ?", [msg.slice(0, 300), tarefa.corte_id]]);
       else if (tarefa.tipo !== 'baixar_corte' && tarefa.tipo !== 'quadros') lotes.push(['UPDATE cortex_videos SET erro = ?, atualizado_em = ? WHERE id = ?', [msg, iso, tarefa.video_id]]);
       else if (tarefa.corte_id) lotes.push(['UPDATE cortex_cortes SET erro = ?, atualizado_em = ? WHERE id = ?', [msg, iso, tarefa.corte_id]]);
     }
