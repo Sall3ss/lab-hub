@@ -389,22 +389,69 @@ ${texto || '(trecho sem fala)'}`;
 async function escolherLongos(env, video, assuntos, ini, dur) {
   if (!assuntos.length) return { assuntos: [], cortes: [], modelo: null };
   const max = Math.max(1, Math.min(6, Math.floor((dur - ini) / (40 * 60))));
-  const usados = await titulosDaLive(env, video.id);
+  // 24/11 (dono: "qualidade acima de quantidade, retenção e views"): antes o longo recebia a lista
+  // dos curtos com "não repita o acontecimento" e por isso fugia justo dos melhores momentos. Agora
+  // os curtos entram como PICOS que o longo deve conter; só não pode repetir outro LONGO.
+  const outros = await db(env).all(
+    "SELECT tipo, inicio_s, fim_s, titulo, nota, acontecimento FROM cortex_cortes WHERE video_id = ? AND estado <> 'descartado' ORDER BY inicio_s LIMIT 80", video.id);
+  const picos = outros.filter((c) => c.tipo === 'curto');
+  const longosJa = outros.filter((c) => c.tipo === 'longo');
   const linhas = assuntos.map((a) => `[${hms(a.i)} - ${hms(a.f)}] (força ${a.forca}) ${a.a}`).join('\n');
-  const pedido = `${cabecalho(video)}${usados}
+  const pedido = `${cabecalho(video)}
 ${ini > 0 ? `Parte analisada: de ${hms(ini)} a ${hms(dur)} (o começo do vídeo ficou de fora, de propósito).` : `Duração total: ${hms(dur)}.`}
 
 Abaixo está o mapa de assuntos ${ini > 0 ? 'dessa parte' : 'do vídeo inteiro'} (já resumido por trechos).
 Tarefa: "longos" = de 1 a ${max} cortes LONGOS de 30 a 40 minutos (vídeo horizontal no YouTube),
 sem se sobrepor, cada um com um fio condutor (um tema, uma sequência, uma história). Comece e
-termine em divisas de assunto. Prefira os blocos com mais força.
+termine em divisas de assunto. Qualidade acima de quantidade: entregue menos longos se só houver
+material forte para menos.
 
+RETENÇÃO NO LONGO (o que faz o YouTube recomendar um vídeo horizontal):
+- O primeiro minuto decide se a pessoa fica. O longo COMEÇA num assunto forte (força alta), de
+  preferência já no meio da ação ou num conflito; nunca em começo de live, cumprimento, leitura
+  de chat, espera, carregamento, fila ou organização.
+- O meio não pode ter "barriga": evite longo com vários minutos seguidos de assuntos fracos
+  (força abaixo de 40). Prefira o bloco com mais picos (momentos fortes listados abaixo) e com a
+  força média mais alta.
+- Termina logo depois de um desfecho, clímax ou reação forte, nunca no meio de um papo morno.
+- O título e a thumbnail prometem o fio condutor e o pico principal do longo, que precisa estar
+  DENTRO dele.
+${picos.length ? `
+Momentos fortes já marcados como curtos nesta live (são os picos; um bom longo CONTÉM vários
+deles, e pode repetir os acontecimentos dos curtos à vontade):
+${picos.map((c) => `- [${hms(c.inicio_s)} - ${hms(c.fim_s)}]${c.nota != null ? ` nota ${c.nota}` : ''} · ${c.acontecimento || c.titulo}`.slice(0, 220)).join('\n')}
+` : ''}${longosJa.length ? `
+Longos que já existem desta live (não repita o trecho nem a estrutura do título):
+${longosJa.map((c) => `- [${hms(c.inicio_s)} - ${hms(c.fim_s)}] ${c.titulo}`).join('\n')}
+` : ''}
 Mapa de assuntos:
 ${linhas}`;
   const { dados, modelo } = await perguntar(env, pedido, ESQ_LONGOS);
   const cortes = limpar(dados.longos, 'longo', ini, Math.ceil(dur) + 1)
-    .filter((c, k, todos) => !todos.slice(0, k).some((o) => sobrepoe(o, c))).slice(0, max);
+    .map((c) => aparar(c, assuntos))
+    .filter((c, k, todos) => !todos.slice(0, k).some((o) => sobrepoe(o, c)) && !longosJa.some((o) => sobrepoe(o, c)))
+    .slice(0, max);
   return { assuntos: [], cortes, modelo };
+}
+
+// 24/11: longo que começa ou termina em assunto fraco (força < 40, pelo mapa) perde essa ponta,
+// desde que continue com pelo menos 25 min: o começo morno derruba a retenção do vídeo inteiro.
+// O gancho fora do novo intervalo é descartado.
+export function aparar(c, assuntos) {
+  const MIN = 25 * 60;
+  const dentro = assuntos.filter((a) => a.i >= c.inicio_s - 5 && a.f <= c.fim_s + 5).sort((x, y) => x.i - y.i);
+  let i = c.inicio_s, f = c.fim_s;
+  for (const a of dentro) {
+    if (a.forca == null || a.forca >= 40 || f - a.f < MIN) break;
+    i = Math.max(i, a.f);
+  }
+  for (const a of [...dentro].reverse()) {
+    if (a.forca == null || a.forca >= 40 || a.i - i < MIN) break;
+    f = Math.min(f, a.i);
+  }
+  if (i === c.inicio_s && f === c.fim_s) return c;
+  const fora = c.gancho_inicio_s != null && (c.gancho_inicio_s < i || c.gancho_inicio_s >= f);
+  return { ...c, inicio_s: i, fim_s: f, ...(fora ? { gancho_inicio_s: null, gancho_fim_s: null } : {}) };
 }
 
 function cabecalho(v) {

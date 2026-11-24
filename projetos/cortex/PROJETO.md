@@ -645,3 +645,13 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
     dentro do prazo; foto em andamento sai junto (o agente trata como "a tarefa saiu deste PC")
     e tarefa vencida não bloqueia. Testado: foto em andamento passa, roteiro em andamento
     bloqueia, roteiro vencido passa.
+- 24/11 (dono: "Refazer do zero" deu 1 longo; não quer mínimo, a quantidade de antes servia, quer
+  QUALIDADE: longo que segura e rende views). Conferido: as mudanças de 23/11 não tocaram no longo;
+  o pedido é "de 1 a N" (N = duração ÷ 40 min, até 6), então 1 é escolha da IA. Achado: a escolha
+  dos longos recebia a lista dos curtos com "não repita o acontecimento" e fugia dos melhores
+  momentos. Agora (`escolherLongos` em roteiro.js): os curtos entram como PICOS que o longo deve
+  conter (com nota e acontecimento); só não repete outro LONGO (inclusive publicado, que também é
+  filtrado no código); regras de retenção no pedido (começa em assunto forte, sem "barriga" de
+  assunto fraco, termina depois de um desfecho, menos longos se o material for fraco). `aparar()`:
+  ponta do longo em assunto de força < 40 sai, desde que fiquem 25 min. Testado com IA simulada.
+  Vale para os próximos roteiros e para "Refazer do zero"/"Só os cortes".
