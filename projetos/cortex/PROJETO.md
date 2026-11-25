@@ -697,3 +697,7 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   texto é protegida sozinha na primeira leitura. Decisões do dono: VPS continua publicando direto
   (A, mantido); login do painel sem autenticador por enquanto (D). Contas Google e GitHub com
   verificação em 2 etapas: o dono vai fazer.
+- 25/11 (pedido do dono: "uma vez upado pro youtube ele já foi publicado"): quando o PC confirma
+  o envio, o curto sai da Edição e vai para **Publicado** sozinho (concluir e `/maquina/youtube/
+  registrar`). "Desvincular" traz de volta para a Edição (é para enviar de novo). Migration 0024
+  acerta os já enviados. Testado local: desvincular > enviar > PC (mock) > Publicado.

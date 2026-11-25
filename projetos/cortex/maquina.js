@@ -110,9 +110,10 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     const c = await request.json().catch(() => ({}));
     if (!ID_YOUTUBE.test(String(c.youtube_id || ''))) return json({ erro: 'ID do YouTube inválido' }, 400);
     const r = await db(env).run(
-      `UPDATE cortex_cortes SET youtube_id = ?, youtube_estado = 'enviado', youtube_erro = NULL, youtube_em = ?
+      `UPDATE cortex_cortes SET youtube_id = ?, youtube_estado = 'enviado', youtube_erro = NULL, youtube_em = ?,
+              estado = CASE WHEN estado = 'edicao' THEN 'publicado' ELSE estado END, atualizado_em = ?
         WHERE id = ? AND usuario_id = ? AND youtube_id IS NULL AND NOT EXISTS (SELECT 1 FROM cortex_cortes o WHERE o.youtube_id = ?)`,
-      c.youtube_id, iso, Number(c.corte_id), ag.usuario_id, c.youtube_id);
+      c.youtube_id, iso, iso, Number(c.corte_id), ag.usuario_id, c.youtube_id);
     if (r.meta.changes) {
       await db(env).run("UPDATE cortex_tarefas SET estado = 'feita', erro = NULL, progresso = NULL, atualizada_em = ? WHERE corte_id = ? AND tipo = 'enviar_youtube' AND estado IN ('pendente', 'falhou')",
         iso, Number(c.corte_id));
@@ -450,10 +451,12 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
          corpo.qualidade ? String(corpo.qualidade).slice(0, 200) : null, iso, tarefa.corte_id]]);
     } else if (tarefa.tipo === 'enviar_youtube' && tarefa.corte_id) {
       // 24/11: o ID do vídeo no YouTube. O primeiro que chegar fica (nunca troca um ID por outro).
+      // 25/11 (pedido do dono): enviado ao YouTube = publicado; o corte sai da Edição para Publicado.
       if (!ID_YOUTUBE.test(String(corpo.youtube_id || ''))) return json({ erro: 'o PC não mandou o ID do vídeo no YouTube' }, 400);
-      lotes.push([`UPDATE cortex_cortes SET youtube_id = COALESCE(youtube_id, ?), youtube_estado = 'enviado', youtube_erro = NULL, youtube_em = ?
+      lotes.push([`UPDATE cortex_cortes SET youtube_id = COALESCE(youtube_id, ?), youtube_estado = 'enviado', youtube_erro = NULL, youtube_em = ?,
+                          estado = CASE WHEN estado = 'edicao' THEN 'publicado' ELSE estado END, atualizado_em = ?
                     WHERE id = ? AND NOT EXISTS (SELECT 1 FROM cortex_cortes o WHERE o.youtube_id = ? AND o.id <> ?)`,
-        [corpo.youtube_id, iso, tarefa.corte_id, corpo.youtube_id, tarefa.corte_id]]);
+        [corpo.youtube_id, iso, iso, tarefa.corte_id, corpo.youtube_id, tarefa.corte_id]]);
     }
     await db(env).batch(lotes);
     return json({ ok: true });

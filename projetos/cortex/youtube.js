@@ -209,9 +209,13 @@ export async function rotasYoutube({ request, env, data, u, id, metodo, json, ag
     const antigos = await db(env).first('SELECT youtube_antigos FROM cortex_cortes WHERE id = ?', c.id);
     let lista = []; try { lista = JSON.parse(antigos.youtube_antigos || '[]'); } catch { lista = []; }
     lista = [...new Set([...lista, c.youtube_id])].slice(-20);
-    await db(env).run('UPDATE cortex_cortes SET youtube_id = NULL, youtube_estado = NULL, youtube_erro = NULL, youtube_em = NULL, youtube_antigos = ? WHERE id = ?',
-      JSON.stringify(lista), c.id);
-    await auditar(env, { quem: u.email, acao: 'desvincular-youtube', entidade: 'cortex_cortes', entidade_id: c.id, antes: { youtube_id: c.youtube_id }, ip: data.ip });
+    // 25/11: desvincular é para enviar de novo, então o corte volta de Publicado para a Edição.
+    const est = await db(env).first('SELECT estado FROM cortex_cortes WHERE id = ?', c.id);
+    await db(env).run(`UPDATE cortex_cortes SET youtube_id = NULL, youtube_estado = NULL, youtube_erro = NULL, youtube_em = NULL, youtube_antigos = ?,
+                        estado = CASE WHEN estado = 'publicado' THEN 'edicao' ELSE estado END, atualizado_em = ? WHERE id = ?`,
+      JSON.stringify(lista), new Date().toISOString(), c.id);
+    await auditar(env, { quem: u.email, acao: 'desvincular-youtube', entidade: 'cortex_cortes', entidade_id: c.id,
+      antes: { youtube_id: c.youtube_id, estado: est && est.estado }, depois: { estado: est && est.estado === 'publicado' ? 'edicao' : est && est.estado }, ip: data.ip });
     return json({ ok: true });
   }
 

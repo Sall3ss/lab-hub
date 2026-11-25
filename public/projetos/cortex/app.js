@@ -1502,7 +1502,7 @@
       };
       var bd = el.querySelector('#yt-desv');
       if (bd) bd.onclick = function () {
-        confirmar('Desvincular o envio deste Short? O vídeo continua no YouTube (apague por lá se quiser); aqui ele volta a poder ser enviado, como um vídeo NOVO.', 'Desvincular').then(function (sim) {
+        confirmar('Desvincular o envio deste Short? O vídeo continua no YouTube (apague por lá se quiser); aqui ele volta para a Edição e pode ser enviado de novo, como um vídeo NOVO.', 'Desvincular').then(function (sim) {
           if (!sim) return;
           bd.disabled = true;
           api('/youtube/desvincular', { metodo: 'POST', corpo: { id: c.id } }).then(function () {
