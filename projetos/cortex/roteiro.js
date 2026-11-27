@@ -46,7 +46,16 @@ destaque, curiosidade sem inventar nem exagerar.
    tornou a fuga diferente (o caminho inesperado, a polícia quase pegando, a reação dele, algo
    que deu errado no meio) e use isso.
 
-3. TÍTULOS ("titulos": exatamente 3 opções, em MAIÚSCULAS, até 70 caracteres, sem hashtag):
+3. TÍTULOS ("titulos": exatamente 3 opções, em MAIÚSCULAS, sem hashtag):
+- TAMANHO (27/11, recomendação do YouTube Studio ao canal): o Short é visto no CELULAR, com o
+  título por cima do vídeo, e o resto é cortado perto de 40 caracteres. SHORT: ideal até 40
+  caracteres, NUNCA mais de 50 (conte as letras e os espaços). LONGO: até 70. As palavras que
+  decidem o clique vêm primeiro. Para encurtar, tire o que não é o gancho: o jogo ("NO GTA 6") e
+  o evento ficam na descrição e nas hashtags, salvo se forem o assunto; corte artigo, "DO NADA",
+  "ACABA", "SIMPLESMENTE", "COMPLETAMENTE", locução longa ("TENTANDO FAZER", "NA HORA DE") e
+  repetição. Prefira verbo forte e direto. Ex.: "CORINGA FOI ATACADO POR UM NPC DO NADA NO GTA 6"
+  (47) -> "NPC ATACOU O CORINGA SEM MOTIVO" (31). Curto não pode virar vago: se não couber o
+  diferencial, escolha UM detalhe só, o mais forte.
 - Personalidade principal no começo quando fizer sentido ("CORINGA DESCOBRIU UMA FORMA
   INESPERADA DE ESCAPAR DA POLÍCIA", "TAINÁ NÃO CONSEGUIU ACREDITAR NA RESPOSTA DO CORINGA").
   Se o acontecimento for bem mais forte que a pessoa, ele pode vir primeiro.
@@ -61,8 +70,8 @@ destaque, curiosidade sem inventar nem exagerar.
   entre clareza, curiosidade, personalidade, especificidade e fidelidade.
 - Varie a construção (não sempre "FULANO FEZ/ENCONTROU/FICOU/SE IMPRESSIONOU..."): afirmação,
   pergunta, reação, descoberta, situação específica. Pergunta só quando funciona melhor.
-- Curto e fácil de ler no celular: sem explicação longa, palavra inútil, nome repetido ou excesso
-  de adjetivo.
+- Curto e fácil de ler no celular (veja TAMANHO): sem explicação longa, palavra inútil, nome
+  repetido ou excesso de adjetivo.
 - As 3 opções são ÂNGULOS DIFERENTES, não variações da mesma frase. Referência: (1) o
   acontecimento principal; (2) o detalhe curioso que torna aquilo interessante; (3) a reação de
   alguém ou a consequência. Use outros ângulos se representarem melhor o vídeo.
@@ -124,7 +133,8 @@ CATEGORIA NOS TEXTOS (21/11; orienta a abordagem, não é fórmula de título): 
    é específico ou serviria para dezenas de cortes? usou o melhor detalhe? o nome está bem
    posicionado? é natural? promete algo que o vídeo não cumpre? as 3 opções têm ângulos
    diferentes? a descrição contextualiza sem inventar? hashtags só na descrição? tags relevantes?
-   o título difere dos outros cortes da live? existe alternativa mais interessante? Gramática
+   o título difere dos outros cortes da live? o Short tem até 50 caracteres (ideal 40)? existe
+   alternativa mais interessante? Gramática
    certa não basta: título genérico se reescreve.
 
 TOM: português do Brasil natural e direto; chamativo sem exagero. NENHUM emoji em título,
@@ -222,7 +232,7 @@ ${PADRAO}`;
 // Campos de texto de publicação (iguais no roteiro e no "Refazer textos").
 const TEXTOS = {
   analise: { type: 'STRING', description: 'acontecimento principal e melhor gancho, 1-2 frases' },
-  titulos: { type: 'ARRAY', items: { type: 'STRING' }, description: 'exatamente 3 títulos em MAIÚSCULAS, ângulos diferentes' },
+  titulos: { type: 'ARRAY', items: { type: 'STRING' }, description: 'exatamente 3 títulos em MAIÚSCULAS, ângulos diferentes; Short até 50 caracteres (ideal 40), longo até 70' },
   melhor: { type: 'INTEGER', description: '1, 2 ou 3' },
   porque_titulo: { type: 'STRING' },
   descricao: { type: 'STRING' },
@@ -556,9 +566,16 @@ export function lerClasse(c) {
 // Textos de publicação vindos da IA -> campos do corte (sem emoji, título da opção "melhor").
 const EMOJI = /[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu;
 function semEmoji(t) { return String(t || '').replace(EMOJI, '').replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').trim(); }
-export function lerTextos(c) {
+// 27/11: no Short, se a "melhor" passou de 50 caracteres (o celular corta perto de 40), vale a
+// opção mais bem colocada que cabe; se nenhuma cabe, fica a "melhor" (o dono vê o contador).
+export const TITULO_SHORT_MAX = 50;
+export function lerTextos(c, tipo) {
   const titulos = (Array.isArray(c.titulos) ? c.titulos : []).map((t) => semEmoji(t).replace(/\s+/g, ' ').toLocaleUpperCase('pt-BR').slice(0, 120)).filter(Boolean).slice(0, 3);
-  const k = Math.min(titulos.length, Math.max(1, Math.round(Number(c.melhor)) || 1)) - 1;
+  let k = Math.min(titulos.length, Math.max(1, Math.round(Number(c.melhor)) || 1)) - 1;
+  if ((tipo || c.tipo) === 'curto' && titulos[k] && titulos[k].length > TITULO_SHORT_MAX) {
+    const cabe = titulos.findIndex((t) => t.length <= TITULO_SHORT_MAX);
+    if (cabe >= 0) { c = { ...c, porque_titulo: `Usei a opção ${cabe + 1}: a ${k + 1}, que a IA preferia, passava de ${TITULO_SHORT_MAX} caracteres. ${semEmoji(c.porque_titulo)}`.trim() }; k = cabe; }
+  }
   return {
     titulo: titulos[k] || semEmoji(c.titulo).slice(0, 120) || null,
     titulos: titulos.length ? titulos : null,
@@ -587,7 +604,7 @@ Escreva os textos de publicação deste corte seguindo o padrão do canal.
 
 ${ctx.falas}`;
   const { dados } = await perguntar(env, pedido, ESQ_TEXTOS);
-  return lerTextos(dados);
+  return lerTextos(dados, corte.tipo);
 }
 
 // 21/11: "Classificar com a IA" de UM corte (cortes de antes da categoria existir): devolve
@@ -663,7 +680,7 @@ function limpar(lista, tipo, min, max) {
     if (i === null || f === null) return null;
     i = Math.max(min, Math.round(i)); f = Math.min(max, Math.round(f));
     if (f - i < dMin || f - i > dMax) return null;
-    const tx = lerTextos(c);
+    const tx = lerTextos(c, tipo);
     if (!tx.titulo) return null;
     const { gi, gf } = tempoGancho(c, tipo, i, f);
     // 23/11 (dados do Studio: o Short se decide nos 2 primeiros segundos): curto cujo gancho cai

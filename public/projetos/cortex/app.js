@@ -1160,7 +1160,7 @@
   function blocoTextosIA(c) {
     var ts = lerLista(c.titulos) || [];
     return (ts.length ? '<div class="tit-opcoes"><span class="tit-rot">Opções da IA (toque para usar)</span>' +
-        ts.map(function (t, k) { return '<button type="button" class="tit-op' + (t === c.titulo ? ' on' : '') + '" data-tit="' + k + '">' + (k + 1) + '. ' + esc(t) + '</button>'; }).join('') +
+        ts.map(function (t, k) { return '<button type="button" class="tit-op' + (t === c.titulo ? ' on' : '') + '" data-tit="' + k + '">' + (k + 1) + '. ' + esc(t) + ' <small class="tit-n">' + t.length + '</small></button>'; }).join('') +
         (c.titulo_porque ? '<p class="tit-porque"><b>Melhor:</b> ' + esc(c.titulo_porque) + '</p>' : '') + '</div>' : '') +
       (c.duvida ? '<p class="tit-duvida">⚠ A IA ficou com dúvida: ' + esc(c.duvida) + ' Escreva no "Contexto da live" (gaveta do vídeo) e refaça os textos.</p>' : '') +
       (c.thumb ? '<div class="tit-thumb"><b>THUMBNAIL</b>' + esc(c.thumb) + '</div>' : '') +
@@ -1212,7 +1212,7 @@
       '<label class="campo"><span>Fim</span><input class="tc-campo" name="fim" inputmode="numeric" placeholder="00:00:00" value="' + (c.fim_s === '' ? '' : tc(c.fim_s)) + '"' + (tempoLivre ? '' : ' disabled') + '>' + ajustes('fim', tempoLivre) + '</label></div>' +
       (c.estado === 'edicao' ? '<p style="margin:-.2rem 0 0;font-size:.78rem;color:var(--suave)">' + (fora ? 'Sem arquivo no PC: ajuste o tempo e aperte <b>Salvar</b>.' : 'Mudou o tempo? Use <b>Baixar de novo</b>: o PC baixa com o tempo novo.') + '</p>' : '') +
       '<p style="margin:-.2rem 0 0;font:.74rem var(--mono);color:var(--suave)" id="dur-corte"></p>' +
-      '<label class="campo"><span>Título</span><input name="titulo" maxlength="150" value="' + esc(c.titulo) + '" placeholder="Título de alto clique"></label>' +
+      '<label class="campo"><span>Título</span><input name="titulo" maxlength="150" value="' + esc(c.titulo) + '" placeholder="Título de alto clique"><small class="tit-cont" id="tit-cont"></small></label>' +
       // 19/11: padrão do canal - 3 opções de título da IA, o porquê, thumbnail e "Refazer textos"
       (novo ? '' : '<div id="textos-ia">' + blocoTextosIA(c) + '</div>') +
       '<label class="campo"><span>Gancho (primeiros segundos)</span><input name="gancho" maxlength="300" value="' + esc(c.gancho || '') + '" placeholder="A frase que segura quem está rolando o feed"></label>' +
@@ -1327,7 +1327,18 @@
         function layoutEscolhido() { return tipo !== 'curto' ? undefined : f.layout.value === '' ? null : Number(f.layout.value); }
         marcarTipo();
         if (leg) box.querySelector('#esc-tipo').addEventListener('click', function () { box.querySelector('#campo-legenda').hidden = tipo !== 'curto'; });
-        box.querySelector('#esc-tipo').onclick = function (ev) { var b = ev.target.closest('button'); if (b) { tipo = b.dataset.v; marcarTipo(); mostrarDur(); } };
+        box.querySelector('#esc-tipo').onclick = function (ev) { var b = ev.target.closest('button'); if (b) { tipo = b.dataset.v; marcarTipo(); mostrarDur(); contarTit(); } };
+        // 27/11 (recomendação do YouTube Studio ao dono): no celular o título do Short aparece por
+        // cima do vídeo e é cortado perto de 40 caracteres. Contador ao vivo: até 40 ideal, até 50 ok.
+        function contarTit() {
+          var el = box.querySelector('#tit-cont'); if (!el) return;
+          var n = f.titulo.value.trim().length, lim = tipo === 'curto' ? [40, 50] : [60, 70];
+          el.textContent = n ? n + ' caracteres · ' + (tipo === 'curto' ? 'Short: ideal até 40, máximo 50 (o celular corta o resto)' : 'longo: até 70') : '';
+          el.className = 'tit-cont' + (n > lim[1] ? ' alto' : n > lim[0] ? ' medio' : '');
+        }
+        f.titulo.addEventListener('input', contarTit);
+        box.addEventListener('click', function (ev) { if (ev.target.closest('[data-tit]')) setTimeout(contarTit, 0); });
+        contarTit();
         // máscara de timecode: só dígitos e ":", e completa os ":" ao sair do campo
         [f.inicio, f.fim, f.g_inicio, f.g_fim].forEach(function (el) {
           el.addEventListener('input', function () { this.value = this.value.replace(/[^\d:]/g, '').slice(0, 8); mostrarDur(); });

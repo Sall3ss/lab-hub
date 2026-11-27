@@ -383,6 +383,10 @@ button, input, textarea { font: inherit; color: inherit; }
 .tit-rot { font: .66rem/1.2 var(--mono); letter-spacing: .06em; color: var(--suave); text-transform: uppercase; }
 .tit-op { text-align: left; font-size: .8rem; line-height: 1.35; padding: .45rem .6rem; border-radius: 8px; border: 1px solid var(--fio-2); background: transparent; color: var(--texto); cursor: pointer; }
 .tit-op.on { border-color: var(--curto); color: var(--curto); }
+.tit-n { font: .68rem var(--mono); color: var(--suave); margin-left: .25rem; }
+.tit-cont { display: block; margin-top: .25rem; font: .72rem var(--mono); color: var(--suave); }
+.tit-cont.medio { color: #f5b942; }
+.tit-cont.alto { color: #ff6b6b; }
 .tit-porque, .tit-duvida { margin: .1rem 0 0; font-size: .76rem; color: var(--suave); line-height: 1.45; }
 .tit-duvida { color: #e0a040; }
 .tit-thumb { margin-top: .4rem; font-size: .78rem; line-height: 1.45; color: var(--texto); border-left: 3px solid var(--curto); padding: .35rem .6rem; background: rgba(255,176,32,.06); }

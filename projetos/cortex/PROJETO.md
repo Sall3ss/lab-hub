@@ -755,3 +755,10 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   é lido do navegador do PC e não sai dele. Nenhum com login = falha clara pedindo para entrar
   no YouTube pelo Firefox (o Chrome/Edge novos no Windows costumam recusar a leitura) e usar
   "Tentar de novo". Testado com yt-dlp de mentira (Firefox com login; nenhum com login).
+- 27/11 (recomendação do YouTube Studio, trazida pelo dono): títulos de Short mais curtos para o
+  celular. Regra nova no padrão editorial: Short ideal até 40 caracteres, nunca mais de 50 (o
+  título aparece por cima do vídeo e é cortado perto de 40); longo continua até 70. Jogo/evento
+  vão para descrição e hashtags quando não são o gancho. Se a opção "melhor" da IA passar de 50
+  num Short, `lerTextos` usa a primeira que cabe (e diz isso no "porquê"). Gaveta do corte ganhou
+  contador ao vivo (amarelo acima de 40, vermelho acima de 50) e o tamanho de cada opção da IA.
+  Títulos já gerados não mudam sozinhos: "Refazer textos" refaz no padrão novo.
