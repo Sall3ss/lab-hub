@@ -808,12 +808,16 @@ function layoutsIniciais() {
     // 19/11: só a câmera (a live em "full cam"): recorte 9:16 no centro; a IA escolhe sozinha
     { nome: 'Full cam', tipo: 'sem_webcam', cam_x: null, cam_y: null, cam_w: null, cam_h: null, cam_altura: null,
       jogo_x: +((1 - jogoSem) / 2).toFixed(4), jogo_y: 0, jogo_w: +jogoSem.toFixed(4), jogo_h: 1, proporcao: +P.toFixed(4), cena: 'fullcam' },
-  ].map((L) => ({ cena: null, logo_on: 0, logo_x: null, logo_y: null, logo_w: null, logo_opac: null, ...L }));
+    // 27/11: o vídeo inteiro na horizontal, no meio do vertical, sem cortar nada (fundo desfocado)
+    { nome: 'Horizontal inteiro', tipo: 'sem_webcam', cam_x: null, cam_y: null, cam_w: null, cam_h: null, cam_altura: null,
+      jogo_x: 0, jogo_y: 0, jogo_w: 1, jogo_h: 1, proporcao: +P.toFixed(4), encaixe: 'inteiro', fundo: 'desfocado' },
+  ].map((L) => ({ cena: null, logo_on: 0, logo_x: null, logo_y: null, logo_w: null, logo_opac: null, encaixe: null, fundo: null, ...L }));
 }
 
 // cena (19/11): 'fullcam' | 'jogo' | null = o layout que entra sozinho quando a IA vê essa cena na foto do corte
 const CAMPOS_LAYOUT = ['nome', 'tipo', 'cam_x', 'cam_y', 'cam_w', 'cam_h', 'cam_altura', 'jogo_x', 'jogo_y', 'jogo_w', 'jogo_h', 'proporcao', 'cena',
-  'logo_on', 'logo_x', 'logo_y', 'logo_w', 'logo_opac'];   // 19/11: logo do canal no vertical
+  'logo_on', 'logo_x', 'logo_y', 'logo_w', 'logo_opac',   // 19/11: logo do canal no vertical
+  'encaixe', 'fundo'];                                     // 27/11: 'inteiro' = o quadro todo, sem cortar
 function lerLayout(c) {
   const nome = String(c.nome || '').trim().slice(0, 60);
   if (!nome) return { erro: 'Dê um nome ao layout.' };
@@ -824,6 +828,10 @@ function lerLayout(c) {
     && x + w <= 1.001 && y + h <= 1.001;
   const L = { nome, tipo, proporcao: Number(c.proporcao) > 0.5 && Number(c.proporcao) < 4 ? +Number(c.proporcao).toFixed(4) : 1.7778,
     cena: c.cena === 'fullcam' || c.cena === 'jogo' ? c.cena : null };
+  // 27/11: "Horizontal inteiro" - o quadro todo entra no vertical (só sem webcam).
+  L.encaixe = tipo === 'sem_webcam' && c.encaixe === 'inteiro' ? 'inteiro' : null;
+  L.fundo = L.encaixe ? (c.fundo === 'preto' ? 'preto' : 'desfocado') : null;
+  if (L.encaixe) Object.assign(c, { jogo_x: 0, jogo_y: 0, jogo_w: 1, jogo_h: 1 });
   for (const k of ['jogo_x', 'jogo_y', 'jogo_w', 'jogo_h']) L[k] = +n(c[k]).toFixed(4);
   if (!caixa(L.jogo_x, L.jogo_y, L.jogo_w, L.jogo_h)) return { erro: 'O recorte da gameplay saiu do quadro.' };
   // 19/11: logo do canal (posição em fração da tela 1080x1920). Desligada = campos vazios.

@@ -767,3 +767,12 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   cartão: invisível, e colar o link de novo dava "já está no quadro". Agora aparece na coluna
   Roteiro IA com o aviso "A IA não achou corte neste trecho", para abrir e Puxar o resto, mudar o
   trecho, concluir ou excluir (`semCortes` no app.js). Conferido no PC e no celular.
+- 27/11 (pedido do dono): layout **"Horizontal inteiro"** para os Shorts - o vídeo original entra
+  inteiro, na largura do 1080x1920 e no meio, sem cortar nada; em cima e embaixo, o próprio vídeo
+  desfocado e escurecido (padrão) ou preto. É `sem_webcam` + `encaixe = 'inteiro'` e `fundo`
+  (migration 0026, que também cria o layout pronto para quem já tem layouts, com a logo na faixa de
+  cima). Agente **3.2.0** (`filtroVertical`: fundo desfocado em 270x480 e ampliado, leve para o
+  PC); agente mais velho não recebe download de curto com esse layout. Editor: terceiro tipo
+  "Horizontal inteiro" com a escolha do fundo e prévia igual à do FFmpeg (também na gaveta).
+  Legenda fica em 1340 de 1920, logo abaixo do vídeo (16:9 ocupa 656 a 1264). Testado: FFmpeg
+  nos dois fundos (1080x1920), trava de versão (3.1.1 não pega, 3.2.0 pega), editor no PC e celular.

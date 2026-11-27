@@ -330,6 +330,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .lay-caixa.cam { border-color: #2fd6ea; background: rgb(47 214 234 / .16); z-index: 2; }
 .lay-caixa span { position: absolute; left: 0; top: 0; padding: .15rem .35rem; font: 700 .6rem/1 var(--mono); letter-spacing: .08em; color: #000; }
 .lay-caixa.jogo span { background: #ff8a3d; } .lay-caixa.cam span { background: #2fd6ea; }
+.lay-caixa.fixa { cursor: default; } .lay-caixa.fixa i { display: none; }   /* 27/11: Horizontal inteiro */
 .lay-caixa i { position: absolute; right: -2px; bottom: -2px; width: 1.4rem; height: 1.4rem; display: grid; place-items: center; font-style: normal; font-size: .8rem; cursor: nwse-resize; color: #000; }
 .lay-caixa.jogo i { background: #ff8a3d; } .lay-caixa.cam i { background: #2fd6ea; }
 .lay-previa-col { display: flex; flex-direction: column; gap: .4rem; align-items: center; }

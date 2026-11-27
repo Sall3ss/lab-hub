@@ -34,7 +34,7 @@ import { textosYoutube, configYoutube, pcDoArquivo } from './youtube.js';
 import { correcoesDoCanal, corrigirTexto, corrigirPalavras, nomesCertos } from './correcoes.js';
 import { colarNaFala, separarPartes } from './fala.js';
 
-export const AGENTE_VERSAO = '3.1.1';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+export const AGENTE_VERSAO = '3.2.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
 // 22/11 (dono: "bem devagar da Entrada até o Roteiro IA"): a fila do PC era por ordem de
 // chegada, então um vídeo novo esperava TODOS os downloads aprovados antes (cada curto hoje é
 // download + legenda + vertical + logo), e o roteiro voltava para o fim da fila depois do texto.
@@ -51,6 +51,7 @@ const VERSAO_VERTICAL = [2, 0, 0];      // 19/11: curto com layout vertical 9:16
 const VERSAO_FICHA = [1, 9, 0];         // 18/11: ficha .txt de corte "sem baixar"; o agente velho BAIXARIA o video
 const VERSAO_QUADROS = [2, 1, 0];
 const VERSAO_LEGENDA = [2, 4, 0];      // 19/11: legenda do curto revisada no painel antes de baixar      // 19/11: foto de cada curto (cena + previa do vertical)
+const VERSAO_INTEIRO = [3, 2, 0];      // 27/11: layout "Horizontal inteiro" (vídeo todo no meio do vertical)
 const VERSAO_FALA = [3, 1, 0];          // 27/11: o PC ouve o começo e o fim do curto (corte colado na fala)
 const VERSAO_LIVE = [1, 8, 2];          // 18/11: live da Kick (link do canal, m3u8, "Puxar o resto" com "ate") so a 1.8.2+
 const MAX_TENTATIVAS = 3;
@@ -157,6 +158,11 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
       semTrecho += ` AND NOT (tipo = 'baixar_corte' AND EXISTS (SELECT 1 FROM cortex_cortes c JOIN cortex_videos v ON v.id = c.video_id
         WHERE c.id = corte_id AND c.tipo = 'curto' AND c.baixar_fora = 0 AND COALESCE(c.layout_id, v.layout_id, 0) <> 0))`;
     }
+    // 27/11: "Horizontal inteiro" só a 3.2.0+ (a velha esticaria o quadro todo para 9:16).
+    if (!versaoMin(ag.versao, VERSAO_INTEIRO)) {
+      semTrecho += ` AND NOT (tipo = 'baixar_corte' AND EXISTS (SELECT 1 FROM cortex_cortes c JOIN cortex_videos v ON v.id = c.video_id
+        JOIN cortex_layouts l ON l.id = COALESCE(c.layout_id, v.layout_id) WHERE c.id = corte_id AND c.tipo = 'curto' AND l.encaixe = 'inteiro'))`;
+    }
     if (!versaoMin(ag.versao, VERSAO_FICHA)) {
       semTrecho += " AND NOT (tipo = 'baixar_corte' AND EXISTS (SELECT 1 FROM cortex_cortes c WHERE c.id = corte_id AND c.baixar_fora = 1))";
     }
@@ -188,7 +194,7 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
             : ((await db(env).first('SELECT layout_id FROM cortex_videos WHERE id = ?', t.video_id)) || {}).layout_id || 0;
           corte.layout = lid ? await db(env).first(
             `SELECT id, nome, tipo, cam_x, cam_y, cam_w, cam_h, cam_altura, jogo_x, jogo_y, jogo_w, jogo_h, proporcao,
-                    logo_on, logo_x, logo_y, logo_w, logo_opac
+                    logo_on, logo_x, logo_y, logo_w, logo_opac, encaixe, fundo
                FROM cortex_layouts WHERE id = ? AND usuario_id = ?`, lid, ag.usuario_id) : null;
           // 19/11: logo do canal - o PC baixa uma vez (por "em") e grava no vertical
           if (corte.layout && corte.layout.logo_on) {

@@ -651,7 +651,10 @@
     pos(j, L.jogo_x, L.jogo_y, L.jogo_w, L.jogo_h);
     j.querySelector('span').textContent = L.tipo === 'webcam' ? 'GAMEPLAY' : 'RECORTE';
     if (L.tipo === 'webcam') pos(cam, L.cam_x, L.cam_y, L.cam_w, L.cam_h);
+    if (L.encaixe === 'inteiro') j.querySelector('span').textContent = 'VÍDEO INTEIRO';
     if (!img.naturalWidth) return;
+    // 27/11: "Horizontal inteiro" - o quadro todo no meio do vertical (prévia do layouts.js)
+    if (L.encaixe === 'inteiro' && window.CortexLayouts) { CortexLayouts.previaInteiro(g, img, L, 135, 240); return; }
     var W = img.naturalWidth, H = img.naturalHeight;
     var hc = L.tipo === 'webcam' ? Math.round((1920 * (L.cam_altura || 0.35)) / 2) * 2 / 8 : 0;   // 1080x1920 / 8
     if (L.tipo === 'webcam') g.drawImage(img, L.cam_x * W, L.cam_y * H, L.cam_w * W, L.cam_h * H, 0, 0, 135, hc);

@@ -59,7 +59,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '3.1.1';
+const VERSAO = '3.2.0';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -806,6 +806,15 @@ function tempoExato(s) { s = Math.max(0, Math.round(s)); const h = Math.floor(s 
 function filtroVertical(L) {
   const f = (x) => Math.min(1, Math.max(0, Number(x))).toFixed(5);
   const corte = (x, y, w, h) => `crop=trunc(iw*${f(w)}/2)*2:trunc(ih*${f(h)}/2)*2:trunc(iw*${f(x)}):trunc(ih*${f(y)})`;
+  // 3.2.0 (27/11, pedido do dono): "Horizontal inteiro" - o quadro todo, sem cortar nada, na
+  // largura do vertical e no meio; em cima e embaixo, o próprio vídeo desfocado (ou preto).
+  // O fundo é desfocado em tamanho pequeno (270x480) e ampliado: fica leve para o PC.
+  if (L.encaixe === 'inteiro') {
+    const frente = 'scale=1080:1920:force_original_aspect_ratio=decrease:flags=lanczos,setsar=1';
+    if (L.fundo === 'preto') return `[0:v]${frente},pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,format=yuv420p[v]`;
+    return `[0:v]split=2[a][b];[b]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,boxblur=12:2,eq=brightness=-0.12,` +
+      `scale=1080:1920,setsar=1[fd];[a]${frente}[fr];[fd][fr]overlay=(W-w)/2:(H-h)/2,format=yuv420p[v]`;
+  }
   const jogo = corte(L.jogo_x, L.jogo_y, L.jogo_w, L.jogo_h);
   if (L.tipo === 'sem_webcam') return `[0:v]${jogo},scale=1080:1920:flags=lanczos,setsar=1,format=yuv420p[v]`;
   const hc = Math.round((1920 * Number(L.cam_altura)) / 2) * 2, hj = 1920 - hc;

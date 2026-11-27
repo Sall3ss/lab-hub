@@ -109,6 +109,8 @@
     };
   }
 
+  // 27/11: "Horizontal inteiro" = sem webcam + encaixe 'inteiro' (o quadro todo, sem cortar).
+  function tipoUI(L) { return L.encaixe === 'inteiro' ? 'inteiro' : L.tipo; }
   function proporcaoCam(L) { return (1080 / alturaCam(L)) / L.proporcao; }          // largura/altura (em fração)
   function proporcaoJogo(L) { return (1080 / (1920 - (L.tipo === 'webcam' ? alturaCam(L) : 0))) / L.proporcao; }
   function alturaCam(L) { return Math.round((1920 * (L.cam_altura || 0.35)) / 2) * 2; }
@@ -123,6 +125,7 @@
     return { x: limitar(cx - w / 2, 0, 1 - w), y: limitar(cy - h / 2, 0, 1 - h), w: w, h: h };
   }
   function reenquadrar(L) {
+    if (L.encaixe === 'inteiro') { L.jogo_x = 0; L.jogo_y = 0; L.jogo_w = 1; L.jogo_h = 1; return; }
     // gameplay: mantém a altura quando der (é o que centraliza o personagem sem perder a cena)
     var jh = Math.min(1, L.jogo_h || 1), jw = jh * proporcaoJogo(L);
     if (jw > 1) { jw = 1; jh = jw / proporcaoJogo(L); }
@@ -204,7 +207,7 @@
   function desenharLista() {
     $('lay-itens').innerHTML = lista.map(function (l) {
       return '<button type="button" class="lay-item' + (atual && atual.id === l.id ? ' on' : '') + '" data-lay="' + l.id + '">' +
-        '<b>' + dep.esc(l.nome) + '</b><span>' + (l.tipo === 'webcam' ? 'webcam ' + Math.round(l.cam_altura * 100) + '% + gameplay' : 'só gameplay') +
+        '<b>' + dep.esc(l.nome) + '</b><span>' + (l.tipo === 'webcam' ? 'webcam ' + Math.round(l.cam_altura * 100) + '% + gameplay' : l.encaixe === 'inteiro' ? 'vídeo inteiro, fundo ' + (l.fundo === 'preto' ? 'preto' : 'desfocado') : 'só gameplay') +
           (l.cena ? ' · auto: ' + (l.cena === 'fullcam' ? 'full cam' : 'só o jogo') : '') + '</span></button>';
     }).join('') || '<p class="lay-vazio">Nenhum layout ainda.</p>';
     $('lay-itens').querySelectorAll('[data-lay]').forEach(function (b) {
@@ -228,7 +231,8 @@
     ed.innerHTML =
       '<div class="lay-campos">' +
       '<label class="campo"><span>Nome</span><input id="lay-nome" maxlength="60" value="' + dep.esc(L.nome) + '"></label>' +
-      '<div class="campo"><span>Tipo</span><div class="escolha" id="lay-tipo"><button type="button" data-v="webcam">Com webcam</button><button type="button" data-v="sem_webcam">Sem webcam</button></div></div>' +
+      '<div class="campo"><span>Tipo</span><div class="escolha" id="lay-tipo"><button type="button" data-v="webcam">Com webcam</button><button type="button" data-v="sem_webcam">Sem webcam</button><button type="button" data-v="inteiro">Horizontal inteiro</button></div></div>' +
+      '<div class="campo" id="lay-fundo-campo"><span>Fundo em cima e embaixo</span><div class="escolha" id="lay-fundo-esc"><button type="button" data-v="desfocado">Vídeo desfocado</button><button type="button" data-v="preto">Preto</button></div></div>' +
       // 19/11: a IA olha a foto de cada curto; o layout marcado aqui entra sozinho quando a cena bate.
       '<label class="campo"><span>Usar sozinho quando a foto do corte mostrar</span><select id="lay-cena">' +
         '<option value="">Nada (só quando eu escolher)</option><option value="fullcam">Full cam (só a câmera)</option>' +
@@ -236,7 +240,7 @@
       '<label class="campo" id="lay-alt-campo"><span>Webcam ocupa <b id="lay-alt-txt"></b> da altura</span><input type="range" id="lay-alt" min="20" max="60" step="1"></label>' +
       '</div>' +
       '<div class="lay-area">' +
-      '<div class="lay-palco-col"><p class="lay-dica">Arraste as caixas. O canto ◢ muda o tamanho (a proporção fica travada). <b>Gameplay</b>: deixe o personagem no meio. ' +
+      '<div class="lay-palco-col"><p class="lay-dica">' + (L.encaixe === 'inteiro' ? 'O vídeo entra <b>inteiro</b> no meio do vertical: nada é cortado. ' : 'Arraste as caixas. O canto ◢ muda o tamanho (a proporção fica travada). <b>Gameplay</b>: deixe o personagem no meio. ') +
       (fotoCorte && L.print === fotoCorte.foto ? 'Fundo: <b>' + dep.esc(fotoCorte.rotulo) + '</b>. Para usar outro print: <b>Ctrl+V</b> ou ' : 'Para ver a live por trás: <b>Ctrl+V</b> com um print dela ou ') +
       '<label class="lay-arq">escolha a imagem<input type="file" accept="image/*" id="lay-arq" hidden></label>.</p>' +
       '<div class="lay-palco" id="lay-palco"><div class="lay-fundo" id="lay-fundo"></div>' +
@@ -254,9 +258,18 @@
     $('lay-cena').value = L.cena || '';
     $('lay-cena').onchange = function () { L.cena = this.value || null; sujo = true; };
     $('lay-tipo').onclick = function (ev) {
-      var b = ev.target.closest('button'); if (!b || b.dataset.v === L.tipo) return;
-      L.tipo = b.dataset.v; if (L.tipo === 'webcam' && !L.cam_altura) L.cam_altura = 0.35;
-      reenquadrar(L); sujo = true; desenhar();
+      var b = ev.target.closest('button'); if (!b || b.dataset.v === tipoUI(L)) return;
+      if (b.dataset.v === 'inteiro') { L.tipo = 'sem_webcam'; L.encaixe = 'inteiro'; L.fundo = L.fundo || 'desfocado'; }
+      else {
+        if (L.encaixe === 'inteiro') { L.encaixe = null; L.jogo_h = 1; L.jogo_w = 0.3; L.jogo_x = 0.35; L.jogo_y = 0; }
+        L.tipo = b.dataset.v;
+      }
+      if (L.tipo === 'webcam' && !L.cam_altura) L.cam_altura = 0.35;
+      reenquadrar(L); sujo = true; abrirEditor();    // redesenha a dica do tipo novo (o que não foi salvo continua em L)
+    };
+    $('lay-fundo-esc').onclick = function (ev) {
+      var b = ev.target.closest('button'); if (!b || b.dataset.v === L.fundo) return;
+      L.fundo = b.dataset.v; sujo = true; desenhar();
     };
     $('lay-alt').oninput = function () { L.cam_altura = Number(this.value) / 100; reenquadrar(L); sujo = true; desenhar(); };
     $('lay-arq').onchange = function () { receberArquivo(this.files[0]); this.value = ''; };
@@ -277,15 +290,20 @@
 
   function desenhar() {
     var L = atual; if (!L) return;
-    $('lay-tipo').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === L.tipo); });
+    $('lay-tipo').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === tipoUI(L)); });
     $('lay-alt-campo').hidden = L.tipo !== 'webcam';
+    $('lay-fundo-campo').hidden = L.encaixe !== 'inteiro';
+    $('lay-fundo-esc').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === (L.fundo || 'desfocado')); });
     if (L.tipo === 'webcam') { $('lay-alt').value = Math.round(L.cam_altura * 100); $('lay-alt-txt').textContent = Math.round(L.cam_altura * 100) + '%'; }
     var palco = $('lay-palco');
     palco.style.aspectRatio = String(L.proporcao);
     $('lay-fundo').style.backgroundImage = img ? 'url("' + img.src + '")' : '';
     palco.classList.toggle('sem-print', !img);
     function pos(el, x, y, w, h) { el.style.left = x * 100 + '%'; el.style.top = y * 100 + '%'; el.style.width = w * 100 + '%'; el.style.height = h * 100 + '%'; }
-    pos(palco.querySelector('[data-caixa="jogo"]'), L.jogo_x, L.jogo_y, L.jogo_w, L.jogo_h);
+    var jg = palco.querySelector('[data-caixa="jogo"]');
+    pos(jg, L.jogo_x, L.jogo_y, L.jogo_w, L.jogo_h);
+    jg.classList.toggle('fixa', L.encaixe === 'inteiro');      // o quadro todo: nada para arrastar
+    jg.querySelector('span').textContent = L.encaixe === 'inteiro' ? 'VÍDEO INTEIRO' : 'GAMEPLAY';
     var cam = palco.querySelector('[data-caixa="cam"]');
     cam.hidden = L.tipo !== 'webcam';
     if (L.tipo === 'webcam') pos(cam, L.cam_x, L.cam_y, L.cam_w, L.cam_h);
@@ -304,8 +322,11 @@
         g.fillStyle = 'rgba(255,255,255,.85)'; g.font = '600 15px system-ui, sans-serif'; g.textAlign = 'center'; g.fillText(rot, 135, dy + dh / 2 + 5);
       }
     }
-    if (L.tipo === 'webcam') parte(L.cam_x, L.cam_y, L.cam_w, L.cam_h, 0, hc, '#0e5c66', 'WEBCAM');
-    parte(L.jogo_x, L.jogo_y, L.jogo_w, L.jogo_h, hc, 480 - hc, '#6b3416', 'GAMEPLAY');
+    if (L.encaixe === 'inteiro') previaInteiro(g, img, L, 270, 480);
+    else {
+      if (L.tipo === 'webcam') parte(L.cam_x, L.cam_y, L.cam_w, L.cam_h, 0, hc, '#0e5c66', 'WEBCAM');
+      parte(L.jogo_x, L.jogo_y, L.jogo_w, L.jogo_h, hc, 480 - hc, '#6b3416', 'GAMEPLAY');
+    }
     cv.style.touchAction = L.logo_on && logoInfo ? 'none' : '';   // arrastar a logo sem rolar a página (só com logo)
     // 19/11: logo do canal + as faixas onde o app (Shorts/TikTok/Reels) põe botões e título
     if (L.logo_on && logoInfo) {
@@ -325,11 +346,29 @@
     }
   }
 
+  // 27/11: prévia do "Horizontal inteiro" (a mesma conta do FFmpeg: largura toda, no meio; fundo
+  // = o quadro ampliado, desfocado e escurecido, ou preto). Também usada pela gaveta do corte.
+  function previaInteiro(g, im, L, W, H) {
+    var prop = im ? im.naturalWidth / im.naturalHeight : (L.proporcao || 16 / 9);
+    var w = W, h = W / prop; if (h > H) { h = H; w = H * prop; }
+    g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+    if (im && L.fundo !== 'preto') {
+      var s = Math.max(W / im.naturalWidth, H / im.naturalHeight), bw = im.naturalWidth * s, bh = im.naturalHeight * s;
+      g.save(); g.filter = 'blur(' + Math.round(W / 30) + 'px) brightness(.85)';
+      g.drawImage(im, (W - bw) / 2, (H - bh) / 2, bw, bh); g.restore();
+    } else if (!im && L.fundo !== 'preto') { g.fillStyle = '#3a2412'; g.fillRect(0, 0, W, H); }
+    if (im) g.drawImage(im, (W - w) / 2, (H - h) / 2, w, h);
+    else {
+      g.fillStyle = '#6b3416'; g.fillRect((W - w) / 2, (H - h) / 2, w, h);
+      g.fillStyle = 'rgba(255,255,255,.85)'; g.font = '600 ' + Math.round(W / 18) + 'px system-ui, sans-serif'; g.textAlign = 'center'; g.fillText('VÍDEO INTEIRO', W / 2, H / 2 + 5);
+    }
+  }
+
   // Arrastar (mover) e o canto ◢ (tamanho, proporção travada). Mouse e dedo (pointer events).
   function ligarArrasto() {
     var palco = $('lay-palco');
     palco.onpointerdown = function (ev) {
-      var alvo = ev.target.closest('[data-alca],[data-caixa]'); if (!alvo) return;
+      var alvo = ev.target.closest('[data-alca],[data-caixa]'); if (!alvo || alvo.closest('.fixa')) return;
       ev.preventDefault();
       var qual = alvo.dataset.alca || alvo.dataset.caixa, redim = !!alvo.dataset.alca;
       var L = atual, k = qual === 'cam' ? 'cam' : 'jogo';
@@ -354,7 +393,8 @@
   }
 
   function corpoDe(L) {
-    var c = { nome: (L.nome || '').trim(), tipo: L.tipo, proporcao: L.proporcao, jogo_x: L.jogo_x, jogo_y: L.jogo_y, jogo_w: L.jogo_w, jogo_h: L.jogo_h, cena: L.cena || null };
+    var c = { nome: (L.nome || '').trim(), tipo: L.tipo, proporcao: L.proporcao, jogo_x: L.jogo_x, jogo_y: L.jogo_y, jogo_w: L.jogo_w, jogo_h: L.jogo_h, cena: L.cena || null,
+      encaixe: L.encaixe === 'inteiro' ? 'inteiro' : null, fundo: L.encaixe === 'inteiro' ? (L.fundo || 'desfocado') : null };
     if (L.tipo === 'webcam') { c.cam_x = L.cam_x; c.cam_y = L.cam_y; c.cam_w = L.cam_w; c.cam_h = L.cam_h; c.cam_altura = L.cam_altura; }
     c.logo_on = L.logo_on ? 1 : 0;
     if (c.logo_on) { c.logo_x = L.logo_x; c.logo_y = L.logo_y; c.logo_w = L.logo_w; c.logo_opac = L.logo_opac || 1; }
@@ -401,6 +441,7 @@
 
   window.CortexLayouts = {
     iniciar: function (d) { dep = d; },
+    previaInteiro: previaInteiro,      // 27/11: a gaveta do corte desenha a mesma prévia
     carregar: carregarLista,
     // abre a tela (no layout pedido, ou no primeiro)
     // opc (19/11): { foto, rotulo } = foto do corte como fundo
