@@ -229,7 +229,7 @@
     var rolagem = quadroEl.scrollLeft, html = '', atalhos = '';
     COLUNAS.forEach(function (col, i) {
       var itens = col.grupo === 'video'
-        ? estado.videos.filter(function (v) { return v.etapa === col.id; })
+        ? estado.videos.filter(function (v) { return v.etapa === col.id || (col.id === 'roteiro' && semCortes(v)); })
         : estado.cortes.filter(function (c) { return c.estado === col.id; }).sort(ordemCortes);
       html += '<section class="coluna' + (i === 3 ? ' divisa' : '') + '" data-grupo="' + col.grupo + '" aria-label="' + esc(col.nome) + '">' +
         '<header class="col-topo"><span class="faixa">' + col.faixa + '</span><span class="col-nome">' + esc(col.nome) + '</span>' +
@@ -267,11 +267,19 @@
     }).join('');
   }
 
+  // 27/11: vídeo com roteiro pronto mas sem nenhum corte no quadro (ex.: live que acabou de
+  // começar, trecho curto) sumia: não tinha coluna de vídeo nem cartão de corte. Fica na coluna
+  // Roteiro IA com o aviso, para abrir e "Puxar o resto", mudar o trecho ou concluir.
+  function semCortes(v) {
+    return v.etapa === 'cortado' && !estado.cortes.some(function (c) { return c.video_id === v.id; });
+  }
+
   function cartaoVideo(v) {
     // 18/11: live da Kick - o PC primeiro acha a live; "Puxar o resto" busca só a parte nova.
     var esperaEntrada = v.continuar_de_s != null ? 'puxando o resto…' : v.ao_vivo_canal && !v.capturado_ate_s ? 'procurando a live na Kick…' : 'buscando o texto…';
     var st = situacao(v, v.etapa === 'entrada' ? esperaEntrada : v.etapa === 'roteiro' ? 'IA começando a ler…' : 'transcrevendo…');
     if (!st && v.etapa === 'roteiro') st = '<div class="c-estado espera"><span class="ponto"></span>Texto pronto: aguardando a IA (etapa 3)</div>';
+    if (v.etapa === 'cortado' && !v.erro) st = '<div class="c-estado falha"><span class="ponto"></span>A IA não achou corte neste trecho. Abra para ' + (v.ao_vivo_canal ? '"Puxar o resto", ' : '') + 'mudar o trecho ou concluir.</div>';
     return '<button type="button" class="cartao' + (v.id === selVideo ? ' sel' : '') + '" data-video="' + v.id + '">' +
       '<div class="c-linha"><span class="tag-plat ' + v.plataforma + '">' + PLAT[v.plataforma] + '</span>' +
       (v.ao_vivo ? '<span class="c-vivo" title="A live seguia no ar na última captura">● AO VIVO</span>' : '') +

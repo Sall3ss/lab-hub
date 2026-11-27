@@ -762,3 +762,8 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   num Short, `lerTextos` usa a primeira que cabe (e diz isso no "porquê"). Gaveta do corte ganhou
   contador ao vivo (amarelo acima de 40, vermelho acima de 50) e o tamanho de cada opção da IA.
   Títulos já gerados não mudam sozinhos: "Refazer textos" refaz no padrão novo.
+- 27/11 (dono: "adicionei uma live e o card sumiu"): vídeo com roteiro pronto e NENHUM corte no
+  quadro (live que acabou de começar, trecho curto, ou todos descartados) ficava sem coluna e sem
+  cartão: invisível, e colar o link de novo dava "já está no quadro". Agora aparece na coluna
+  Roteiro IA com o aviso "A IA não achou corte neste trecho", para abrir e Puxar o resto, mudar o
+  trecho, concluir ou excluir (`semCortes` no app.js). Conferido no PC e no celular.
