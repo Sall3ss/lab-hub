@@ -59,7 +59,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '3.1.0';
+const VERSAO = '3.1.1';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -116,6 +116,36 @@ const filhos = new Set();   // yt-dlp/ffmpeg rodando agora (para interromper ao 
 let atual = null;           // { cfg, tarefa, pasta } em execução
 let parando = false;
 
+// 3.1.1 (27/11): vídeo do YouTube com restrição de idade (ou "confirme que não é um robô"): o
+// yt-dlp só baixa com o login de uma conta. Ele lê o login do NAVEGADOR deste PC
+// (--cookies-from-browser); nada sai do PC nem vai para o painel. O Firefox é o que funciona com o
+// navegador aberto; o Chrome e o Edge novos no Windows costumam recusar (criptografia própria).
+// Descoberto o navegador que serve, ele é lembrado até o agente reiniciar.
+const PEDE_LOGIN = /Sign in to confirm|age-restricted|inappropriate for some users|--cookies-from-browser or --cookies|not a bot/i;
+const NAVEGADORES = ['firefox', 'edge', 'chrome', 'brave', 'opera', 'vivaldi'];
+let navegadorLogin = null;
+async function rodarYt(args, opc) {
+  const comLogin = (nav) => ['--cookies-from-browser', nav, ...args];
+  if (navegadorLogin) return rodar('yt-dlp', comLogin(navegadorLogin), opc);
+  try { return await rodar('yt-dlp', args, opc); } catch (e) {
+    if (parando || !PEDE_LOGIN.test(e.message)) throw e;
+    const tentados = [];
+    for (const nav of NAVEGADORES) {
+      try {
+        const r = await rodar('yt-dlp', comLogin(nav), opc);
+        navegadorLogin = nav;
+        log(`O YouTube pediu login (restrição de idade); usei o login do ${nav} deste PC.`);
+        return r;
+      } catch (e2) {
+        if (parando) throw e2;
+        tentados.push(nav + (PEDE_LOGIN.test(e2.message) ? ' (sem login válido)' : ''));
+      }
+    }
+    throw Object.assign(new Error('o YouTube pede login para este vídeo (restrição de idade). Neste PC, abra o Firefox, ' +
+      'entre no YouTube com uma conta maior de 18 anos e clique "Tentar de novo" no painel (o login fica só no PC). Tentei: ' + tentados.join(', ')), { definitivo: true });
+  }
+}
+
 // Roda um programa e devolve a saída. `aoLer` recebe cada linha (para mostrar progresso).
 function rodar(prog, args, { aoLer, cwd } = {}) {
   return new Promise((ok, falha) => {
@@ -170,7 +200,7 @@ async function tarefaTexto(cfg, t, pasta) {
   }
   const m3u8 = /\.m3u8(\?|$)/.test(alvo);
   log(`Buscando informações de ${m3u8 ? 'kick.com/' + (v.ao_vivo_canal || '') + ' (HLS)' : v.url}`);
-  const info = JSON.parse(await rodar('yt-dlp', ['-J', '--no-warnings', '--no-playlist', alvo]));
+  const info = JSON.parse(await rodarYt(['-J', '--no-warnings', '--no-playlist', alvo]));
   const durTotal = Number(info.duration) || 0;
 
   // 1.7.0 (16/11): trecho escolhido no painel. Só o pedaço entre "de" e "até" é buscado e
@@ -266,7 +296,7 @@ async function tarefaTexto(cfg, t, pasta) {
   // começa em 0, e cada parte vai ao painel com o tempo somado ao início do trecho.
   const bruto = join(pasta, 'audio');
   const durTrecho = comTrecho && ateEf ? ateEf - de : 0;
-  await rodar('yt-dlp', ['-f', 'ba/w', '--no-playlist', '--no-warnings', '--newline',
+  await rodarYt(['-f', 'ba/w', '--no-playlist', '--no-warnings', '--newline',
     ...(comTrecho ? ['--download-sections', `*${tc(de)}-${ateEf ? tc(ateEf) : 'inf'}`] : []),
     '-o', bruto + '.%(ext)s', alvo],
   { aoLer: progresso(cfg, t, 'baixando áudio', durTrecho).aoLer });
@@ -524,7 +554,7 @@ async function volumeKick(cfg, t, master, de, ate, pasta, aviso) {
 async function volumeOutro(alvo, de, ate, pasta, comTrecho, aviso) {
   const bruto = join(pasta, 'vol');
   aviso('volume: baixando o áudio leve');
-  await rodar('yt-dlp', ['-f', 'wa/ba/w', '--no-playlist', '--no-warnings', '--newline', '-N', '4',
+  await rodarYt(['-f', 'wa/ba/w', '--no-playlist', '--no-warnings', '--newline', '-N', '4',
     ...(comTrecho ? ['--download-sections', `*${tc(de)}-${ate ? tc(ate) : 'inf'}`] : []),
     '-o', bruto + '.%(ext)s', alvo]);
   const arq = readdirSync(pasta).find((n) => n.startsWith('vol.') && !n.endsWith('.part'));
@@ -695,7 +725,7 @@ function escolherLegenda(info) {
 }
 
 async function baixarLegenda(url, lingua, pasta) {
-  await rodar('yt-dlp', ['--skip-download', '--no-playlist', '--no-warnings', lingua.auto ? '--write-auto-subs' : '--write-subs',
+  await rodarYt(['--skip-download', '--no-playlist', '--no-warnings', lingua.auto ? '--write-auto-subs' : '--write-subs',
     '--sub-langs', lingua.codigo, '--sub-format', 'vtt', '-o', join(pasta, 'leg.%(ext)s'), url]);
   const arq = readdirSync(pasta).find((n) => n.startsWith('leg.') && n.endsWith('.vtt'));
   if (!arq) return [];
@@ -1077,7 +1107,7 @@ async function tarefaCorte(cfg, t, pasta) {
     if (Date.now() - prog.avancou > PARADO_MS) { travou = true; matarFilhos(); }
   }, 20000);
   try {
-    await rodar('yt-dlp', [
+    await rodarYt([
       '--no-playlist', '--no-warnings', '--newline',
       '--download-sections', `*${tc(c.inicio_s)}-${tc(c.fim_s)}`,
       // Curto: corte no quadro exato (recodifica). Longo: SEM recodificar - 15/11 o longo de
@@ -1268,7 +1298,7 @@ async function tarefaQuadros(cfg, t, pasta) {
   if (!lista.length) { log('Fotos: nenhum curto esperando foto.'); return; }
   log(`Fotos dos curtos (${lista.length}): ${v.titulo || v.url}`);
   const alvo = v.fonte_m3u8 || v.url;
-  const endereco = ultimaLinha(await rodar('yt-dlp', ['-g', '--no-playlist', '--no-warnings',
+  const endereco = ultimaLinha(await rodarYt(['-g', '--no-playlist', '--no-warnings',
     '-f', 'bv*[height<=720]/b[height<=720]/bv*/b', alvo])).trim();
   if (!/^https?:\/\//.test(endereco)) throw new Error('o yt-dlp não devolveu o endereço do vídeo para a foto');
   let feitas = 0, falhas = 0;
@@ -1320,7 +1350,7 @@ async function colarCortes(cfg, t, pasta) {
   log(`Colando ${lista.length} curto(s) na fala (começo e fim no limite da frase)…`);
   let endereco;
   try {
-    endereco = ultimaLinha(await rodar('yt-dlp', ['-g', '--no-playlist', '--no-warnings', '-f', 'ba/b[height<=480]/b', v.fonte_m3u8 || v.url])).trim();
+    endereco = ultimaLinha(await rodarYt(['-g', '--no-playlist', '--no-warnings', '-f', 'ba/b[height<=480]/b', v.fonte_m3u8 || v.url])).trim();
   } catch (e) { if (parando) throw e; log(`Fala: sem o endereço do áudio (${e.message}); os curtos ficam como a IA marcou.`); return; }
   if (!/^https?:\/\//.test(endereco)) return;
   let ajustados = 0;
@@ -1368,7 +1398,7 @@ async function tarefaLegenda(cfg, t, pasta) {
   if (!c) throw Object.assign(new Error('o corte foi apagado no painel'), { definitivo: true });
   log(`Legenda para revisar: "${c.titulo}" (${tc(c.inicio_s)} → ${tc(c.fim_s)})`);
   const alvo = v.fonte_m3u8 || v.url;
-  const endereco = ultimaLinha(await rodar('yt-dlp', ['-g', '--no-playlist', '--no-warnings',
+  const endereco = ultimaLinha(await rodarYt(['-g', '--no-playlist', '--no-warnings',
     '-f', 'ba/b[height<=480]/b', alvo])).trim();
   if (!/^https?:\/\//.test(endereco)) throw new Error('o yt-dlp não devolveu o endereço do áudio');
   const audio = join(pasta, 'legenda.ogg');

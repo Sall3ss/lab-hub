@@ -748,3 +748,10 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   02:12:52-02:13:53, foto); telas no PC (1280) e celular (390) sem erro nem rolagem lateral.
   Observado aqui: o yt-dlp 2026.10.26 desta máquina dá NOT_FOUND no link de VOD gravado da Kick
   (o caminho pelo HLS funciona); não confirmado no PC do dono.
+- 27/11 (print do dono: curto falhou com "Sign in to confirm your age", vídeo do YouTube com
+  restrição de idade). Agente **3.1.1**: toda chamada do yt-dlp passa por `rodarYt`; quando o
+  YouTube pede login (idade ou "não é um robô"), tenta de novo com `--cookies-from-browser`
+  (firefox, edge, chrome, brave, opera, vivaldi) e lembra o que funcionou até reiniciar. O login
+  é lido do navegador do PC e não sai dele. Nenhum com login = falha clara pedindo para entrar
+  no YouTube pelo Firefox (o Chrome/Edge novos no Windows costumam recusar a leitura) e usar
+  "Tentar de novo". Testado com yt-dlp de mentira (Firefox com login; nenhum com login).
