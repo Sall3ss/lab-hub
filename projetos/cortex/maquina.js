@@ -14,6 +14,8 @@
 //   POST /tarefas/:id/quadro?corte&s     corpo = foto JPEG crua do meio do curto -> R2 + cena pelo Gemini (19/11)
 //   POST /tarefas/:id/palavras           corpo = audio cru do corte baixado -> Whisper (Groq) palavra a palavra,
 //                                        para o PC gravar a legenda no vertical e o .srt (19/11, agente 2.2.0)
+//   POST /tarefas/:id/sinais             { de, ate, fontes, picos } picos de volume e chat da live (27/11, agente 3.1.0)
+//   POST /tarefas/:id/fala?corte&ini&fim&a&la&b  corpo = audio do começo + do fim do curto -> corte colado na fala (27/11)
 //   POST /tarefas/:id/concluir            { arquivo_local? }
 //   POST /tarefas/:id/falhar              { erro, definitivo? }
 //   POST /tarefas/:id/devolver            o dono desligou o PC no meio: volta para a fila sem contar falha
@@ -29,8 +31,10 @@ import { passoRoteiro } from './roteiro.js';
 import { receberFoto, MAX_FOTO } from './cena.js';
 import { arquivos, temDeposito } from '../../lib/arquivos.js';
 import { textosYoutube, configYoutube, pcDoArquivo } from './youtube.js';
+import { correcoesDoCanal, corrigirTexto, corrigirPalavras, nomesCertos } from './correcoes.js';
+import { colarNaFala, separarPartes } from './fala.js';
 
-export const AGENTE_VERSAO = '3.0.1';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
+export const AGENTE_VERSAO = '3.1.0';     // muda junto com public/projetos/cortex/agente/cortex-agente.mjs
 // 22/11 (dono: "bem devagar da Entrada até o Roteiro IA"): a fila do PC era por ordem de
 // chegada, então um vídeo novo esperava TODOS os downloads aprovados antes (cada curto hoje é
 // download + legenda + vertical + logo), e o roteiro voltava para o fim da fila depois do texto.
@@ -47,6 +51,7 @@ const VERSAO_VERTICAL = [2, 0, 0];      // 19/11: curto com layout vertical 9:16
 const VERSAO_FICHA = [1, 9, 0];         // 18/11: ficha .txt de corte "sem baixar"; o agente velho BAIXARIA o video
 const VERSAO_QUADROS = [2, 1, 0];
 const VERSAO_LEGENDA = [2, 4, 0];      // 19/11: legenda do curto revisada no painel antes de baixar      // 19/11: foto de cada curto (cena + previa do vertical)
+const VERSAO_FALA = [3, 1, 0];          // 27/11: o PC ouve o começo e o fim do curto (corte colado na fala)
 const VERSAO_LIVE = [1, 8, 2];          // 18/11: live da Kick (link do canal, m3u8, "Puxar o resto" com "ate") so a 1.8.2+
 const MAX_TENTATIVAS = 3;
 const VISTO_A_CADA_MS = 60 * 1000;      // grava "visto_em" no maximo 1x por minuto (poupa escrita no D1)
@@ -212,6 +217,13 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
           `SELECT id, inicio_s, fim_s FROM cortex_cortes WHERE video_id = ? AND tipo = 'curto' AND estado = 'triagem' AND quadro_em IS NULL
             ORDER BY inicio_s LIMIT 80`, t.video_id)).map((c) => ({ id: c.id, s: Math.round((c.inicio_s + c.fim_s) / 2) }));
       }
+      // 27/11 (3.1.0): curtos da IA ainda na Triagem, sem legenda e sem ajuste: o PC ouve o começo e o fim.
+      let falas;
+      if (t.tipo === 'quadros' && versaoMin(ag.versao, VERSAO_FALA)) {
+        falas = await db(env).all(
+          `SELECT id, inicio_s, fim_s FROM cortex_cortes WHERE video_id = ? AND tipo = 'curto' AND origem = 'ia' AND estado = 'triagem'
+              AND fala_em IS NULL AND legenda IS NULL ORDER BY inicio_s LIMIT 80`, t.video_id);
+      }
       // 24/11: envio ao YouTube - os textos exatos (pelo modelo do dono), a privacidade, o caminho do
       // arquivo neste PC e os IDs que o dono desvinculou (o registro local não vale para eles).
       let envio;
@@ -225,7 +237,7 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
         await db(env).run("UPDATE cortex_cortes SET youtube_estado = 'enviando', youtube_erro = NULL WHERE id = ?", corte.id);
       }
       // pasta: a escolhida no painel vale ja neste download (sem esperar o proximo "oi").
-      return json({ tarefa: { id: t.id, tipo: t.tipo, tentativa: t.tentativas + 1, prazo, video, corte, cortes, envio, pasta: ag.pasta || null } });
+      return json({ tarefa: { id: t.id, tipo: t.tipo, tentativa: t.tentativas + 1, prazo, video, corte, cortes, falas, envio, pasta: ag.pasta || null } });
     }
     return json({ tarefa: null });
   }
@@ -310,7 +322,10 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
       fonte = 'whisper';
     }
 
-    const blocos = juntar(segmentos);
+    // 27/11: correções de nomes do canal ("GT6" -> "GTA 6") já no texto que a IA vai ler.
+    const vc = await db(env).first('SELECT canal FROM cortex_videos WHERE id = ?', tarefa.video_id);
+    const corr = await correcoesDoCanal(env, ag.usuario_id, vc && vc.canal);
+    const blocos = juntar(segmentos).map((b) => ({ ...b, t: corrigirTexto(b.t, corr) }));
     const lotes = [];
     // 18/11: "Puxar o resto" (continuar_de_s): o texto antigo fica; sai so o que vier dali em diante.
     const vid = await db(env).first('SELECT continuar_de_s FROM cortex_videos WHERE id = ?', tarefa.video_id);
@@ -404,10 +419,14 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
     const url = new URL(request.url);
     const idioma = /^[a-z]{2}$/.test(url.searchParams.get('idioma') || '') ? url.searchParams.get('idioma') : 'pt';
     // 19/11: o contexto da live (escrito pelo dono) vai como "prompt" do Whisper: os nomes saem certos.
-    const vid = await db(env).first('SELECT contexto FROM cortex_videos WHERE id = ?', tarefa.video_id);
+    const vid = await db(env).first('SELECT contexto, canal FROM cortex_videos WHERE id = ?', tarefa.video_id);
+    // 27/11: os nomes certos das correções do canal também vão para o Whisper.
+    const corr = await correcoesDoCanal(env, ag.usuario_id, vid && vid.canal);
+    const ctx = [nomesCertos(corr), vid && vid.contexto].filter(Boolean).join('. ');   // os nomes certos primeiro (a lista corta em 160 letras)
     const r = await transcreverGroq(env, audio, request.headers.get('content-type') || 'audio/ogg',
-      { palavras: true, idioma, contexto: vid && vid.contexto, buraco: !!url.searchParams.get('buraco') });
+      { palavras: true, idioma, contexto: ctx, buraco: !!url.searchParams.get('buraco') });
     if (r.erro) return json({ erro: r.erro, esperar_s: r.esperar_s, definitivo: !!r.definitivo }, r.status || 502);
+    if (r.palavras) r.palavras = corrigirPalavras(r.palavras, corr);
     // 19/11: guarda para o dono revisar. Pedido de revisao ('legenda') sobrescreve; o do download
     // so preenche se ainda nao ha legenda (nunca apaga uma correcao do dono).
     // 2.5.0: "parcial" = o PC ainda vai juntar pedaços (buracos transcritos de novo) e grava no fim (legenda_final).
@@ -435,6 +454,68 @@ export async function maquina({ request, env, partes, metodo, json, waitUntil })
         JSON.stringify(palavras), iso, tarefa.corte_id);
     }
     return json({ ok: true, palavras: palavras.length });
+  }
+
+  // 27/11 (agente 3.1.0): picos da live medidos pelo PC (volume acima do normal do streamer e
+  // velocidade do chat acima do normal da live). Chega antes do texto, na mesma tarefa: o roteiro
+  // já nasce sabendo onde a live "explodiu". Refazer a mesma parte troca os picos dela.
+  if (acao === 'sinais') {
+    if (tarefa.tipo !== 'texto') return json({ erro: 'tarefa não é de texto' }, 400);
+    const c = await request.json().catch(() => ({}));
+    const de = Math.max(0, Math.floor(Number(c.de) || 0));
+    const ate = Number(c.ate) > de ? Math.ceil(Number(c.ate)) : null;
+    const num = (x, max) => { const v = Number(x); return Number.isFinite(v) ? Math.round(Math.min(max, Math.max(0, v)) * 10) / 10 : null; };
+    const picos = (Array.isArray(c.picos) ? c.picos : []).slice(0, 120)
+      .map((p) => ({ s: Math.round(Number(p && p.s)), vol: num(p && p.volume_db, 80), chat: num(p && p.chat_x, 50), forca: num(p && p.forca, 200) }))
+      .filter((p) => Number.isFinite(p.s) && p.s >= de && (!ate || p.s <= ate) && p.forca !== null);
+    const fontes = [c.fontes && c.fontes.volume ? 'volume' : null, c.fontes && c.fontes.chat ? 'chat' : null].filter(Boolean).join(',');
+    const lotes = [[`DELETE FROM cortex_sinais WHERE video_id = ? AND segundo >= ?${ate ? ' AND segundo <= ?' : ''}`, ate ? [tarefa.video_id, de, ate] : [tarefa.video_id, de]]];
+    for (let i = 0; i < picos.length; i += 20) {
+      const f = picos.slice(i, i + 20);
+      lotes.push(['INSERT INTO cortex_sinais (video_id, segundo, volume_db, chat_x, forca) VALUES ' + f.map(() => '(?, ?, ?, ?, ?)').join(', '),
+        f.flatMap((p) => [tarefa.video_id, p.s, p.vol, p.chat, p.forca])]);
+    }
+    lotes.push(['UPDATE cortex_videos SET sinais_fontes = ?, sinais_em = ? WHERE id = ?', [fontes, iso, tarefa.video_id]]);
+    await db(env).batch(lotes);
+    return json({ ok: true, picos: picos.length });
+  }
+
+  // 27/11 (agente 3.1.0): corte colado na fala. O PC manda o áudio do começo (parte A) e do fim
+  // (parte B) do curto, juntos com 1 s de silêncio no meio; o Whisper dá o tempo de cada palavra e
+  // o curto estica até o início/fim da frase (fala.js). Só mexe se o tempo ainda é o que o PC
+  // recebeu, sem legenda e na Triagem: ajuste do dono nunca é desfeito.
+  if (acao === 'fala') {
+    if (tarefa.tipo !== 'quadros') return json({ erro: 'tarefa não é de fotos' }, 400);
+    const url = new URL(request.url);
+    const q = (k) => Number(url.searchParams.get(k));
+    const corte = await db(env).first(
+      "SELECT id, inicio_s, fim_s, gancho_inicio_s, gancho_fim_s, estado, legenda, fala_em FROM cortex_cortes WHERE id = ? AND video_id = ? AND usuario_id = ? AND tipo = 'curto'",
+      q('corte'), tarefa.video_id, ag.usuario_id);
+    const marcar = (nota) => db(env).run('UPDATE cortex_cortes SET fala_em = ?, fala_ajuste = COALESCE(fala_ajuste, ?) WHERE id = ? AND fala_em IS NULL', iso, nota, corte.id);
+    if (!corte) return json({ erro: 'corte não existe mais', pular: true }, 404);
+    if (corte.fala_em || corte.estado !== 'triagem' || corte.legenda || corte.inicio_s !== q('ini') || corte.fim_s !== q('fim')) {
+      return json({ ok: true, mudou: false, motivo: 'o corte mudou no painel' });
+    }
+    if (!env.GROQ_API_KEY) return json({ erro: 'Falta a chave GROQ_API_KEY no Cloudflare.', pular: true }, 503);
+    const audio = await request.arrayBuffer();
+    if (!audio.byteLength || audio.byteLength > 4 * 1024 * 1024) return json({ erro: 'áudio do ajuste vazio ou grande demais', pular: true }, 400);
+    const vid = await db(env).first('SELECT contexto, canal FROM cortex_videos WHERE id = ?', tarefa.video_id);
+    const corr = await correcoesDoCanal(env, ag.usuario_id, vid && vid.canal);
+    const r = await transcreverGroq(env, audio, request.headers.get('content-type') || 'audio/ogg',
+      { palavras: true, idioma: 'pt', contexto: [nomesCertos(corr), vid && vid.contexto].filter(Boolean).join('. ') });
+    if (r.erro) return json({ erro: r.erro, esperar_s: r.esperar_s, pular: !r.esperar_s }, r.status || 502);
+    const { A, B } = separarPartes(r.palavras || [], q('a'), q('la'), q('b'));
+    const x = colarNaFala({ inicio: corte.inicio_s, fim: corte.fim_s }, A, B);
+    if (!x.mudou) { await marcar(null); return json({ ok: true, mudou: false }); }
+    const ajuste = JSON.stringify({ ini_antes: corte.inicio_s, fim_antes: corte.fim_s, ini: x.inicio, fim: x.fim });
+    // o gancho continua dentro do corte
+    const gi = corte.gancho_inicio_s == null ? null : Math.max(x.inicio, corte.gancho_inicio_s);
+    const gf = corte.gancho_fim_s == null ? null : Math.min(x.fim, Math.max(gi ?? x.inicio, corte.gancho_fim_s));
+    const u = await db(env).run(
+      `UPDATE cortex_cortes SET inicio_s = ?, fim_s = ?, gancho_inicio_s = ?, gancho_fim_s = ?, fala_em = ?, fala_ajuste = ?, atualizado_em = ?
+        WHERE id = ? AND inicio_s = ? AND fim_s = ? AND estado = 'triagem' AND legenda IS NULL AND fala_em IS NULL`,
+      x.inicio, x.fim, gi, gf, iso, ajuste, iso, corte.id, corte.inicio_s, corte.fim_s);
+    return json({ ok: true, mudou: !!u.meta.changes, inicio_s: x.inicio, fim_s: x.fim });
   }
 
   if (acao === 'concluir') {

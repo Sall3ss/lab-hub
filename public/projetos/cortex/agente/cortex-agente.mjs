@@ -59,7 +59,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir, tmpdir } from 'node:os';
 
-const VERSAO = '3.0.1';
+const VERSAO = '3.1.0';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const ARQ_CONFIG = join(AQUI, 'config.json');
 const ARQ_LOG = join(AQUI, 'agente.log');
@@ -160,9 +160,10 @@ async function tarefaTexto(cfg, t, pasta) {
   const v = t.video;
   // 1.8.0 (18/11): vídeo de live da Kick. Enquanto a live roda, o yt-dlp não abre o link do vídeo
   // (a Kick responde NOT_FOUND), mas abre o endereço HLS (m3u8), que devolve até o minuto atual.
-  let alvo = v.fonte_m3u8 || v.url, idioma = null, aoVivo = null;
+  let alvo = v.fonte_m3u8 || v.url, idioma = null, aoVivo = null, kick = null;
   if (v.ao_vivo_canal) {
     const lv = await liveKick(v);
+    kick = lv;
     await painel(cfg, `/tarefas/${t.id}/live`, { corpo: { uuid: lv.uuid, fonte: lv.fonte, titulo: lv.titulo, ao_vivo: lv.aoVivo } });
     alvo = lv.fonte; idioma = lv.idioma; aoVivo = lv.aoVivo;
     log(`Live da Kick: ${lv.titulo || v.ao_vivo_canal} (${lv.aoVivo ? 'AO VIVO' : 'já terminou'}).`);
@@ -195,8 +196,24 @@ async function tarefaTexto(cfg, t, pasta) {
   const comTrecho = de > 0 || ate > 0 || m3u8;
   if (de > 0 || ate > 0) log(`Só o trecho ${tc(de)} → ${ateEf ? tc(ateEf) : 'fim'}.`);
 
+  // 3.1.0 (27/11): vídeo gravado da Kick - a lista do canal dá a legenda, o chat e o HLS leve.
+  let kGravado = null;
+  if (!m3u8 && v.plataforma === 'kick') {
+    try { kGravado = await kickGravado(v); } catch (e) { if (parando) throw e; log(`Kick: lista do canal falhou (${e.message}).`); }
+    const uuid = (String(v.url).match(/videos\/([0-9a-f-]{36})/i) || [])[1];
+    kick = kGravado || (uuid ? { uuid: uuid.toLowerCase() } : null);
+  }
+  // 3.1.0: sinais (volume + chat) em paralelo com o texto; chegam ao painel antes da última parte.
+  let sinaisP = null;
+  const iniciarSinais = (arquivo, fim) => {
+    if (!sinaisP) sinaisP = medirSinais(cfg, t, { de, ate: fim || ateEf, alvo, m3u8, comTrecho, kick, arquivo, pasta }).then(() => null, (e) => e);
+    return sinaisP;
+  };
+  const esperarSinais = async () => { if (sinaisP) { const e = await sinaisP; if (e) throw e; } };
+
   // Texto pronto (legenda): em lotes de 400 frases para cada pedido ficar leve para o painel.
   const enviarLegenda = async (segs) => {
+    await esperarSinais();
     const lotes = [];
     for (let i = 0; i < segs.length; i += 400) lotes.push(segs.slice(i, i + 400));
     for (let i = 0; i < lotes.length; i++) {
@@ -212,6 +229,7 @@ async function tarefaTexto(cfg, t, pasta) {
     const lg = idioma || 'pt';
     try {
       log(`Buscando a legenda da Kick (${lg}${idioma ? '' : ', língua do canal desconhecida'})…`);
+      iniciarSinais();
       const segs = await legendaHls(cfg, t, alvo, lg, de, ateEf);
       if (segs.length >= minimoFrases(de, ateEf)) { await enviarLegenda(segs); return; }
       log('Esta live da Kick não tem legenda (ou veio curta demais); vou pelo áudio.');
@@ -219,11 +237,12 @@ async function tarefaTexto(cfg, t, pasta) {
   } else {
     if (v.plataforma === 'kick') {
       try {
-        const k = await kickGravado(v);
+        const k = kGravado;
         if (!k) log('Vídeo não achado na lista do canal na Kick; sem legenda da Kick.');
         else {
           const lg = k.idioma || 'pt';
           log(`Vídeo gravado da Kick: buscando a legenda da Kick (${lg})…`);
+          iniciarSinais();
           const segs = await legendaHls(cfg, t, k.fonte, lg, de, ateEf);
           if (segs.length >= minimoFrases(de, ateEf)) { await enviarLegenda(segs); return; }
           log('Este vídeo da Kick não tem legenda (ou veio curta demais).');
@@ -233,6 +252,7 @@ async function tarefaTexto(cfg, t, pasta) {
     const lingua = escolherLegenda(info);
     if (lingua) {
       log(`Legenda nativa encontrada (${lingua.codigo}${lingua.auto ? ', automática' : ''}). Baixando o texto…`);
+      iniciarSinais();
       try {
         const segs = (await baixarLegenda(v.url, lingua, pasta)).filter((s) => s.f > de && (!ate || s.i < ate));
         if (segs.length > 20) { await enviarLegenda(segs); return; }
@@ -255,6 +275,7 @@ async function tarefaTexto(cfg, t, pasta) {
   // Com trecho, mede o arquivo (o corte do yt-dlp cai no quadro-chave, alguns segundos de folga).
   let dur = comTrecho ? await duracaoDe(join(pasta, arq), durTrecho) : durTotal || await duracaoDe(join(pasta, arq));
   if (durTrecho) dur = Math.min(dur, durTrecho + 15);
+  iniciarSinais(join(pasta, arq), ateEf || de + dur);   // 3.1.0: o volume sai do próprio áudio (sem baixar de novo)
   // (- 5 s: um resto de meio segundo no fim não vira uma parte quase vazia para a Groq)
   const total = Math.max(1, Math.ceil((dur - 5) / PARTE_AUDIO_S));
   for (let i = 0; i < total; i++) {
@@ -265,6 +286,7 @@ async function tarefaTexto(cfg, t, pasta) {
       '-i', join(pasta, arq), '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'libopus', '-b:a', '24k', parte]);
     const dados = readFileSync(parte);
     log(`Transcrevendo parte ${i + 1}/${total} (${(dados.length / 1048576).toFixed(1)} MB)…`);
+    if (i === total - 1) await esperarSinais();   // os picos chegam antes do texto terminar
     // Limite do plano grátis da Groq (horas de áudio por hora/dia): espera o tempo que ela
     // pede e manda de novo a MESMA parte, sem recomeçar a live. Desiste só depois de 8 h.
     let esperado = 0;
@@ -336,7 +358,8 @@ async function liveKick(v) {
     throw Object.assign(new Error(`o canal ${canal} não está ao vivo agora. Para uma live que já acabou, cole o link do vídeo gravado (kick.com/${canal}/videos/...)`), { definitivo: true });
   }
   return { uuid: item.video.uuid, fonte: item.source, aoVivo: !!item.is_live, titulo: item.session_title || null,
-    idioma: IDIOMAS[String(item.language || '').toLowerCase()] || null };
+    idioma: IDIOMAS[String(item.language || '').toLowerCase()] || null,
+    canalId: item.channel_id || null, inicioMs: horaKick(item.start_time) };   // 3.1.0: para o chat
 }
 
 // 2.9.0 (22/11, dono: "ta pegando uma live da kick e usando a Groq"): vídeo GRAVADO da Kick
@@ -352,7 +375,8 @@ async function kickGravado(v) {
   const lista = await r.json().catch(() => []);
   const item = (Array.isArray(lista) ? lista : []).find((x) => x && x.video && String(x.video.uuid).toLowerCase() === m[2].toLowerCase());
   if (!item || !item.source) return null;
-  return { fonte: item.source, idioma: IDIOMAS[String(item.language || '').toLowerCase()] || null };
+  return { fonte: item.source, idioma: IDIOMAS[String(item.language || '').toLowerCase()] || null,
+    uuid: m[2].toLowerCase(), canalId: item.channel_id || null, inicioMs: horaKick(item.start_time) };
 }
 // Mínimo de frases para aceitar a legenda (proporcional: no "Puxar o resto" curto, 20 é demais).
 const minimoFrases = (de, ateEf) => ateEf ? Math.min(20, Math.max(3, Math.floor((ateEf - de) / 20))) : 20;
@@ -400,6 +424,258 @@ async function legendaHls(cfg, t, master, idioma, de, ate) {
   }));
   if (parando) throw new Error('desligando');
   return lerVtt(textos.join('\n\n')).filter((s) => s.f > de && (!ate || s.i < ate));
+}
+
+// ---------------------------------------------------------------- sinais da live (3.1.0, 27/11/2026)
+// Pedido do dono, depois de estudar um projeto de cortes de um amigo: reação (grito, risada, chat
+// explodindo) não aparece no texto. O PC mede e manda ao painel SÓ os picos:
+//   - volume de cada segundo comparado com o normal do próprio streamer naquele trecho (mediana
+//     móvel de ~5 min): grito e risada alta sobem; música de fundo constante, não;
+//   - chat da Kick (o VOD guarda o chat): uma amostra de 5 s a cada 20-30 s, com calma (~1 pedido
+//     por segundo; testado em 27/11: 200 seguidos sem bloqueio, 6 por segundo = bloqueio 429).
+// Força = dB acima do normal + 4 x log2(chat x vezes o normal). Os mais fortes, a 90 s um do outro.
+// Falhar aqui nunca impede o texto: o roteiro segue só pelo texto, como antes.
+const PISO_DB = -50;
+
+// dB (RMS) de cada segundo de um áudio/vídeo, lido pelo ffmpeg a 8 kHz mono (leve). `inicio` =
+// segundo do vídeo em que o arquivo começa; o resultado vai para vol[segundo - de].
+function volumePcm(args, aoSegundo) {
+  return new Promise((ok, falha) => {
+    let p;
+    try { p = spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', ...args, '-vn', '-ac', '1', '-ar', '8000', '-f', 's16le', 'pipe:1'], { windowsHide: true }); } catch (e) { falha(e); return; }
+    filhos.add(p);
+    let soma = 0, n = 0, k = 0, sobra = null, erro = '';
+    p.stdout.on('data', (b) => {
+      if (sobra) { b = Buffer.concat([sobra, b]); sobra = null; }
+      const pares = b.length >> 1;
+      if (b.length & 1) sobra = b.subarray(b.length - 1);
+      for (let i = 0; i < pares; i++) {
+        const x = b.readInt16LE(i * 2) / 32768;
+        soma += x * x;
+        if (++n === 8000) { aoSegundo(k++, 20 * Math.log10(Math.sqrt(soma / n) + 1e-9)); soma = 0; n = 0; }
+      }
+    });
+    p.stderr.on('data', (b) => { erro = (erro + b).slice(-800); });
+    p.on('error', falha);
+    p.on('close', (cod) => {
+      filhos.delete(p);
+      if (n > 4000) aoSegundo(k++, 20 * Math.log10(Math.sqrt(soma / n) + 1e-9));
+      cod === 0 ? ok(k) : falha(new Error(`ffmpeg ${cod}: ${ultimaLinha(erro)}`));
+    });
+  });
+}
+
+// Volume de um arquivo que já está no PC (o áudio baixado para a Groq): começa em `de`.
+async function volumeDeArquivo(arq, de, ate) {
+  const vol = new Float32Array(Math.max(1, Math.ceil(ate - de))).fill(NaN);
+  await volumePcm(['-i', arq], (k, db) => { if (k < vol.length) vol[k] = db; });
+  return vol;
+}
+
+// Kick: não há faixa só de áudio; o mais leve é o 160p (~140 MB por hora de live). Pedaços de
+// 12,5 s baixados 6 por vez; cada um é medido e apagado na hora.
+async function volumeKick(cfg, t, master, de, ate, pasta, aviso) {
+  const pegar = async (url, bin) => {
+    for (let k = 0; ; k++) {
+      try {
+        const r = await fetch(url, { headers: { 'user-agent': NAVEGADOR }, signal: AbortSignal.timeout(60000) });
+        if (r.ok) return bin ? Buffer.from(await r.arrayBuffer()) : await r.text();
+        if (r.status === 404 || k >= 3) throw new Error(`${r.status}`);
+      } catch (e) { if (k >= 3 || e.message === '404') throw e; }
+      await dorme(1500 * (k + 1));
+    }
+  };
+  const mestre = await pegar(master);
+  const variantes = mestre.split(/\r?\n/).filter((l) => l && !l.startsWith('#'));
+  const leve = variantes.find((l) => /160p/.test(l)) || variantes[variantes.length - 1];
+  if (!leve) throw new Error('sem variante de vídeo no HLS');
+  const lista = new URL(leve, master).href;
+  const pl = await pegar(lista);
+  const pedacos = [];
+  let t0 = 0, d = null;
+  for (const bruta of pl.split(/\r?\n/)) {
+    const x = bruta.trim();
+    if (x.startsWith('#EXTINF:')) d = parseFloat(x.slice(8));
+    else if (x && !x.startsWith('#') && d !== null) {
+      if (t0 + d > de && t0 < ate) pedacos.push({ url: new URL(x, lista).href, t0 });
+      t0 += d; d = null;
+    }
+  }
+  const vol = new Float32Array(Math.max(1, Math.ceil(ate - de))).fill(NaN);
+  let prox = 0, feitos = 0;
+  await Promise.all(Array.from({ length: 6 }, async (_, w) => {
+    const arq = join(pasta, `vol-${w}.ts`);
+    while (prox < pedacos.length && !parando) {
+      const p = pedacos[prox++];
+      try {
+        writeFileSync(arq, await pegar(p.url, true));
+        await volumePcm(['-i', arq], (k, db) => { const s = Math.floor(p.t0 + k) - de; if (s >= 0 && s < vol.length) vol[s] = Number.isNaN(vol[s]) ? db : Math.max(vol[s], db); });
+      } catch { /* um pedaço perdido não estraga a medida */ }
+      feitos++;
+      aviso(`volume ${Math.floor(feitos / pedacos.length * 100)}%`);
+    }
+    try { unlinkSync(arq); } catch { /* */ }
+  }));
+  if (parando) throw new Error('desligando');
+  return vol;
+}
+
+// YouTube/Twitch/outros: o áudio mais leve (só o trecho analisado), medido e apagado.
+async function volumeOutro(alvo, de, ate, pasta, comTrecho, aviso) {
+  const bruto = join(pasta, 'vol');
+  aviso('volume: baixando o áudio leve');
+  await rodar('yt-dlp', ['-f', 'wa/ba/w', '--no-playlist', '--no-warnings', '--newline', '-N', '4',
+    ...(comTrecho ? ['--download-sections', `*${tc(de)}-${ate ? tc(ate) : 'inf'}`] : []),
+    '-o', bruto + '.%(ext)s', alvo]);
+  const arq = readdirSync(pasta).find((n) => n.startsWith('vol.') && !n.endsWith('.part'));
+  if (!arq) throw new Error('o yt-dlp não gerou o áudio');
+  aviso('volume: medindo');
+  try { return await volumeDeArquivo(join(pasta, arq), de, ate); } finally { try { unlinkSync(join(pasta, arq)); } catch { /* */ } }
+}
+
+// Dados do vídeo gravado na Kick (canal e hora em que a live começou), para alinhar o chat.
+async function kickVideo(uuid) {
+  const v1 = KICK_API.replace(/\/v2\/?$/, '/v1');
+  const r = await fetch(`${v1}/video/${uuid}`, { headers: { 'user-agent': NAVEGADOR, accept: 'application/json' }, signal: AbortSignal.timeout(30000) });
+  if (!r.ok) throw new Error(`a Kick respondeu ${r.status}`);
+  const j = await r.json();
+  const ls = j.livestream || {};
+  return { canalId: ls.channel_id, inicioMs: horaKick(ls.start_time || ls.created_at) };
+}
+// "2026-11-23 21:21:39" (UTC; conferido em 27/11: bate com a pasta do HLS e com o chat).
+const horaKick = (s) => { const t = Date.parse(String(s || '').replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(s || '')) ? '' : 'Z')); return Number.isFinite(t) ? t : null; };
+
+// Chat da Kick: uma janela de 5 s (até 25 mensagens) a cada `passo` segundos. Com 25 (o teto), a
+// taxa sai do espalhamento dos horários (25 mensagens em 2 s = 62 a cada 5 s).
+async function chatKick(canalId, inicioMs, de, ate, aviso) {
+  const passo = ate - de > 4 * 3600 ? 30 : 20;
+  const alvos = [];
+  for (let s = Math.floor(de); s < ate; s += passo) alvos.push(s);
+  const amostras = [];
+  let prox = 0, feitos = 0, espaco = 500, pausaAte = 0, perdidas = 0;
+  await Promise.all([0, 1].map(async () => {
+    while (prox < alvos.length && !parando) {
+      const s = alvos[prox++];
+      for (let tent = 0; tent < 4 && !parando; tent++) {
+        const espera = pausaAte - Date.now();
+        if (espera > 0) await dorme(espera);
+        let r;
+        try {
+          r = await fetch(`${KICK_API}/channels/${canalId}/messages?start_time=${new Date(inicioMs + s * 1000).toISOString()}`,
+            { headers: { 'user-agent': NAVEGADOR, accept: 'application/json' }, signal: AbortSignal.timeout(20000) });
+        } catch { await dorme(3000); continue; }
+        if (r.status === 429) { pausaAte = Date.now() + 30000; espaco = Math.min(3000, espaco + 400); continue; }
+        if (!r.ok) { await dorme(2000); continue; }
+        const j = await r.json().catch(() => ({}));
+        const msgs = ((j.data || {}).messages || []).map((m) => Date.parse(m.created_at)).filter(Number.isFinite);
+        let taxa = msgs.length;
+        if (msgs.length >= 25) taxa = msgs.length * 5 / Math.max(1, (Math.max(...msgs) - Math.min(...msgs)) / 1000 + 1);
+        amostras.push({ s, taxa });
+        break;
+      }
+      feitos++;
+      perdidas = feitos - amostras.length;
+      if (perdidas > 20 && perdidas > feitos / 2) throw new Error('a Kick não devolveu o chat');
+      aviso(`chat ${Math.floor(feitos / alvos.length * 100)}%`);
+      await dorme(espaco);
+    }
+  }));
+  if (parando) throw new Error('desligando');
+  return amostras.sort((a, b) => a.s - b.s);
+}
+
+const mediana = (a) => { if (!a.length) return 0; const b = [...a].sort((x, y) => x - y); return b[b.length >> 1]; };
+// Os picos (cálculo puro; exportado para teste). vol[k] = dB do segundo de+k (NaN = sem medida).
+function calcularPicos(vol, amostras, de, ate) {
+  const n = Math.max(1, Math.ceil(ate - de));
+  const forca = new Float64Array(n), exc = new Float64Array(n);
+  let temVol = false;
+  if (vol && vol.length) {
+    const v = Array.from({ length: n }, (_, k) => { const x = vol[k]; return Number.isFinite(x) ? Math.max(x, PISO_DB) : PISO_DB; });
+    const sons = v.filter((x) => x > PISO_DB + 1);
+    if (sons.length > 60) {
+      temVol = true;
+      const med = mediana(sons);
+      const ref = v.map((x) => (x > PISO_DB + 1 ? x : med));
+      // linha de base: mediana de blocos de 30 s, suavizada (mediana de ~5 min em volta)
+      const nb = Math.ceil(n / 30), blocos = [];
+      for (let b = 0; b < nb; b++) blocos.push(mediana(ref.slice(b * 30, (b + 1) * 30)));
+      const suave = blocos.map((_, b) => mediana(blocos.slice(Math.max(0, b - 5), b + 6)));
+      for (let k = 0; k < n; k++) exc[k] = v[k] > PISO_DB + 1 ? v[k] - suave[Math.floor(k / 30)] : 0;
+      for (let k = 0; k < n; k++) {
+        const viz = Math.max(exc[k], k > 0 ? exc[k - 1] : 0, k < n - 1 ? exc[k + 1] : 0);
+        forca[k] = (exc[k] + viz) / 2;   // grito curto conta; o segundo do pico vence os vizinhos
+      }
+    }
+  }
+  // chat: a reação aparece no chat alguns segundos DEPOIS do momento (atraso da live + digitar)
+  const chat = new Float64Array(n).fill(NaN);
+  const comChat = amostras && amostras.length >= 10 && amostras.some((a) => a.taxa > 0);
+  if (comChat) {
+    const base = Math.max(1, mediana(amostras.map((a) => a.taxa).filter((x) => x > 0)));
+    let j = 0;
+    for (let k = 0; k < n; k++) {
+      const s = de + k;
+      while (j < amostras.length && amostras[j].s < s) j++;
+      let m = NaN;
+      for (let q = j; q < amostras.length && amostras[q].s <= s + 25; q++) m = Number.isNaN(m) ? amostras[q].taxa / base : Math.max(m, amostras[q].taxa / base);
+      chat[k] = m;
+      if (Number.isFinite(m)) forca[k] += 4 * Math.log2(Math.max(m, 1));
+    }
+  }
+  const max = Math.min(60, Math.max(8, Math.round(n / 3600 * 5)));
+  const ordem = Array.from({ length: n }, (_, k) => k).sort((a, b) => forca[b] - forca[a]);
+  const escolhidos = [];
+  for (const k of ordem) {
+    if (forca[k] < 4 || escolhidos.length >= max) break;
+    if (de + k < 10) continue;
+    if (escolhidos.every((e) => Math.abs(e - k) >= 90)) escolhidos.push(k);
+  }
+  return {
+    fontes: { volume: temVol, chat: !!comChat },
+    picos: escolhidos.sort((a, b) => a - b).map((k) => ({
+      s: de + k, forca: Math.round(forca[k] * 10) / 10,
+      volume_db: temVol ? Math.round(exc[k] * 10) / 10 : null,
+      chat_x: Number.isFinite(chat[k]) ? Math.round(chat[k] * 10) / 10 : null,
+    })),
+  };
+}
+
+// Mede tudo o que der (volume e chat em paralelo) e manda os picos ao painel. Nunca lança erro
+// (só o "desligando"): sem sinais, o roteiro segue pelo texto.
+async function medirSinais(cfg, t, { de, ate, alvo, m3u8, comTrecho, kick, arquivo, pasta }) {
+  if (!ate || ate - de < 120) return;
+  let ultimo = 0; const partes = {};
+  const aviso = (txt) => {
+    partes[txt.split(' ')[0]] = txt;
+    if (Date.now() - ultimo < 15000) return;
+    ultimo = Date.now();
+    painel(cfg, `/tarefas/${t.id}/prorrogar`, { corpo: { progresso: 'sinais: ' + Object.values(partes).join(' · ') } }).catch(() => {});
+  };
+  const pastaVol = join(pasta, 'sinais'); mkdirSync(pastaVol, { recursive: true });
+  const tVol = (async () => {
+    try {
+      if (arquivo) return await volumeDeArquivo(arquivo, de, ate);
+      if (m3u8 || (kick && kick.fonte)) return await volumeKick(cfg, t, m3u8 ? alvo : kick.fonte, de, ate, pastaVol, aviso);
+      return await volumeOutro(alvo, de, ate, pastaVol, comTrecho, aviso);
+    } catch (e) { if (parando) throw e; log(`Sinais: volume não deu (${e.message}).`); return null; }
+  })();
+  const tChat = (async () => {
+    if (!kick || !kick.uuid) return null;
+    try {
+      let info = { canalId: kick.canalId, inicioMs: kick.inicioMs };
+      if (!info.canalId || !info.inicioMs) info = await kickVideo(kick.uuid);
+      if (!info.canalId || !info.inicioMs) throw new Error('a Kick não informou o canal ou a hora da live');
+      return await chatKick(info.canalId, info.inicioMs, de, ate, aviso);
+    } catch (e) { if (parando) throw e; log(`Sinais: chat não deu (${e.message}).`); return null; }
+  })();
+  const [vol, amostras] = await Promise.all([tVol, tChat]);
+  try { rmSync(pastaVol, { recursive: true, force: true }); } catch { /* */ }
+  const r = calcularPicos(vol, amostras, de, ate);
+  try {
+    await painel(cfg, `/tarefas/${t.id}/sinais`, { corpo: { de, ate, fontes: r.fontes, picos: r.picos } });
+    log(`Sinais: ${r.picos.length} picos (${[r.fontes.volume && 'volume', r.fontes.chat && 'chat'].filter(Boolean).join(' + ') || 'nada medido'}).`);
+  } catch (e) { if (e instanceof ErroPainel && e.dados.perdida) throw e; log('Sinais: o painel não recebeu:', e.message); }
 }
 
 function escolherLegenda(info) {
@@ -988,6 +1264,7 @@ async function tarefaRoteiro(cfg, t) {
 // vídeo (até 720p: a foto é pequena); o ffmpeg pula direto para o segundo e tira 1 quadro.
 async function tarefaQuadros(cfg, t, pasta) {
   const v = t.video, lista = t.cortes || [];
+  if (t.falas && t.falas.length) await colarCortes(cfg, t, pasta);   // 3.1.0: antes da foto
   if (!lista.length) { log('Fotos: nenhum curto esperando foto.'); return; }
   log(`Fotos dos curtos (${lista.length}): ${v.titulo || v.url}`);
   const alvo = v.fonte_m3u8 || v.url;
@@ -1033,6 +1310,52 @@ async function tarefaQuadros(cfg, t, pasta) {
   }
   if (!feitas && falhas) throw new Error(`nenhuma foto saiu (${falhas} falhas); vai tentar de novo`);
   log(`Fotos prontas: ${feitas} de ${lista.length}${falhas ? ` (${falhas} falharam)` : ''}.`);
+}
+// 3.1.0 (27/11): corte colado na fala. A IA marca pelos blocos de ~10 s do texto e o curto pode
+// começar ou terminar no meio de uma frase. Para cada curto novo, ~8 s de áudio em volta do começo
+// e ~9 s em volta do fim, juntos num arquivo só (1 s de silêncio no meio) -> painel -> Whisper. O
+// painel decide o ajuste (só estica até o início/fim da frase; nunca encurta).
+async function colarCortes(cfg, t, pasta) {
+  const v = t.video, lista = t.falas;
+  log(`Colando ${lista.length} curto(s) na fala (começo e fim no limite da frase)…`);
+  let endereco;
+  try {
+    endereco = ultimaLinha(await rodar('yt-dlp', ['-g', '--no-playlist', '--no-warnings', '-f', 'ba/b[height<=480]/b', v.fonte_m3u8 || v.url])).trim();
+  } catch (e) { if (parando) throw e; log(`Fala: sem o endereço do áudio (${e.message}); os curtos ficam como a IA marcou.`); return; }
+  if (!/^https?:\/\//.test(endereco)) return;
+  let ajustados = 0;
+  for (let i = 0; i < lista.length && !parando; i++) {
+    const c = lista[i];
+    const a0 = Math.max(0, c.inicio_s - 6), la = c.inicio_s + 2 - a0, b0 = Math.max(c.fim_s - 2, c.inicio_s + 2), lb = 9;
+    const arq = join(pasta, `fala-${c.id}.ogg`);
+    const faixa = (n, d) => `[${n}:a]aresample=16000,aformat=channel_layouts=mono,${FILTRO_VOZ},apad=whole_dur=${d},atrim=0:${d}`;
+    const relogio = setTimeout(() => matarFilhos(), 120000);
+    try {
+      await rodar('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y',
+        '-ss', String(a0), '-t', String(la), '-i', endereco, '-ss', String(b0), '-t', String(lb), '-i', endereco,
+        '-f', 'lavfi', '-t', '1', '-i', 'anullsrc=r=16000:cl=mono',
+        '-filter_complex', `${faixa(0, la)}[x];[2:a]anull[s];${faixa(1, lb)}[y];[x][s][y]concat=n=3:v=0:a=1[o]`,
+        '-map', '[o]', '-c:a', 'libopus', '-b:a', '24k', arq]);
+    } catch (e) {
+      if (parando) throw e;
+      log(`Fala ${i + 1}/${lista.length}: o áudio não saiu (${e.message}).`); continue;
+    } finally { clearTimeout(relogio); }
+    for (let tent = 0; tent < 4; tent++) {
+      try {
+        const r = await painel(cfg, `/tarefas/${t.id}/fala?corte=${c.id}&ini=${c.inicio_s}&fim=${c.fim_s}&a=${a0}&la=${la}&b=${b0}`,
+          { bruto: readFileSync(arq), tipo: 'audio/ogg', prazo: 120000 });
+        if (r.mudou) { ajustados++; log(`Fala ${i + 1}/${lista.length}: ${tc(c.inicio_s)}-${tc(c.fim_s)} -> ${tc(r.inicio_s)}-${tc(r.fim_s)}.`); }
+        break;
+      } catch (e) {
+        if (e instanceof ErroPainel && e.dados.perdida) throw e;
+        const esp = e instanceof ErroPainel && Number(e.dados.esperar_s);
+        if (esp && esp <= 600 && tent < 3) { log(`Limite da Groq: ajuste da fala tenta de novo em ${minutos(esp)}.`); await dorme(esp * 1000); continue; }
+        log(`Fala ${i + 1}/${lista.length}: ${e.message} (fica como a IA marcou).`); break;
+      }
+    }
+    try { unlinkSync(arq); } catch { /* */ }
+  }
+  log(`Fala: ${ajustados} de ${lista.length} curto(s) ajustado(s) para não cortar no meio da frase.`);
 }
 const NOMES_CENA = { fullcam: 'Full cam', jogo_webcam: 'Jogo com webcam', jogo: 'Só o jogo' };
 

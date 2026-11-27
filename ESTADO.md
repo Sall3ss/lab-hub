@@ -1,6 +1,6 @@
 # ESTADO - Lab Hub
 
-**Atualizado em 24/11/2026 (cabeçalhos de segurança; Cortex: Shorts ao YouTube, agente 3.0.1).**
+**Atualizado em 27/11/2026 (Cortex: sinais de volume e chat, corte colado na fala, correções de nomes; agente 3.1.0).**
 
 ## Pronto
 
@@ -126,7 +126,7 @@
    detectada pelo Gemini (full cam / jogo com webcam / só o jogo) escolhendo o layout, agente 2.1.0;
    depósito R2 `lab-hub-arquivos` criado pelo dono e ligado (binding `ARQUIVOS`).
    19/11: legenda automática estilo Shorts gravada no vertical (Whisper da Groq palavra a
-   palavra), agente 2.2.0; 2.3.0: legenda em português e só no vertical (Shorts); 2.4.0: legenda revisada no painel antes de baixar; 2.5.0: buracos da legenda refeitos, padrão de títulos/descrições/tags do canal e contexto da live; 2.6.0: logo do canal nos curtos e hashtags na ficha; 20/11: índices da fila (a página parou por estourar o limite diário de leituras do D1) e 2.7.0: legenda sem frase inventada em gameplay; 21/11: novo padrão editorial dos títulos, usando o contexto da live inteira (2.7.2), e categoria + nota por critérios em cada corte; 22/11: fila com prioridade, PC adianta outras tarefas na espera da Groq (2.8.0) e legenda da Kick em vídeo gravado (2.9.0); 23/11: curto começa no gancho (texto em blocos de 10 s, aviso "começa frio" e botão "Começar no gancho") e títulos pelo público do canal (Coringa na frente; outro criador, a situação); 24/11: longos escolhidos pelos picos da live e envio dos Shorts ao YouTube pelo PC (agente 3.0.0, token só no PC; falta o dono conectar). Arquitetura,
+   palavra), agente 2.2.0; 2.3.0: legenda em português e só no vertical (Shorts); 2.4.0: legenda revisada no painel antes de baixar; 2.5.0: buracos da legenda refeitos, padrão de títulos/descrições/tags do canal e contexto da live; 2.6.0: logo do canal nos curtos e hashtags na ficha; 20/11: índices da fila (a página parou por estourar o limite diário de leituras do D1) e 2.7.0: legenda sem frase inventada em gameplay; 21/11: novo padrão editorial dos títulos, usando o contexto da live inteira (2.7.2), e categoria + nota por critérios em cada corte; 22/11: fila com prioridade, PC adianta outras tarefas na espera da Groq (2.8.0) e legenda da Kick em vídeo gravado (2.9.0); 23/11: curto começa no gancho (texto em blocos de 10 s, aviso "começa frio" e botão "Começar no gancho") e títulos pelo público do canal (Coringa na frente; outro criador, a situação); 24/11: longos escolhidos pelos picos da live e envio dos Shorts ao YouTube pelo PC (agente 3.0.0, token só no PC; falta o dono conectar). 27/11: ideias de um projeto de cortes estudado: picos de volume e de chat da Kick guiando a IA, regras novas (fala de personagem do jogo, barulho sem reação), curto colado na fala e correções de nomes por canal (agente 3.1.0, migration 0025). Arquitetura,
    modelo de dados e próximos passos em `projetos/cortex/PROJETO.md`.
 
 ## ClipStudio: arquivado em 15/10/2026

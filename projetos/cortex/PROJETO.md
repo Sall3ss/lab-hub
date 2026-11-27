@@ -28,6 +28,7 @@ Beta.
 | Rotas do PC (sem sessão, com chave do PC) | `projetos/cortex/maquina.js` |
 | Agente do PC | `public/projetos/cortex/agente/cortex-agente.mjs` (servido pelo site para o PC baixar; roda no Windows do dono, nunca na nuvem) |
 | Envio dos Shorts ao YouTube (24/11) | `projetos/cortex/youtube.js` (fila, modelo da descrição, prévia) + seção YouTube do agente; migration `0023_cortex_youtube.sql` |
+| Sinais da live, corte colado na fala, correções de nomes (27/11) | `projetos/cortex/fala.js`, `projetos/cortex/correcoes.js`, rotas `sinais`/`fala` no `maquina.js`, seção "sinais da live" do agente; migration `0025_cortex_sinais.sql` |
 | Esta ficha | `projetos/cortex/PROJETO.md` |
 
 ## Arquitetura: quem faz o quê
@@ -701,3 +702,49 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   o envio, o curto sai da Edição e vai para **Publicado** sozinho (concluir e `/maquina/youtube/
   registrar`). "Desvincular" traz de volta para a Edição (é para enviar de novo). Migration 0024
   acerta os já enviados. Testado local: desvincular > enviar > PC (mock) > Publicado.
+- 27/11 (dono estudou o "cortador-de-lives" que um amigo mandou, MIT, Python + Claude Code local;
+  análise na conversa; escolheu os itens 1 a 5, descartou tarja de título queimada e pergunta no
+  fim da descrição; o 7, layout trocando no meio do corte, ficou em avaliação). Agente **3.1.0**,
+  migration **0025**:
+  1. **Volume** (ideia central deles: reação não aparece no texto). O PC mede o dB de cada segundo e
+     compara com o normal do próprio streamer (mediana de blocos de 30 s, suavizada em ~5 min).
+     Kick: não há faixa só de áudio (testado: `audio_only` = 403), então baixa o 160p (~140 MB por
+     hora de live, pedaços de 12,5 s, 6 por vez, medidos e apagados). Com áudio já baixado para a
+     Groq, mede do próprio arquivo. YouTube/Twitch: o áudio mais leve (`wa`).
+  5. **Chat da Kick**: o VOD guarda o chat (`/api/v2/channels/<id>/messages?start_time=`, janela
+     fixa de 5 s, teto de 25 mensagens; com 25 a taxa sai do espalhamento dos horários). Uma
+     amostra a cada 20 s (30 s em live de mais de 4 h), 2 por vez com ~0,5 s de pausa (testado em
+     27/11: 200 seguidos sem bloqueio; 6 por segundo dá 429, aí pausa 30 s e vai mais devagar).
+     Canal e hora de início vêm da lista do canal ou de `/api/v1/video/<uuid>` (`start_time` é UTC,
+     conferido com a pasta do HLS e com o chat). Chat do YouTube e da Twitch: não (só Kick).
+     Força = dB acima do normal + 4 x log2(chat x vezes o normal, olhando até 25 s depois); até 5
+     picos por hora (8 a 60), a 90 s um do outro, força mínima 4. Vão ao painel ANTES da última
+     parte do texto (`/maquina/tarefas/:id/sinais`, tabela `cortex_sinais`); falhar não impede o
+     texto. Roteiro: cada trecho recebe os picos dele com "um pico costuma ser o desfecho, o gancho
+     vem antes; pico sem reação na fala não conta"; os longos recebem os 25 mais fortes. Cada corte
+     guarda o pico mais forte dentro dele (`sinal`). Tela: "Reações" na gaveta do vídeo, "Reação"
+     na do corte e ▼ vermelho na régua da linha do tempo.
+  2. **Regras novas no roteiro** (SISTEMA): fala de personagem do jogo não é o streamer; barulho
+     sem reação não é momento (nem como pico); leitura de doação/"deixa o like" fora, salvo se for
+     a piada. O texto "você lê SÓ o texto" passou a citar os picos.
+  3. **Corte colado na fala** (curtos da IA, na Triagem, sem legenda): na tarefa de fotos o PC
+     manda ~8 s em volta do começo + 1 s de silêncio + ~9 s em volta do fim (um pedido à Groq por
+     curto, ~50 KB); `fala.js` estica o começo até o início da frase (pausa de 0,45 s ou pontuação,
+     até 4 s; 0,3 s antes da palavra) e o fim até o fim da frase (até 5 s; 0,5 s depois). **Só
+     estica, nunca encurta**: silêncio no texto pode ser a risada/grito que o Whisper não escreve.
+     Segundos inteiros, como todo o Cortex. Só grava se o tempo ainda é o que o PC recebeu (ajuste
+     do dono nunca é desfeito); gancho continua dentro. Gaveta: "Fala: colado na frase: começa N s
+     antes..." e "Voltar ao tempo da IA" (põe nos campos; só grava no Salvar).
+  4. **Correções de nomes** (`cortex_correcoes`, por canal ou para todos): "errado -> certo" na
+     gaveta do vídeo (Aa Correções de nomes). Valem para o texto que a IA lê (ao receber o texto),
+     para a legenda palavra por palavra (rota `palavras`, várias palavras viram uma) e os nomes
+     certos vão primeiro na lista do Whisper. O que já foi transcrito não muda. Sem máscara de
+     maiúsculas (a caixa do nome faz parte da correção, como no título). Limite 300.
+  Testado: regras puras (12 casos: frase cortada no começo/fim, silêncio não encurta, limite de
+  4 s, correções com acento e várias palavras, picos com e sem chat); 20 min reais de uma live do
+  Coringa medidos em 39 s (8 picos; o mais forte, +14 dB e chat 3,8x, é o fim de um roubo com
+  "tem nota pro roubo?"); fluxo completo local com agente 3.1.0 real, Kick real e IA/Groq de
+  mentira (texto corrigido, picos no pedido do trecho, corte 02:12:54-02:13:50 colado para
+  02:12:52-02:13:53, foto); telas no PC (1280) e celular (390) sem erro nem rolagem lateral.
+  Observado aqui: o yt-dlp 2026.10.26 desta máquina dá NOT_FOUND no link de VOD gravado da Kick
+  (o caminho pelo HLS funciona); não confirmado no PC do dono.

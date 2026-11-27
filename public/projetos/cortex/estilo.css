@@ -479,3 +479,16 @@ button, input, textarea { font: inherit; color: inherit; }
 .yt-marcas { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; font-size: .78rem; color: var(--suave); }
 .yt-previa { display: grid; gap: .35rem; padding: .7rem .8rem; border: 1px dashed var(--fio-2); border-radius: var(--raio); }
 @media (max-width: 520px) { .yt-prev { grid-template-columns: 1fr; } }
+
+/* 27/11: picos de reação na régua, correções de nomes do canal */
+.regua i.tl-pico { bottom: auto; top: 0; width: 0; height: 0; background: none; border-left: 5px solid transparent; border-right: 5px solid transparent;
+  border-top: 8px solid var(--perigo); transform: translateX(-5px); pointer-events: auto; cursor: help; z-index: 2; }
+.tl-legenda .leg-pico { width: 0 !important; height: 0 !important; background: none !important; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 8px solid var(--perigo); border-radius: 0 !important; }
+#corr-onde button.on { border-color: var(--cor); color: var(--cor); background: var(--cor-fraca); }
+#corr-onde button:disabled { opacity: .4; cursor: not-allowed; }
+.corr-itens { list-style: none; margin: 0 0 .6rem; padding: 0; display: grid; gap: .3rem; }
+.corr-itens li { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; padding: .35rem .5rem; border: 1px solid var(--fio); border-radius: 6px; font-size: .86rem; }
+.corr-itens code { font-family: var(--mono); color: var(--suave); text-decoration: line-through; overflow-wrap: anywhere; }
+.corr-itens b { overflow-wrap: anywhere; }
+.corr-itens small { color: var(--suave); font-size: .72rem; margin-left: auto; }
+.corr-seta { color: var(--suave); }

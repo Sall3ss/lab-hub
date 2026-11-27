@@ -720,9 +720,15 @@
     }
     var obs = !v.duracao_s ? '<span>Duração ainda desconhecida: o PC informa ao buscar o vídeo.</span>' : '';
     if (textoTrecho(v)) obs += '<span><b class="leg-fora"></b>Fora da análise (' + textoTrecho(v) + ')</span>';
+    // 27/11: picos de reação medidos pelo PC (volume/chat), marcados em cima da régua
+    var sinais = detalhe.sinais || [];
+    var picos = sinais.map(function (p) {
+      return '<i class="tl-pico" style="left:' + (p.segundo / total * 100).toFixed(3) + '%" title="' + esc('Reação aos ' + tc(p.segundo) + ': ' + textoSinal({ s: p.segundo, volume_db: p.volume_db, chat_x: p.chat_x }).replace(/<[^>]+>/g, '')) + '"></i>';
+    }).join('');
+    if (sinais.length) obs += '<span><b class="leg-pico"></b>Pico de reação (volume/chat)</span>';
     corpo.innerHTML =
       '<div class="tl"><div class="tl-cab"><div class="r">TC</div><div class="l">L</div><div class="c">C</div></div>' +
-      '<div class="tl-area">' + foraDoTrecho(v, total) + '<div class="regua" style="--passo:' + passoPct + '">' + marcas + '</div>' +
+      '<div class="tl-area">' + foraDoTrecho(v, total) + '<div class="regua" style="--passo:' + passoPct + '">' + marcas + picos + '</div>' +
       pista('longo') + pista('curto') + '<span class="cabeca" id="cabeca"></span></div></div>' +
       '<div class="tl-legenda"><span><b style="background:var(--longo)"></b>Longo (30-40 min)</span><span><b style="background:var(--curto)"></b>Curto (45-90 s)</span>' +
       '<span><b style="background:var(--fio-2)"></b>Descartado (apagado)</span>' + obs +
@@ -779,6 +785,50 @@
     });
   }
 
+  // 27/11: o que o PC mediu na live (picos de volume e de chat)
+  function textoSinaisVideo(v) {
+    if (v.sinais_fontes == null) return '';
+    var n = detalhe && detalhe.video.id === v.id && detalhe.sinais ? detalhe.sinais.length : 0;
+    var f = String(v.sinais_fontes || '').split(',').filter(Boolean);
+    if (!f.length) return '<span style="color:var(--suave)">o PC não conseguiu medir volume nem chat; a IA leu só o texto</span>';
+    return n + ' pico' + (n === 1 ? '' : 's') + ' medido' + (n === 1 ? '' : 's') + ' (' + f.map(function (x) { return x === 'volume' ? '🔊 volume' : '💬 chat'; }).join(' + ') + ')' +
+      (f.indexOf('chat') < 0 ? ' <small style="color:var(--suave)">· chat só nas lives da Kick</small>' : '');
+  }
+  function ligarCorrecoes(box, v) {
+    var lista = box.querySelector('#corr-lista'), f = box.querySelector('#f-corr'), onde = v.canal ? 'canal' : 'todos';
+    function marcar() { box.querySelectorAll('#corr-onde button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === onde); }); }
+    box.querySelectorAll('#corr-onde button').forEach(function (b) { b.onclick = function () { onde = b.dataset.v; marcar(); }; });
+    marcar();
+    function carregarCorr() {
+      api('/correcoes?canal=' + encodeURIComponent(v.canal || '')).then(function (j) {
+        if (!lista.isConnected) return;
+        lista.innerHTML = j.correcoes.length ? '<ul class="corr-itens">' + j.correcoes.map(function (c) {
+          return '<li><code>' + esc(c.errado) + '</code><span class="corr-seta">→</span><b>' + esc(c.certo) + '</b><small>' + (c.canal ? 'este canal' : 'todos') + '</small>' +
+            '<button type="button" class="leg-apaga" data-corr="' + c.id + '" title="Apagar esta correção" aria-label="Apagar a correção ' + esc(c.errado) + '">✕</button></li>';
+        }).join('') + '</ul>' : '<p class="dica-trecho">Nenhuma correção ainda.</p>';
+        lista.querySelectorAll('[data-corr]').forEach(function (b) {
+          b.onclick = function () {
+            var item = j.correcoes.find(function (c) { return String(c.id) === b.dataset.corr; });
+            confirmar('Apagar a correção "' + item.errado + '" → "' + item.certo + '"? O que já foi transcrito não muda.', 'Apagar').then(function (sim) {
+              if (!sim) return;
+              api('/correcoes/' + item.id, { metodo: 'DELETE' }).then(carregarCorr).catch(function (e) { aviso(e.message, true); });
+            });
+          };
+        });
+      }).catch(function (e) { lista.innerHTML = '<p class="leg-msg erro">' + esc(e.message) + ' <button type="button" class="mini" id="corr-de-novo">Tentar de novo</button></p>'; lista.querySelector('#corr-de-novo').onclick = carregarCorr; });
+    }
+    carregarCorr();
+    f.onsubmit = function (ev) {
+      ev.preventDefault();
+      var msg = $('msg-corr'), b = f.querySelector('[type=submit]');
+      if (!f.errado.value.trim() || !f.certo.value.trim()) { msg.textContent = 'Preencha como sai errado e como deve ficar.'; return; }
+      b.disabled = true; msg.textContent = '';
+      api('/correcoes', { metodo: 'POST', corpo: { errado: f.errado.value, certo: f.certo.value, canal: onde === 'canal' ? v.canal : null } }).then(function () {
+        b.disabled = false; f.errado.value = ''; f.certo.value = ''; aviso('Correção salva.'); carregarCorr();
+      }).catch(function (e) { b.disabled = false; msg.textContent = e.message; });
+    };
+  }
+
   function abrirVideo(depois) {   // depois(box): chamado com a gaveta montada (ex.: focar o "Puxar mais")
     var base = estado.videos.find(function (v) { return v.id === selVideo; });
     var pronto = detalhe && detalhe.video.id === selVideo ? Promise.resolve() : carregarDetalhe(selVideo);
@@ -795,6 +845,7 @@
         (v.ao_vivo_canal ? '<dt>Live</dt><dd>' + (v.ao_vivo ? '<b style="color:var(--perigo)">● no ar</b> na última captura' : 'encerrada') +
           (v.capturado_ate_s ? ' · capturado até <b>' + tc(v.capturado_ate_s) + '</b>' : ' · o PC ainda vai procurar') + '</dd>' : '') +
         '<dt>Etapa</dt><dd>' + etapas[v.etapa] + '</dd>' +
+        (textoSinaisVideo(v) ? '<dt>Reações</dt><dd>' + textoSinaisVideo(v) + '</dd>' : '') +
         '<dt>Importado</dt><dd>' + data(v.criado_em) + '</dd>' +
         (v.erro ? '<dt>Falha</dt><dd style="color:var(--perigo)">' + esc(v.erro) + '</dd>' : '') + '</dl>' +
         (v.erro ? '<div class="acoes"><button class="btn btn-ok" type="button" id="v-tentar">↻ Tentar de novo</button></div>' : '') +
@@ -821,6 +872,14 @@
           '<small class="dica-layout">A IA usa nos títulos, descrições e tags, e a legenda passa a escrever esses nomes certo. Vale para os próximos textos e legendas (use "Refazer textos" no corte para aplicar já).</small></label>' +
         '<p class="msg-form" id="msg-video"></p><div class="acoes"><button class="btn btn-cor" type="submit">Salvar</button>' +
         '<button class="btn" type="button" id="v-marcar">+ Marcar corte</button></div></form>' +
+        // 27/11: correções de nomes do canal (a transcrição erra sempre os mesmos)
+        '<div class="bloco caixa-corr"><b class="resto-tit">Aa Correções de nomes' + (v.canal ? ' · ' + esc(v.canal) : '') + '</b>' +
+          '<p class="dica-trecho">Quando a transcrição escreve um nome errado (ex.: "GT6" em vez de "GTA 6"), cadastre aqui uma vez. Vale para o texto que a IA lê e para as legendas daqui em diante.</p>' +
+          '<div id="corr-lista"><p class="dica-trecho">Carregando…</p></div>' +
+          '<form id="f-corr" novalidate><div class="dupla"><label class="campo"><span>Sai errado</span><input name="errado" maxlength="60" autocomplete="off" placeholder="GT6"></label>' +
+          '<label class="campo"><span>Fica certo</span><input name="certo" maxlength="60" autocomplete="off" placeholder="GTA 6"></label></div>' +
+          '<div class="campo"><span>Vale para</span><div class="escolha" id="corr-onde"><button type="button" data-v="canal"' + (v.canal ? '' : ' disabled') + '>Só este canal</button><button type="button" data-v="todos">Todos os canais</button></div></div>' +
+          '<p class="msg-form" id="msg-corr"></p><div class="acoes"><button class="btn" type="submit">+ Adicionar correção</button></div></form></div>' +
         '<form class="bloco" id="f-trecho" novalidate><div class="dupla">' +
         '<label class="campo"><span>Analisar a partir de</span><input class="tc-campo" name="de" inputmode="numeric" autocomplete="off" placeholder="00:00:00" value="' + (v.analisar_de_s ? tc(v.analisar_de_s) : '') + '"></label>' +
         '<label class="campo"><span>Até (vazio = até o fim)</span><input class="tc-campo" name="ate" inputmode="numeric" autocomplete="off" placeholder="fim do vídeo" value="' + (v.analisar_ate_s ? tc(v.analisar_ate_s) : '') + '"></label></div>' +
@@ -837,6 +896,7 @@
               .catch(function (e) { $('msg-video').textContent = e.message; });
           };
           box.querySelector('#v-marcar').onclick = function () { formCorte(null); };
+          ligarCorrecoes(box, v);
           box.querySelector('#v-layouts').onclick = function () { CortexLayouts.abrir(v.layout_id || null); };
           var ft = box.querySelector('#f-trecho');
           mascaraTC(ft.de); mascaraTC(ft.ate);
@@ -904,6 +964,25 @@
       var c = detalhe && detalhe.cortes.find(function (x) { return x.id === id; });
       if (c) formCorte(c);
     });
+  }
+
+  // 27/11: pico de reação dentro do corte (medido no áudio e no chat pelo PC)
+  function textoSinal(js) {
+    var x; try { x = typeof js === 'string' ? JSON.parse(js) : js; } catch (e) { x = null; }
+    if (!x) return '';
+    var p = [];
+    if (x.volume_db != null && x.volume_db >= 3) p.push('🔊 volume +' + Math.round(x.volume_db) + ' dB');
+    if (x.chat_x != null && x.chat_x >= 1.5) p.push('💬 chat ' + String(Math.round(x.chat_x * 10) / 10).replace('.', ',') + 'x');
+    return p.length ? p.join(' · ') + ' <small style="color:var(--suave)">aos ' + tc(x.s) + '</small>' : '';
+  }
+  function ajusteFala(c) {
+    var x; try { x = c.fala_ajuste ? JSON.parse(c.fala_ajuste) : null; } catch (e) { x = null; }
+    if (!x || x.ini == null) return null;
+    var p = [];
+    if (x.ini_antes - x.ini > 0) p.push('começa ' + (x.ini_antes - x.ini) + ' s antes');
+    if (x.fim - x.fim_antes > 0) p.push('termina ' + (x.fim - x.fim_antes) + ' s depois');
+    if (!p.length) return null;
+    return { texto: 'Colado na frase: ' + p.join(' e ') + ' do que a IA marcou', voltar: c.inicio_s === x.ini && c.fim_s === x.fim, x: x };
   }
 
   function ajustes(campo, livre, passo) {
@@ -1114,7 +1193,10 @@
             : '<dl class="info"><dt>Estado</dt><dd>' + nomes[c.estado] + '</dd><dt>Origem</dt><dd>' + (c.origem === 'ia' ? 'Sugerido pela IA' : 'Marcado à mão') + '</dd>' +
               (c.arquivo_local ? '<dt>No PC</dt><dd style="font-family:var(--mono);font-size:.78rem">' + esc(c.arquivo_local) + '</dd>' : '') +
               (c.qualidade ? '<dt>Qualidade</dt><dd style="font-family:var(--mono);font-size:.78rem">' + esc(c.qualidade) + '</dd>' : '') +
-              (c.erro ? '<dt>Falha</dt><dd style="color:var(--perigo)">' + esc(c.erro) + '</dd>' : '') + '</dl>') +
+              (c.erro ? '<dt>Falha</dt><dd style="color:var(--perigo)">' + esc(c.erro) + '</dd>' : '') +
+              // 27/11: reação medida pelo PC (volume/chat) e o ajuste para não cortar no meio da frase
+              (textoSinal(c.sinal) ? '<dt>Reação</dt><dd>' + textoSinal(c.sinal) + '</dd>' : '') +
+              (ajusteFala(c) ? '<dt>Fala</dt><dd>' + ajusteFala(c).texto + (ajusteFala(c).voltar && tempoLivre ? ' <button type="button" class="mini" id="c-voltar-ia">Voltar ao tempo da IA</button>' : '') + '</dd>' : '') + '</dl>') +
       ia + (fora ? blocoFora(c, v) : '') + (novo ? '' : blocoYT(c)) +
       (acoesEstado ? '<div class="acoes">' + acoesEstado + '</div>' : '') +
       '<form class="bloco" id="f-corte" novalidate>' +
@@ -1151,6 +1233,13 @@
       function (box) {
         var f = box.querySelector('#f-corte'), tipo = c.tipo;
         if (!novo) ligarBlocoYT(box, c);
+        var bv = box.querySelector('#c-voltar-ia');
+        if (bv) bv.onclick = function () {
+          var x = ajusteFala(c).x;
+          f.inicio.value = tc(x.ini_antes); f.fim.value = tc(x.fim_antes);
+          f.inicio.dispatchEvent(new Event('input')); f.fim.dispatchEvent(new Event('input'));
+          bv.disabled = true; bv.textContent = 'Tempo da IA nos campos: aperte Salvar';
+        };
         box.querySelectorAll('[data-copia]').forEach(function (b) { b.onclick = function () { copiar(b, b.dataset.copia); }; });
         var bf = box.querySelector('#c-ficha');
         if (bf) bf.onclick = function () {

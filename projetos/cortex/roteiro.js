@@ -172,8 +172,10 @@ QUALIDADE ("criterios", de 0 a 10 cada; é separada da categoria: um corte engra
 - diferencial: tem algo que o diferencia dos outros cortes desta live?
 Avalie o que ACONTECEU, não as palavras: "isso foi insano" não torna o momento interessante.
 Seja exigente: 8 ou mais só para o que é forte de verdade; conversa comum fica em 3-5.
-Você lê SÓ o texto da live: não invente avaliação de imagem ou de som. Se algo importante não dá
-para julgar pelo texto (ação de jogo sem fala, expressão, um som), diga em "limitacao"; se o
+Você lê o texto da live e, quando vierem, os PICOS medidos no áudio e no chat (volume acima do
+normal do streamer, chat mais rápido que o normal): eles mostram onde houve grito, risada ou o
+chat explodiu, coisas que o texto não mostra. Não invente avaliação de imagem. Se algo
+importante não dá para julgar (ação de jogo sem fala, expressão), diga em "limitacao"; se o
 texto basta, deixe vazio.
 
 VARIEDADE: uma live rende tipos diferentes de corte. Os melhores momentos vêm primeiro, mas
@@ -190,6 +192,14 @@ Regras dos cortes:
 - Use só o que está na transcrição. Os tempos que você devolve têm que existir nela.
 - Um corte precisa se sustentar sozinho: quem não viu a live entende.
 - Evite: silêncio, leitura de chat sem contexto, propaganda, pausas, papo arrastado.
+- FALA DE PERSONAGEM DO JOGO NÃO É O STREAMER (27/11): cutscene, diálogo, rádio e NPC do jogo
+  (quase sempre em inglês) aparecem na transcrição como um português estranho, formal ou sem
+  sentido ("Yo! Então, o que agora? Vamos fazer o que você tem que fazer"). Ignore esses
+  trechos: o que vale é a reação do streamer, que fala gíria brasileira ("mano", "velho", "caralho").
+- BARULHO NÃO É MOMENTO: alerta de doação, música, efeito sonoro ou som do jogo sem reação do
+  streamer não vira corte, nem quando aparece como pico de volume.
+- Leitura de doação, agradecimento, "deixa o like" e recado de bastidor ficam fora, a não ser que
+  a mensagem em si seja a piada ou provoque uma reação forte.
 - Qualidade acima de quantidade. Se o trecho não tem nada bom, devolva lista vazia.
 - Gancho: a frase falada ou situação dos primeiros 2 segundos que segura quem está rolando o feed.
   "gancho_inicio" e "gancho_fim" = onde essa frase é dita no vídeo (HH:MM:SS, dentro do corte,
@@ -337,6 +347,14 @@ export async function passoRoteiro(env, tarefa) {
 }
 
 async function gravar(env, video, parte, ini, fim, r, agora) {
+  // 27/11: o pico mais forte dentro de cada corte (a reação pode vir até 3 s depois do fim)
+  const sinais = r.cortes.length ? await db(env).all(
+    'SELECT segundo, volume_db, chat_x, forca FROM cortex_sinais WHERE video_id = ? AND segundo >= ? AND segundo <= ?',
+    video.id, Math.min(...r.cortes.map((c) => c.inicio_s)), Math.max(...r.cortes.map((c) => c.fim_s)) + 3) : [];
+  const sinalDe = (c) => {
+    const p = sinais.filter((x) => x.segundo >= c.inicio_s && x.segundo <= c.fim_s + 3).sort((a, b) => b.forca - a.forca)[0];
+    return p ? JSON.stringify({ s: p.segundo, volume_db: p.volume_db, chat_x: p.chat_x }) : null;
+  };
   const lotes = [[
     `INSERT INTO cortex_roteiro_partes (video_id, parte, inicio_s, fim_s, resumo, cortes, modelo, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (video_id, parte) DO NOTHING`,
@@ -345,17 +363,37 @@ async function gravar(env, video, parte, ini, fim, r, agora) {
     lotes.push([
       `INSERT INTO cortex_cortes (video_id, usuario_id, tipo, origem, inicio_s, fim_s, titulo, descricao, tags, gancho, gancho_inicio_s, gancho_fim_s, motivo, nota,
                                   titulos, titulo_porque, thumb, duvida, categoria, categoria_porque, acontecimento, criterios, limitacao,
-                                  estado, criado_em, atualizado_em)
-       VALUES (?, ?, ?, 'ia', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'triagem', ?, ?)`,
+                                  sinal, estado, criado_em, atualizado_em)
+       VALUES (?, ?, ?, 'ia', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'triagem', ?, ?)`,
       [video.id, video.usuario_id, c.tipo, c.inicio_s, c.fim_s, c.titulo, c.descricao, JSON.stringify(c.tags), c.gancho,
        c.gancho_inicio_s, c.gancho_fim_s, c.motivo, c.nota, JSON.stringify(c.titulos), c.titulo_porque, c.thumb, c.duvida,
-       c.categoria, c.categoria_porque, c.acontecimento, c.criterios, c.limitacao, agora, agora]]);
+       c.categoria, c.categoria_porque, c.acontecimento, c.criterios, c.limitacao, sinalDe(c), agora, agora]]);
   }
   await db(env).batch(lotes);
 }
 
+// 27/11: picos que o PC mediu (volume acima do normal do streamer, chat acima do normal da live),
+// em texto para a IA. Os mais fortes primeiro; o tempo é o do pico (a reação), não o do gancho.
+export function textoPicos(picos) {
+  return picos.map((p) => `- ${hms(p.segundo)}: ` + [
+    p.volume_db != null && p.volume_db >= 3 ? `volume +${Math.round(p.volume_db)} dB acima do normal` : null,
+    p.chat_x != null && p.chat_x >= 1.5 ? `chat ${String(Math.round(p.chat_x * 10) / 10).replace('.', ',')}x mais rápido` : null,
+  ].filter(Boolean).join(' · ')).filter((l) => !l.endsWith(': ')).join('\n');
+}
+async function picosDe(env, videoId, ini, fim, max) {
+  return (await db(env).all(
+    'SELECT segundo, volume_db, chat_x, forca FROM cortex_sinais WHERE video_id = ? AND segundo >= ? AND segundo < ? ORDER BY forca DESC LIMIT ?',
+    videoId, ini, fim, max)).sort((a, b) => a.segundo - b.segundo);
+}
+const COMO_LER_PICOS = `Esses picos foram MEDIDOS no áudio e no chat (não são opinião). Um pico costuma ser o
+desfecho ou a reação: o gancho e o começo do corte vêm ANTES dele (de alguns segundos a ~50 s).
+Leia a fala em volta de cada pico: com reação do streamer (grito, risada, xingamento, susto,
+"não acredito") é forte candidato; pico sem reação na fala (música, alerta, efeito, som do jogo)
+NÃO conta. Um momento bom sem pico continua valendo.`;
+
 async function lerTrecho(env, video, linhas, ini, fim, i, n) {
   const texto = linhas.map((l) => `[${hms(l.inicio_s)}] ${l.texto}`).join('\n');
+  const picos = await picosDe(env, video.id, Math.max(0, ini - 30), fim, 15);
   const usados = await titulosDaLive(env, video.id);
   const antes = i > 0 ? await mapaDaLive(env, video.id, ini) : '';
   const pedido = `${cabecalho(video)}${antes}${usados}
@@ -373,6 +411,11 @@ Tarefa:
    Para os textos de cada corte, use o resto do trecho (antes e depois dele) e o mapa da live
    como contexto, seguindo o padrão editorial.
 
+${picos.length ? `
+Picos de reação neste trecho (medidos pelo PC):
+${textoPicos(picos)}
+${COMO_LER_PICOS}
+` : ''}
 Transcrição (cada linha começa com o tempo em que a fala começa):
 ${texto || '(trecho sem fala)'}`;
   const { dados, modelo } = await perguntar(env, pedido, ESQ_TRECHO);
@@ -397,6 +440,7 @@ async function escolherLongos(env, video, assuntos, ini, dur) {
   const picos = outros.filter((c) => c.tipo === 'curto');
   const longosJa = outros.filter((c) => c.tipo === 'longo');
   const linhas = assuntos.map((a) => `[${hms(a.i)} - ${hms(a.f)}] (força ${a.forca}) ${a.a}`).join('\n');
+  const picosSom = await picosDe(env, video.id, ini, Math.ceil(dur) + 1, 25);
   const pedido = `${cabecalho(video)}
 ${ini > 0 ? `Parte analisada: de ${hms(ini)} a ${hms(dur)} (o começo do vídeo ficou de fora, de propósito).` : `Duração total: ${hms(dur)}.`}
 
@@ -420,6 +464,10 @@ ${picos.length ? `
 Momentos fortes já marcados como curtos nesta live (são os picos; um bom longo CONTÉM vários
 deles, e pode repetir os acontecimentos dos curtos à vontade):
 ${picos.map((c) => `- [${hms(c.inicio_s)} - ${hms(c.fim_s)}]${c.nota != null ? ` nota ${c.nota}` : ''} · ${c.acontecimento || c.titulo}`.slice(0, 220)).join('\n')}
+` : ''}${picosSom.length ? `
+Picos de reação medidos no áudio e no chat (grito, risada, chat explodindo; um bloco com vários
+deles e com fala forte em volta é bom candidato a longo; pico sem reação na fala não conta):
+${textoPicos(picosSom)}
 ` : ''}${longosJa.length ? `
 Longos que já existem desta live (não repita o trecho nem a estrutura do título):
 ${longosJa.map((c) => `- [${hms(c.inicio_s)} - ${hms(c.fim_s)}] ${c.titulo}`).join('\n')}

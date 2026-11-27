@@ -28,6 +28,8 @@
 //   GET/PUT/DELETE /logo  (+ GET /logo/info)  logo do canal no R2, gravada nos verticais (19/11)
 //   GET    /layouts                layouts verticais (9:16) dos curtos; cria os 4 iniciais na 1a vez (19/11)
 //   POST   /layouts  PATCH/DELETE /layouts/:id    o editor de layout (tela "Layouts")
+//   GET    /correcoes?canal=       correções de nomes do canal + as de todos os canais (27/11)
+//   POST   /correcoes              { canal (null = todos), errado, certo }   DELETE /correcoes/:id
 //   GET    /agentes                lista os PCs conectados
 //   POST   /agentes                { nome } -> gera a chave do PC (mostrada UMA vez)
 //   PATCH  /agentes/:id            { baixa_cortes?, pasta? }  pasta dos cortes desse PC (18/11)
@@ -46,6 +48,7 @@ import { refazerTextos, classificarCorte } from './roteiro.js';
 import { pedirFotos, apagarFotos } from './cena.js';
 import { arquivos, temDeposito, chaveDe } from '../../lib/arquivos.js';
 import { rotasYoutube } from './youtube.js';
+import { normCanal } from './correcoes.js';
 
 export { maquina } from './maquina.js';
 
@@ -233,6 +236,43 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
   if (rota === 'videos' && id && partes[2] === 'refazer' && metodo === 'POST') {
     return await refazerDoZero({ request, env, data, u, id, json, agora });
   }
+  // 27/11: correções de nomes por canal ("GT6" -> "GTA 6"). Valem para o texto que a IA lê e para a
+  // legenda a partir de agora (o que já foi transcrito não muda).
+  if (rota === 'correcoes') {
+    if (metodo === 'GET' && !id) {
+      const canal = normCanal(new URL(request.url).searchParams.get('canal'));
+      const lista = await db(env).all(
+        'SELECT id, canal, errado, certo FROM cortex_correcoes WHERE usuario_id = ? AND (canal IS NULL OR canal = ?) ORDER BY canal IS NULL, errado COLLATE NOCASE',
+        u.id, canal || '');
+      return json({ correcoes: lista });
+    }
+    if (metodo === 'POST' && !id) {
+      const c = await request.json().catch(() => ({}));
+      const errado = String(c.errado || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+      const certo = String(c.certo || '').replace(/[{}\\]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+      const canal = c.canal === null || c.canal === '' ? null : normCanal(c.canal);
+      if (!errado || !certo) return json({ erro: 'Preencha como sai errado e como deve ficar.' }, 400);
+      if (errado.toLowerCase() === certo.toLowerCase()) return json({ erro: 'O certo é igual ao errado.' }, 400);
+      if (!/[\p{L}\p{N}]/u.test(errado)) return json({ erro: 'O "errado" precisa ter letra ou número.' }, 400);
+      const n = await db(env).first('SELECT COUNT(*) AS n FROM cortex_correcoes WHERE usuario_id = ?', u.id);
+      if (n.n >= 300) return json({ erro: 'Limite de 300 correções. Apague as que não usa mais.' }, 400);
+      const ja = await db(env).first("SELECT id FROM cortex_correcoes WHERE usuario_id = ? AND COALESCE(canal, '') = ? AND errado = ? COLLATE NOCASE",
+        u.id, canal || '', errado);
+      if (ja) return json({ erro: 'Já existe uma correção para "' + errado + '"' + (canal ? ' neste canal.' : ' em todos os canais.') }, 409);
+      const r = await db(env).run('INSERT INTO cortex_correcoes (usuario_id, canal, errado, certo, criado_em) VALUES (?, ?, ?, ?, ?)', u.id, canal, errado, certo, agora);
+      await auditar(env, { quem: u.email, acao: 'criar', entidade: 'cortex_correcoes', entidade_id: r.meta.last_row_id, depois: { canal, errado, certo }, ip: data.ip });
+      return json({ ok: true, id: r.meta.last_row_id });
+    }
+    if (metodo === 'DELETE' && id) {
+      const c = await db(env).first('SELECT id, canal, errado, certo FROM cortex_correcoes WHERE id = ? AND usuario_id = ?', Number(id), u.id);
+      if (!c) return json({ erro: 'correção não encontrada' }, 404);
+      await db(env).run('DELETE FROM cortex_correcoes WHERE id = ?', c.id);
+      await auditar(env, { quem: u.email, acao: 'excluir', entidade: 'cortex_correcoes', entidade_id: c.id, antes: c, ip: data.ip });
+      return json({ ok: true });
+    }
+    return json({ erro: 'rota nao encontrada' }, 404);
+  }
+
   if (rota === 'videos' && id && partes[2] === 'trecho' && metodo === 'POST') {
     return await mudarTrecho({ request, env, data, u, id, json, agora });
   }
@@ -247,7 +287,9 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
       // 19/11: a legenda (palavra a palavra, ~10 KB por corte) não vem aqui: numa live de 10 h com
       // muitos cortes isso pesava a resposta. A gaveta busca a de UM corte em /cortes/:id/legenda.
       for (const c of cortes) { c.tags = lerTags(c.tags); c.tem_legenda = c.legenda ? 1 : 0; delete c.legenda; }
-      return json({ video, cortes });
+      // 27/11: picos de volume/chat medidos pelo PC (linha do tempo e gaveta)
+      const sinais = await db(env).all('SELECT segundo, volume_db, chat_x, forca FROM cortex_sinais WHERE video_id = ? ORDER BY segundo LIMIT 300', video.id);
+      return json({ video, cortes, sinais });
     }
 
     if (metodo === 'PATCH') {
@@ -284,6 +326,7 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
       await db(env).batch([
         ['DELETE FROM cortex_tarefas WHERE video_id = ?', [video.id]],
         ['DELETE FROM cortex_transcricao WHERE video_id = ?', [video.id]],
+        ['DELETE FROM cortex_sinais WHERE video_id = ?', [video.id]],
         ['DELETE FROM cortex_cortes WHERE video_id = ?', [video.id]],
         ['DELETE FROM cortex_videos WHERE id = ?', [video.id]],
       ]);
