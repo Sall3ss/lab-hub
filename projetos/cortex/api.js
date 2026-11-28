@@ -84,7 +84,11 @@ export async function rotas({ request, env, data, u, partes, metodo, json }) {
         `SELECT c.id, c.video_id, c.tipo, c.origem, c.inicio_s, c.fim_s, c.titulo, c.gancho, c.gancho_inicio_s, c.nota, c.categoria, c.estado,
                 c.erro, c.qualidade, c.baixar_fora, c.cena, c.cena_conf, c.cena_auto, c.quadro_em, c.layout_id, c.legenda IS NOT NULL AS tem_legenda, c.legenda_editada, v.layout_id AS video_layout_id,
                 c.arquivo_local IS NOT NULL AS tem_arquivo, c.youtube_id, c.youtube_estado, c.youtube_erro, c.youtube_privacidade,
-                (SELECT t.progresso FROM cortex_tarefas t WHERE t.corte_id = c.id AND t.tipo = 'enviar_youtube' AND t.estado = 'pega' ORDER BY t.id DESC LIMIT 1) AS youtube_progresso, v.canal AS video_canal, c.atualizado_em, v.titulo AS video_titulo, v.plataforma,
+                (SELECT t.progresso FROM cortex_tarefas t WHERE t.corte_id = c.id AND t.tipo = 'enviar_youtube' AND t.estado = 'pega' ORDER BY t.id DESC LIMIT 1) AS youtube_progresso,
+                -- 28/11: o PC que vai enviar (o que tem o arquivo) e se ele está conectado ao YouTube
+                (SELECT a.nome || '|' || COALESCE(a.youtube_canal, '') || '|' || COALESCE(a.youtube_aviso, '') || '|' || COALESCE(a.versao, '')
+                   FROM cortex_tarefas t JOIN cortex_agentes a ON a.id = t.agente_alvo
+                  WHERE t.corte_id = c.id AND t.tipo = 'enviar_youtube' AND t.estado = 'pendente' ORDER BY t.id DESC LIMIT 1) AS youtube_alvo, v.canal AS video_canal, c.atualizado_em, v.titulo AS video_titulo, v.plataforma,
                 ${TAREFA_SQL('t.corte_id = c.id AND t.tipo = \'baixar_corte\'')}
            FROM cortex_cortes c JOIN cortex_videos v ON v.id = c.video_id
           WHERE c.usuario_id = ? AND c.estado <> 'descartado' AND v.arquivado = 0

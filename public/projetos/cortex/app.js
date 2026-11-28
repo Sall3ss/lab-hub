@@ -1465,11 +1465,37 @@
     if (c.tipo !== 'curto') return '';
     if (c.youtube_id) return '<div class="c-yt ok" title="ID ' + esc(c.youtube_id) + '">▶ No YouTube · ' + esc((PRIV[c.youtube_privacidade] || 'enviado').toLowerCase()) + '</div>';
     if (c.youtube_estado === 'enviando' && c.youtube_progresso) return '<div class="c-yt">▲ ' + esc(c.youtube_progresso) + '</div>';
+    var espera = esperaYT(c);
+    if (c.youtube_estado === 'fila' && espera) return '<div class="c-yt erro" title="' + esc(espera) + '">▲ YouTube: na fila · ' + esc(espera) + '</div>';
     if (c.youtube_estado === 'fila' || c.youtube_estado === 'enviando') {
       return '<div class="c-yt"' + (c.youtube_erro ? ' title="' + esc(c.youtube_erro) + '"' : '') + '>▲ YouTube: na fila' + (c.youtube_erro ? ' · ' + esc(semPC(c.youtube_erro)) : '') + '</div>';
     }
     if (c.youtube_estado === 'erro') return '<div class="c-yt erro" title="' + esc(c.youtube_erro || '') + '">✕ YouTube: ' + esc(semPC(c.youtube_erro) || 'falhou') + '</div>';
     return '';
+  }
+  // 28/11 (dono: "o PC de casa não envia, fica na fila"): quem envia é o PC que TEM o arquivo.
+  // Se esse PC não está conectado ao YouTube (ou está pausado, ou com agente velho), o Short
+  // esperava calado. Agora o cartão e a gaveta dizem por quê.
+  function esperaYT(c) {
+    if (!c.youtube_alvo) return '';
+    var p = String(c.youtube_alvo).split('|'), nome = p[0], canal = p[1], avisoPc = p[2], ver = p[3];
+    if (ver && ver < '3') return 'o PC ' + nome + ' precisa do agente 3.0.0 (reinicie o agente nele)';
+    if (!canal) return 'o PC ' + nome + ' (onde está o arquivo) não está conectado ao YouTube';
+    if (avisoPc) return nome + ': ' + avisoPc;
+    return '';
+  }
+  function pcDoArquivoCli(c) { var m = /^([^:]{1,40}): /.exec(c.arquivo_local || ''); return m ? m[1] : ''; }
+  // Aviso da confirmação: o PC do arquivo precisa estar conectado.
+  function avisoPcYT(cfg, cortes) {
+    var faltam = {};
+    cortes.forEach(function (c) {
+      var nome = pcDoArquivoCli(c); if (!nome) return;
+      var pc = cfg.pcs.find(function (p) { return p.nome === nome; });
+      if (!pc || !pc.youtube_canal) faltam[nome] = true;
+    });
+    var l = Object.keys(faltam);
+    return l.length ? ' Atenção: ' + (l.length > 1 ? 'os PCs ' : 'o PC ') + l.join(', ') + (l.length > 1 ? ' têm' : ' tem') + ' o arquivo mas não ' + (l.length > 1 ? 'estão conectados' : 'está conectado') +
+      ' ao YouTube: o envio espera na fila até você rodar "node cortex-agente.mjs youtube" nele.' : '';
   }
   function escolhaPriv(id, valor) {
     return '<div class="escolha esc-priv" id="' + id + '">' + Object.keys(PRIV).map(function (k) {
@@ -1496,8 +1522,10 @@
     botao.disabled = true;
     cfgYoutube().then(function (cfg) {
       var ok = cfg.pcs.filter(function (p) { return p.youtube_canal; });
+      var c = estado.cortes.find(function (x) { return x.id === id; }) || {}, pcArq = pcDoArquivoCli(c), falta = avisoPcYT(cfg, [c]);
       return confirmar('Enviar este Short ao YouTube como ' + PRIV[cfg.privacidade].toUpperCase() + '?' +
-        (ok.length ? ' Quem envia é o PC que tem o arquivo (canal "' + ok[0].youtube_canal + '").' : ' Atenção: nenhum PC está conectado ao YouTube ainda; o envio espera na fila (veja ▲ YouTube no topo).'), 'Enviar').then(function (sim) {
+        (!ok.length ? ' Atenção: nenhum PC está conectado ao YouTube ainda; o envio espera na fila (veja ▲ YouTube no topo).'
+          : falta || ' Quem envia é o PC ' + (pcArq || 'que tem o arquivo') + ' (canal "' + ok[0].youtube_canal + '").'), 'Enviar').then(function (sim) {
         if (!sim) { botao.disabled = false; return; }
         return enviarYT([id], cfg.privacidade).then(function (r) { (r.na_fila ? aviso : function (t) { aviso(t, true); })(resultadoEnvio(r)); return carregar(); });
       });
@@ -1513,7 +1541,7 @@
       var nomes = Object.keys(grupos).sort(function (a, b) { return grupos[b].length - grupos[a].length; });
       var conectados = cfg.pcs.filter(function (p) { return p.youtube_canal; });
       var html = '<p style="margin:0;color:var(--metal);font-size:.84rem">Só Shorts (curtos) da Edição, já baixados pelo PC. Quem envia é o PC que tem o arquivo; o mesmo Short nunca sobe duas vezes.</p>' +
-        (conectados.length ? '' : '<p class="alerta">Nenhum PC conectado ao YouTube ainda. Os envios esperam na fila até você conectar (botão ▲ YouTube no topo).</p>') +
+        (conectados.length ? (avisoPcYT(cfg, lista) ? '<p class="alerta">' + esc(avisoPcYT(cfg, lista).trim()) + '</p>' : '') : '<p class="alerta">Nenhum PC conectado ao YouTube ainda. Os envios esperam na fila até você conectar (botão ▲ YouTube no topo).</p>') +
         (lista.length ? '<div class="campo"><span>Privacidade</span>' + escolhaPriv('lote-priv', cfg.privacidade) +
           '<small class="dica-layout">Privado: só você vê; revise no YouTube Studio e publique de lá.</small></div>' +
           '<div class="volta-lista">' + nomes.map(function (n, g) {
@@ -1564,7 +1592,7 @@
   function ligarBlocoYT(box, c) {
     var el = box.querySelector('#yt-corpo'); if (!el) return;
     var q = estado.cortes.find(function (x) { return x.id === c.id; }) || {};
-    ['youtube_progresso', 'tem_arquivo'].forEach(function (k) { if (q[k] != null) c[k] = q[k]; });
+    ['youtube_progresso', 'tem_arquivo', 'youtube_alvo'].forEach(function (k) { if (q[k] != null) c[k] = q[k]; });
     cfgYoutube().then(function (cfg) {
       var h = '';
       if (c.youtube_id) {
@@ -1573,7 +1601,7 @@
           '<a class="btn btn-fino" href="https://youtube.com/shorts/' + encodeURIComponent(c.youtube_id) + '" target="_blank" rel="noopener">Ver o Short ↗</a>' +
           '<button type="button" class="btn btn-fino" id="yt-desv" title="Para enviar de novo (ex.: depois de Baixar de novo)">Desvincular</button></div>';
       } else if (c.youtube_estado === 'fila' || c.youtube_estado === 'enviando') {
-        h = '<p class="leg-msg">▲ ' + esc(c.youtube_progresso || 'Na fila de envio do PC.') + (c.youtube_erro ? '<br><span style="color:var(--aviso,#f5b942)">' + esc(c.youtube_erro) + '</span>' : '') + '</p>' +
+        h = '<p class="leg-msg">▲ ' + esc(c.youtube_progresso || (esperaYT(c) ? 'Parado na fila: ' + esperaYT(c) + '. No PC, rode "node cortex-agente.mjs youtube" e reinicie o agente.' : 'Na fila de envio do PC.')) + (c.youtube_erro ? '<br><span style="color:var(--aviso,#f5b942)">' + esc(c.youtube_erro) + '</span>' : '') + '</p>' +
           '<div class="fora-acoes"><button type="button" class="btn btn-fino" id="yt-cancelar">Tirar da fila</button></div>';
       } else if (podeEnviarYT(c)) {
         h = (c.youtube_estado === 'erro' ? '<p class="leg-msg erro">O último envio falhou: ' + esc(c.youtube_erro || '') + '</p>' : '') +

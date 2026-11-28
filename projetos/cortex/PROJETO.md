@@ -776,3 +776,9 @@ IA (cartão = vídeo) e C1 Triagem, C2 Download no PC, C3 Edição (Movavi), C4 
   "Horizontal inteiro" com a escolha do fundo e prévia igual à do FFmpeg (também na gaveta).
   Legenda fica em 1340 de 1920, logo abaixo do vídeo (16:9 ocupa 656 a 1264). Testado: FFmpeg
   nos dois fundos (1080x1920), trava de versão (3.1.1 não pega, 3.2.0 pega), editor no PC e celular.
+- 28/11 (dono: "o PC de casa não faz o upload, fica só na fila"): o envio é sempre do PC que TEM o
+  arquivo (`agente_alvo`), e cada PC precisa da própria conexão com o YouTube (o token não sai do
+  PC). O Short esperava calado. Agora o quadro traz `youtube_alvo` (nome, canal, aviso e versão do
+  PC de destino) e o cartão/gaveta dizem "o PC X (onde está o arquivo) não está conectado ao
+  YouTube" (ou pausado, ou agente velho); a confirmação de envio avisa antes. Conserto do dono:
+  copiar `youtube-cliente.json` para `C:\Cortex` do outro PC e rodar `node cortex-agente.mjs youtube` nele.
